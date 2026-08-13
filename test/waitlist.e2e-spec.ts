@@ -13,7 +13,7 @@ describe('WaitlistController (e2e)', () => {
     }).compile();
 
     app = moduleFixture.createNestApplication();
-    
+
     app.useGlobalPipes(
       new ValidationPipe({
         whitelist: true,
@@ -21,7 +21,7 @@ describe('WaitlistController (e2e)', () => {
         transform: true,
       }),
     );
-    
+
     await app.init();
   });
 
@@ -32,6 +32,7 @@ describe('WaitlistController (e2e)', () => {
   const uniqueEmail = `test-${Date.now()}@test.com`;
 
   it('/waitlist (POST) - should create entry and return receipt', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
     const response = await request(app.getHttpServer())
       .post('/waitlist')
       .send({
@@ -44,10 +45,11 @@ describe('WaitlistController (e2e)', () => {
 
     expect(response.body).toHaveProperty('id');
     expect(response.body).toHaveProperty('receivedAt');
-    firstId = response.body.id;
+    firstId = (response.body as { id: string }).id;
   });
 
   it('/waitlist (POST) - should return 400 for invalid body', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
     await request(app.getHttpServer())
       .post('/waitlist')
       .send({
@@ -60,6 +62,7 @@ describe('WaitlistController (e2e)', () => {
   });
 
   it('/waitlist (POST) - should return existing receipt for same email', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
     const response = await request(app.getHttpServer())
       .post('/waitlist')
       .send({
@@ -70,6 +73,6 @@ describe('WaitlistController (e2e)', () => {
       })
       .expect(201);
 
-    expect(response.body.id).toEqual(firstId);
+    expect((response.body as { id: string }).id).toEqual(firstId);
   });
 });

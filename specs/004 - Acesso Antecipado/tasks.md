@@ -86,10 +86,10 @@ Branch: `feat/004-docs`
   do NestJS por documentação do projeto — variáveis de ambiente, como rodar migrations, estrutura da
   tabela `waitlist_entries` e o contrato de `POST /waitlist` com erros e nota de idempotência,
   conforme a regra 4 do clauderc.
-- [] Task 02: Atualizar o `CLAUDE.md`. Arquivo: `CLAUDE.md`. Objetivo: remover a afirmação de que o
+- [x] Task 02: Atualizar o `CLAUDE.md`. Arquivo: `CLAUDE.md`. Objetivo: remover a afirmação de que o
   repositório ainda é o starter cru e registrar o layout de camadas, o uso de TypeORM e o fluxo de
   migrations.
-- [] Task 03: Rodar `npm run lint`, `npm test`, `npm run test:e2e` e `npm run build`. Objetivo:
+- [x] Task 03: Rodar `npm run lint`, `npm test`, `npm run test:e2e` e `npm run build`. Objetivo:
   suíte verde e build limpo antes de fechar a spec.
 - [] Task 04: Validar o endpoint com uma requisição real contra o Supabase e conferir a linha
   gravada. Objetivo: provar o caminho ponta a ponta, incluindo o segundo envio devolvendo o mesmo

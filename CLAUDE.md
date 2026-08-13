@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project state
 
-`eduleno-back` is a NestJS 11 backend. As of now the repository is still the unmodified `@nestjs/cli` starter (single `AppModule` / `AppController` / `AppService` returning "Hello World!"), so nearly all domain code is still to be written. The README is the stock NestJS README and carries no project-specific information.
+`eduleno-back` is a NestJS 11 backend. It uses TypeORM with PostgreSQL (Supabase) for data persistence. The project follows a simple MVC layout with modules, controllers, services, and repositories. Repositories always return objects `{ found, entry }`, never primitive `null` directly, to simplify the service logic.
 
 ## Commands
 
@@ -18,6 +18,10 @@ npm run format           # prettier --write over src/ and test/
 npm test                 # unit tests: jest, rootDir=src, matches *.spec.ts
 npm run test:cov         # coverage -> ./coverage
 npm run test:e2e         # e2e: jest --config ./test/jest-e2e.json, matches *.e2e-spec.ts at repo root
+
+# Database
+npm run migration:generate # generates migration from entity changes
+npm run migration:run      # applies pending migrations
 ```
 
 Run a single unit test file or case:
@@ -32,9 +36,9 @@ Note the two Jest configs are separate: the inline config in `package.json` only
 
 ## Architecture
 
-Standard Nest DI/module layout. New features should follow the Nest convention of one directory per feature under `src/` containing `*.module.ts`, `*.controller.ts`, `*.service.ts` (plus `dto/` and `entities/` as needed), with the feature module imported into `AppModule.imports`. `nest g resource <name>` scaffolds this and is wired up via `nest-cli.json`.
+Standard Nest DI/module layout. New features follow the Nest convention of one directory per feature under `src/` containing `*.module.ts`, `*.controller.ts`, `*.service.ts`, and `*.repository.ts` (plus `dto/` and `entities/` as needed), with the feature module imported into `AppModule.imports`. `DatabaseModule` provides the TypeORM connection using `ConfigService`.
 
-`src/main.ts` is the only place global setup (validation pipes, CORS, prefixes, Swagger) can be applied — it is currently bare, so anything of that kind must be added there deliberately.
+`src/main.ts` is the only place global setup (validation pipes, CORS, Swagger, trust proxy) can be applied. Validation is strictly configured to throw on non-whitelisted properties.
 
 ## Conventions
 

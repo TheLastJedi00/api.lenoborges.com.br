@@ -29,13 +29,19 @@ describe('WaitlistController', () => {
   });
 
   it('should call service and return receipt on POST', async () => {
-    const dto = { name: 'Test', phone: '11999998888', email: 'test@test.com', consent: true };
+    const dto = {
+      name: 'Test',
+      phone: '11999998888',
+      email: 'test@test.com',
+      consent: true,
+    };
     const receipt: WaitlistReceiptDto = { id: 'uuid', receivedAt: new Date() };
 
     jest.spyOn(service, 'create').mockResolvedValue(receipt);
 
     const result = await controller.create(dto);
     expect(result).toEqual(receipt);
+    // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(service.create).toHaveBeenCalledWith(dto);
   });
 });

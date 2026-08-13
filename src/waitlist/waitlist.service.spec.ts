@@ -1,7 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { WaitlistService } from './waitlist.service';
 import { WaitlistRepository } from './waitlist.repository';
-import { BadRequestException, InternalServerErrorException } from '@nestjs/common';
+import {
+  BadRequestException,
+  InternalServerErrorException,
+} from '@nestjs/common';
 
 const mockRepository = {
   findByEmail: jest.fn(),
@@ -41,7 +44,10 @@ describe('WaitlistService', () => {
       consent: true,
     });
 
-    expect(result).toEqual({ id: 'uuid', receivedAt: new Date('2026-08-13T18:20:31.412Z') });
+    expect(result).toEqual({
+      id: 'uuid',
+      receivedAt: new Date('2026-08-13T18:20:31.412Z'),
+    });
     expect(repository.create).toHaveBeenCalledWith({
       name: 'Test Name',
       phone: '11999998888',
@@ -52,7 +58,9 @@ describe('WaitlistService', () => {
 
   it('should normalize phone', async () => {
     repository.findByEmail.mockResolvedValue({ found: false });
-    repository.create.mockResolvedValue({ entry: { id: 'uuid', createdAt: new Date() } });
+    repository.create.mockResolvedValue({
+      entry: { id: 'uuid', createdAt: new Date() },
+    });
 
     await service.create({
       name: 'Test',
@@ -61,12 +69,16 @@ describe('WaitlistService', () => {
       consent: true,
     });
 
-    expect(repository.create).toHaveBeenCalledWith(expect.objectContaining({ phone: '11999998888' }));
+    expect(repository.create).toHaveBeenCalledWith(
+      expect.objectContaining({ phone: '11999998888' }),
+    );
   });
 
   it('should normalize email', async () => {
     repository.findByEmail.mockResolvedValue({ found: false });
-    repository.create.mockResolvedValue({ entry: { id: 'uuid', createdAt: new Date() } });
+    repository.create.mockResolvedValue({
+      entry: { id: 'uuid', createdAt: new Date() },
+    });
 
     await service.create({
       name: 'Test',
@@ -76,12 +88,16 @@ describe('WaitlistService', () => {
     });
 
     expect(repository.findByEmail).toHaveBeenCalledWith('test@email.com');
-    expect(repository.create).toHaveBeenCalledWith(expect.objectContaining({ email: 'test@email.com' }));
+    expect(repository.create).toHaveBeenCalledWith(
+      expect.objectContaining({ email: 'test@email.com' }),
+    );
   });
 
   it('should normalize name', async () => {
     repository.findByEmail.mockResolvedValue({ found: false });
-    repository.create.mockResolvedValue({ entry: { id: 'uuid', createdAt: new Date() } });
+    repository.create.mockResolvedValue({
+      entry: { id: 'uuid', createdAt: new Date() },
+    });
 
     await service.create({
       name: '  Test   Name  ',
@@ -90,16 +106,20 @@ describe('WaitlistService', () => {
       consent: true,
     });
 
-    expect(repository.create).toHaveBeenCalledWith(expect.objectContaining({ name: 'Test Name' }));
+    expect(repository.create).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'Test Name' }),
+    );
   });
 
   it('should throw BadRequestException if consent is false', async () => {
-    await expect(service.create({
-      name: 'Test',
-      phone: '11999998888',
-      email: 'test@test.com',
-      consent: false,
-    })).rejects.toThrow(BadRequestException);
+    await expect(
+      service.create({
+        name: 'Test',
+        phone: '11999998888',
+        email: 'test@test.com',
+        consent: false,
+      }),
+    ).rejects.toThrow(BadRequestException);
 
     expect(repository.findByEmail).not.toHaveBeenCalled();
     expect(repository.create).not.toHaveBeenCalled();
@@ -108,7 +128,10 @@ describe('WaitlistService', () => {
   it('should not create if email already exists and return existing receipt', async () => {
     repository.findByEmail.mockResolvedValue({
       found: true,
-      entry: { id: 'existing-uuid', createdAt: new Date('2026-08-13T18:20:31.412Z') },
+      entry: {
+        id: 'existing-uuid',
+        createdAt: new Date('2026-08-13T18:20:31.412Z'),
+      },
     });
 
     const result = await service.create({
@@ -118,14 +141,23 @@ describe('WaitlistService', () => {
       consent: true,
     });
 
-    expect(result).toEqual({ id: 'existing-uuid', receivedAt: new Date('2026-08-13T18:20:31.412Z') });
+    expect(result).toEqual({
+      id: 'existing-uuid',
+      receivedAt: new Date('2026-08-13T18:20:31.412Z'),
+    });
     expect(repository.create).not.toHaveBeenCalled();
   });
 
   it('should handle unique violation (23505) and return existing receipt', async () => {
     repository.findByEmail
       .mockResolvedValueOnce({ found: false })
-      .mockResolvedValueOnce({ found: true, entry: { id: 'existing-uuid', createdAt: new Date('2026-08-13T18:20:31.412Z') } });
+      .mockResolvedValueOnce({
+        found: true,
+        entry: {
+          id: 'existing-uuid',
+          createdAt: new Date('2026-08-13T18:20:31.412Z'),
+        },
+      });
 
     repository.create.mockRejectedValue({ code: '23505' });
 
@@ -136,7 +168,10 @@ describe('WaitlistService', () => {
       consent: true,
     });
 
-    expect(result).toEqual({ id: 'existing-uuid', receivedAt: new Date('2026-08-13T18:20:31.412Z') });
+    expect(result).toEqual({
+      id: 'existing-uuid',
+      receivedAt: new Date('2026-08-13T18:20:31.412Z'),
+    });
     expect(repository.create).toHaveBeenCalled();
     expect(repository.findByEmail).toHaveBeenCalledTimes(2);
   });
@@ -145,12 +180,14 @@ describe('WaitlistService', () => {
     repository.findByEmail.mockResolvedValue({ found: false });
     repository.create.mockRejectedValue(new Error('Sensitive DB Error'));
 
-    await expect(service.create({
-      name: 'Test',
-      phone: '11999998888',
-      email: 'test@test.com',
-      consent: true,
-    })).rejects.toThrow(InternalServerErrorException);
+    await expect(
+      service.create({
+        name: 'Test',
+        phone: '11999998888',
+        email: 'test@test.com',
+        consent: true,
+      }),
+    ).rejects.toThrow(InternalServerErrorException);
 
     try {
       await service.create({
@@ -160,7 +197,7 @@ describe('WaitlistService', () => {
         consent: true,
       });
     } catch (e) {
-      expect(e.message).not.toContain('Sensitive DB Error');
+      expect((e as Error).message).not.toContain('Sensitive DB Error');
     }
   });
 });

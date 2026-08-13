@@ -1,4 +1,8 @@
-import { Injectable, BadRequestException, InternalServerErrorException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { WaitlistRepository } from './waitlist.repository';
 import { CreateWaitlistEntryDto } from './dto/create-waitlist-entry.dto';
 import { WaitlistReceiptDto } from './dto/waitlist-receipt.dto';
@@ -36,8 +40,14 @@ export class WaitlistService {
         id: created.entry.id,
         receivedAt: created.entry.createdAt,
       };
-    } catch (error: any) {
-      if (error?.code === '23505') { // PostgreSQL unique violation
+    } catch (error: unknown) {
+      if (
+        error &&
+        typeof error === 'object' &&
+        'code' in error &&
+        error.code === '23505'
+      ) {
+        // PostgreSQL unique violation
         const existing = await this.repository.findByEmail(normalizedEmail);
         if (existing.found && existing.entry) {
           return {
@@ -47,7 +57,9 @@ export class WaitlistService {
         }
       }
       // Do not leak database error
-      throw new InternalServerErrorException('Failed to process waitlist entry');
+      throw new InternalServerErrorException(
+        'Failed to process waitlist entry',
+      );
     }
   }
 }

@@ -13,7 +13,7 @@ async function bootstrap() {
 
   const frontendUrl = configService.get<string>('FRONTEND_URL') || '';
   const allowedOrigins = frontendUrl.split(',').map((url) => url.trim());
-  
+
   app.enableCors({
     origin: allowedOrigins,
   });
@@ -36,4 +36,4 @@ async function bootstrap() {
   const port = configService.get<number>('PORT') ?? 3000;
   await app.listen(port);
 }
-bootstrap();
+void bootstrap();
