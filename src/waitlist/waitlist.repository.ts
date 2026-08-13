@@ -10,7 +10,9 @@ export class WaitlistRepository {
     private readonly repository: Repository<WaitlistEntry>,
   ) {}
 
-  async findByEmail(email: string): Promise<{ found: boolean; entry?: WaitlistEntry }> {
+  async findByEmail(
+    email: string,
+  ): Promise<{ found: boolean; entry?: WaitlistEntry }> {
     const entry = await this.repository.findOne({ where: { email } });
     if (entry) {
       return { found: true, entry };
@@ -18,7 +20,9 @@ export class WaitlistRepository {
     return { found: false };
   }
 
-  async create(data: Partial<WaitlistEntry>): Promise<{ entry: WaitlistEntry }> {
+  async create(
+    data: Partial<WaitlistEntry>,
+  ): Promise<{ entry: WaitlistEntry }> {
     const entry = this.repository.create(data);
     const savedEntry = await this.repository.save(entry);
     return { entry: savedEntry };

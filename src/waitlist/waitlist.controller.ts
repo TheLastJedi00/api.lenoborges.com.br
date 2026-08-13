@@ -14,13 +14,20 @@ export class WaitlistController {
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Entrar na lista de espera' })
-  @ApiResponse({ status: 201, description: 'Inscrição recebida (ou já existente).', type: WaitlistReceiptDto })
-  @ApiResponse({ status: 400, description: 'Erro de validação ou consentimento ausente.' })
+  @ApiResponse({
+    status: 201,
+    description: 'Inscrição recebida (ou já existente).',
+    type: WaitlistReceiptDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Erro de validação ou consentimento ausente.',
+  })
   @ApiResponse({ status: 429, description: 'Limite de requisições excedido.' })
   @ApiResponse({ status: 500, description: 'Erro interno no banco de dados.' })
-  async create(@Body() createWaitlistDto: CreateWaitlistEntryDto): Promise<WaitlistReceiptDto> {
+  async create(
+    @Body() createWaitlistDto: CreateWaitlistEntryDto,
+  ): Promise<WaitlistReceiptDto> {
     return this.waitlistService.create(createWaitlistDto);
   }
 }
-
-

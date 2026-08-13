@@ -14,10 +14,12 @@ import { WaitlistModule } from './waitlist/waitlist.module';
       isGlobal: true,
       validate,
     }),
-    ThrottlerModule.forRoot([{
-      ttl: 60000,
-      limit: 60,
-    }]),
+    ThrottlerModule.forRoot([
+      {
+        ttl: 60000,
+        limit: 60,
+      },
+    ]),
     DatabaseModule,
     WaitlistModule,
   ],
