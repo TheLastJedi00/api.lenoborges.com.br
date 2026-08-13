@@ -68,7 +68,7 @@ Branch: `feat/004-hardening`
 - [x] Task 01: Instalar e registrar o `@nestjs/throttler`. Arquivos: `package.json`,
   `src/app.module.ts`. Objetivo: default global de 60 req/60s por IP com o guard aplicado
   globalmente.
-- [] Task 02: Apertar o limite do endpoint público. Arquivo: `src/waitlist/waitlist.controller.ts`.
+- [x] Task 02: Apertar o limite do endpoint público. Arquivo: `src/waitlist/waitlist.controller.ts`.
   Objetivo: `@Throttle` de 5 requisições por 60s em `POST /waitlist`, devolvendo 429 no estouro.
 - [] Task 03: Instalar e configurar o Swagger. Arquivos: `package.json`, `src/main.ts`. Objetivo:
   documentação navegável em `/docs` com título "Eduleno API".
