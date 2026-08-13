@@ -91,7 +91,7 @@ Branch: `feat/004-docs`
   migrations.
 - [x] Task 03: Rodar `npm run lint`, `npm test`, `npm run test:e2e` e `npm run build`. Objetivo:
   suíte verde e build limpo antes de fechar a spec.
-- [] Task 04: Validar o endpoint com uma requisição real contra o Supabase e conferir a linha
+- [x] Task 04: Validar o endpoint com uma requisição real contra o Supabase e conferir a linha
   gravada. Objetivo: provar o caminho ponta a ponta, incluindo o segundo envio devolvendo o mesmo
   `id`.
 
