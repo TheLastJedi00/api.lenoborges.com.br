@@ -70,9 +70,9 @@ Branch: `feat/004-hardening`
   globalmente.
 - [x] Task 02: Apertar o limite do endpoint público. Arquivo: `src/waitlist/waitlist.controller.ts`.
   Objetivo: `@Throttle` de 5 requisições por 60s em `POST /waitlist`, devolvendo 429 no estouro.
-- [] Task 03: Instalar e configurar o Swagger. Arquivos: `package.json`, `src/main.ts`. Objetivo:
+- [x] Task 03: Instalar e configurar o Swagger. Arquivos: `package.json`, `src/main.ts`. Objetivo:
   documentação navegável em `/docs` com título "Eduleno API".
-- [] Task 04: Anotar DTOs e controller para o Swagger. Arquivos: `src/waitlist/dto/*.ts`,
+- [x] Task 04: Anotar DTOs e controller para o Swagger. Arquivos: `src/waitlist/dto/*.ts`,
   `src/waitlist/waitlist.controller.ts`. Objetivo: `/docs` mostrar o corpo esperado, o exemplo de
   recibo e as respostas 400, 429 e 500.
 - [] Task 05: Escrever o teste e2e. Arquivo: `test/waitlist.e2e-spec.ts`. Objetivo: cobrir envio
