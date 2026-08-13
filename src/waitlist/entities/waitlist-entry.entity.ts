@@ -3,7 +3,6 @@ import {
   PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
-  Index,
 } from 'typeorm';
 
 @Entity('waitlist_entries')
@@ -17,7 +16,6 @@ export class WaitlistEntry {
   @Column()
   phone: string;
 
-  @Index({ unique: true })
   @Column({ unique: true })
   email: string;
 

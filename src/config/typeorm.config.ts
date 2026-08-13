@@ -25,11 +25,13 @@ export const sslOptions = {
   ...(caPath ? { ca: readFileSync(caPath, 'utf8') } : {}),
 };
 
+// O schema NAO e gerenciado aqui: as migrations vivem em supabase/migrations e
+// sao aplicadas por `supabase db push`. O TypeORM so mapeia e consulta, sempre
+// com synchronize: false.
 export default new DataSource({
   type: 'postgres',
   url: process.env.DATABASE_URL,
   ssl: sslOptions,
   synchronize: false,
   entities: [join(__dirname, '..', '**', '*.entity.{ts,js}')],
-  migrations: [join(__dirname, '..', 'database', 'migrations', '*.{ts,js}')],
 });

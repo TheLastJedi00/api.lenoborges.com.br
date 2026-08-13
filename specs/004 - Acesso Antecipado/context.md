@@ -1,3 +1,24 @@
+# Alteração de escopo (2026-08-13) — as migrations passam do TypeORM para o Supabase
+
+Durante o code review ficou claro que **nada aplicava as migrations automaticamente**. Elas viviam
+em `src/database/migrations/` e só chegavam ao banco quando alguém rodava `npm run migration:run`
+à mão. Não havia pasta `supabase/`, nem CI, nem passo de deploy: um `git push` não tocava no banco,
+e uma API subindo em ambiente novo iniciaria bem (`synchronize: false`) e estouraria na primeira
+requisição, sem tabela.
+
+Junto disso, o script `typeorm` dependia de `ts-node` (devDependency) e apontava para o `.ts` em
+`src/`, então nem rodaria num container instalado com `npm ci --omit=dev`.
+
+Decisão do usuário: **o schema passa a ser do Supabase CLI**. As migrations viram SQL em
+`supabase/migrations/`, aplicadas por `supabase db push`. O TypeORM continua responsável por
+entidades, repositories e consultas, sempre com `synchronize: false`, e não gera nem aplica
+migration. O `clauderc.md` foi atualizado com essa regra.
+
+Consequência prática: alterar estrutura de tabela passa a exigir os **dois lados** editados à mão,
+o SQL da migration e a entity correspondente. Nada sincroniza um a partir do outro.
+
+---
+
 # Spec 004: Acesso Antecipado à Seita Dev
 
 ## Objetivo

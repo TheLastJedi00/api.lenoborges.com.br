@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `eduleno-back` is a NestJS 11 backend. It uses TypeORM with PostgreSQL (Supabase) for data persistence. The project follows a simple MVC layout with modules, controllers, services, and repositories. Repositories always return objects `{ found, entry }`, never primitive `null` directly, to simplify the service logic.
 
+The database schema belongs to the Supabase CLI: migrations are plain SQL under `supabase/migrations/` applied with `supabase db push`. TypeORM always runs with `synchronize: false` and neither generates nor applies migrations — it only maps and queries. A schema change therefore requires editing both sides by hand: the SQL migration and the matching entity under `src/**/entities/`.
+
 ## Commands
 
 ```bash
@@ -19,9 +21,10 @@ npm test                 # unit tests: jest, rootDir=src, matches *.spec.ts
 npm run test:cov         # coverage -> ./coverage
 npm run test:e2e         # e2e: jest --config ./test/jest-e2e.json, matches *.e2e-spec.ts at repo root
 
-# Database
-npm run migration:generate # generates migration from entity changes
-npm run migration:run      # applies pending migrations
+# Database (schema is owned by the Supabase CLI, not TypeORM)
+npm run migration:new <name> # creates supabase/migrations/<timestamp>_<name>.sql
+npm run migration:list       # compares local migrations with the remote project
+npm run migration:push       # applies pending migrations (supabase db push)
 ```
 
 Run a single unit test file or case:

@@ -1,6 +1,10 @@
 # Design da API
 - MVC Simples
-- TypeORM
+- TypeORM para entidades, repositories e consultas
+- Migrations são do Supabase, não do TypeORM: o schema vive em `supabase/migrations/*.sql` e é
+  aplicado por `supabase db push` (ou pela integração do Supabase com o GitHub). O TypeORM roda
+  sempre com `synchronize: false` e não gera nem aplica migration. Um `git push` não altera o
+  banco por si só: o passo do Supabase é explícito.
 - Repositories sempre devolvem objeto
 - Documentar endpointes e estruturas de dados no [Read Me]("../../../README.md")
 - Alterações em estrutura de dados devem marcar specs anteriores que montaram essa table com Deprecated e referenciá-las na spec atual
