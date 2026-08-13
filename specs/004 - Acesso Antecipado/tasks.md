@@ -1,4 +1,4 @@
-# Fase 01: Fundação (config, banco e globais) []
+# Fase 01: Fundação (config, banco e globais) [x]
 Branch: `feat/004-fundacao`
 
 - [x] Task 01: Instalar dependências — `@nestjs/config`, `@nestjs/typeorm`, `typeorm`, `pg`,
@@ -20,7 +20,7 @@ Branch: `feat/004-fundacao`
   conexão no container do Nest sem duplicar a configuração da Task 04.
 - [x] Task 06: Adicionar scripts de migration. Arquivo: `package.json`. Objetivo: `migration:generate`,
   `migration:run` e `migration:revert` apontando para o DataSource da Task 04.
-- [] Task 07: Configurar os globais do bootstrap. Arquivo: `src/main.ts`. Objetivo: `ValidationPipe`
+- [x] Task 07: Configurar os globais do bootstrap. Arquivo: `src/main.ts`. Objetivo: `ValidationPipe`
   global (`whitelist`, `forbidNonWhitelisted`, `transform`), CORS restrito às origens de
   `FRONTEND_URL` (lista separada por vírgula) e `trust proxy` ligado para o rate limit enxergar o
   IP real.
