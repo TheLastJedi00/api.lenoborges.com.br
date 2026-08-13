@@ -121,21 +121,21 @@ Repositório: `../eduleno-front` (branch base `dev`). Branch: `feat/004-waitlist
   de CORS no console.
 
 # Fase 07: Release []
-- [] Task 01: Abrir `release/004-acesso-antecipado` unindo as branches `feat/004-*` do backend.
-- [] Task 02: Merge da release em `dev` e PR contra a `main` (se houver origin; se não, merge local).
+- [x] Task 01: Abrir `release/004-acesso-antecipado` unindo as branches `feat/004-*` do backend.
+- [x] Task 02: Merge da release em `dev` e PR contra a `main` (se houver origin; se não, merge local).
 - [] Task 03: Mesmo fluxo no `eduleno-front` para a `feat/004-waitlist-http`.
 
 ## Checklist final
-- [] Migration aplicada e tabela `waitlist_entries` criada com índice único em `email`
-- [] `POST /waitlist` devolve 201 com `{ id, receivedAt }`
-- [] E-mail repetido devolve o recibo original, sem linha nova e sem erro
-- [] Consentimento ausente ou falso devolve 400
-- [] Rate limit de 5 req/60s por IP ativo no endpoint
-- [] CORS restrito às origens de `FRONTEND_URL`
-- [] Swagger disponível em `/docs`
-- [] Specs do service escritas antes da lógica, todas verdes
-- [] `npm run lint`, `npm test`, `npm run test:e2e` e `npm run build` sem erro
-- [] `README.md` documentando endpoint e estrutura de dados
-- [] Nenhum uso de `@supabase/supabase-js` nem leitura de `SUPABASE_SERVICE_ROLE_KEY`
+- [x] Migration aplicada e tabela `waitlist_entries` criada com índice único em `email`
+- [x] `POST /waitlist` devolve 201 com `{ id, receivedAt }`
+- [x] E-mail repetido devolve o recibo original, sem linha nova e sem erro
+- [x] Consentimento ausente ou falso devolve 400
+- [x] Rate limit de 5 req/60s por IP ativo no endpoint
+- [x] CORS restrito às origens de `FRONTEND_URL`
+- [x] Swagger disponível em `/docs`
+- [x] Specs do service escritas antes da lógica, todas verdes
+- [x] `npm run lint`, `npm test`, `npm run test:e2e` e `npm run build` sem erro
+- [x] `README.md` documentando endpoint e estrutura de dados
+- [x] Nenhum uso de `@supabase/supabase-js` nem leitura de `SUPABASE_SERVICE_ROLE_KEY`
 - [] Front chamando `POST /waitlist` de verdade, sem mock e sem erro de CORS
 - [] Texto de uso dos dados do modal descrevendo o armazenamento real, sem inventar política
