@@ -8,7 +8,7 @@ Branch: `feat/004-fundacao`
   acrescentar `PORT`, `NODE_ENV` e `FRONTEND_URL`, corrigir o `DATABASE_URL` de exemplo para o
   formato completo do Supabase (porta 5432) e marcar `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY`
   como reservados para uso futuro, não lidos pela API.
-- [] Task 03: Registrar `ConfigModule.forRoot({ isGlobal: true })` com validação de env. Arquivo:
+- [x] Task 03: Registrar `ConfigModule.forRoot({ isGlobal: true })` com validação de env. Arquivo:
   `src/app.module.ts`. Objetivo: a aplicação falhar no boot se `DATABASE_URL` faltar, em vez de
   quebrar na primeira requisição.
 - [] Task 04: Criar o `DataSource` compartilhado entre app e CLI. Arquivo:
