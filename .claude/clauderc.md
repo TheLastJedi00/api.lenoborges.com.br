@@ -2,6 +2,8 @@
 - MVC Simples
 - TypeORM
 - Repositories sempre devolvem objeto
+- Documentar endpointes e estruturas de dados no [Read Me]("../../../README.md")
+- Alterações em estrutura de dados devem marcar specs anteriores que montaram essa table com Deprecated e referenciá-las na spec atual
 
 # Fluxo de Trabalho
 1. Ler context.md da spec
