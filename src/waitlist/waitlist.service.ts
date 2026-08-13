@@ -47,13 +47,19 @@ export class WaitlistService {
         'code' in error &&
         error.code === '23505'
       ) {
-        // PostgreSQL unique violation
-        const existing = await this.repository.findByEmail(normalizedEmail);
-        if (existing.found && existing.entry) {
-          return {
-            id: existing.entry.id,
-            receivedAt: existing.entry.createdAt,
-          };
+        // PostgreSQL unique violation: outra requisicao gravou o mesmo e-mail
+        // entre o findByEmail e o create. A releitura vai dentro do seu proprio
+        // try para nao escapar do catch e vazar o erro cru do driver.
+        try {
+          const existing = await this.repository.findByEmail(normalizedEmail);
+          if (existing.found && existing.entry) {
+            return {
+              id: existing.entry.id,
+              receivedAt: existing.entry.createdAt,
+            };
+          }
+        } catch {
+          // cai no 500 generico abaixo
         }
       }
       // Do not leak database error

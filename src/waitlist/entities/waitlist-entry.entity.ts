@@ -24,6 +24,6 @@ export class WaitlistEntry {
   @Column({ type: 'boolean' })
   consent: boolean;
 
-  @CreateDateColumn({ name: 'created_at' })
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 }
