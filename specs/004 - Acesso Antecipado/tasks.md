@@ -56,7 +56,7 @@ Branch: `feat/004-waitlist-endpoint`
 - [x] Task 03: Implementar o `WaitlistService` até a spec da Task 02 passar. Arquivo:
   `src/waitlist/waitlist.service.ts`. Objetivo: normalizar a entrada, recusar `consent` falso,
   reaproveitar o recibo existente e traduzir a entity em `WaitlistReceipt`.
-- [] Task 04: Criar o controller e sua spec. Arquivos: `src/waitlist/waitlist.controller.ts` e
+- [x] Task 04: Criar o controller e sua spec. Arquivos: `src/waitlist/waitlist.controller.ts` e
   `src/waitlist/waitlist.controller.spec.ts`. Objetivo: `POST /waitlist` respondendo 201 nos dois
   caminhos (novo e já existente) e delegando ao service.
 - [] Task 05: Criar o `WaitlistModule` e importá-lo. Arquivos: `src/waitlist/waitlist.module.ts` e
