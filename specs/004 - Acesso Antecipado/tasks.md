@@ -4,7 +4,7 @@ Branch: `feat/004-fundacao`
 - [x] Task 01: Instalar dependências — `@nestjs/config`, `@nestjs/typeorm`, `typeorm`, `pg`,
   `class-validator`, `class-transformer`. Arquivo: `package.json`. Objetivo: ter o runtime de
   configuração, ORM e validação disponíveis.
-- [] Task 02: Documentar as variáveis de ambiente. Arquivos: `.env.example`, `.env`. Objetivo:
+- [x] Task 02: Documentar as variáveis de ambiente. Arquivos: `.env.example`, `.env`. Objetivo:
   acrescentar `PORT`, `NODE_ENV` e `FRONTEND_URL`, corrigir o `DATABASE_URL` de exemplo para o
   formato completo do Supabase (porta 5432) e marcar `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY`
   como reservados para uso futuro, não lidos pela API.
