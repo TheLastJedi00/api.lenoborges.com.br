@@ -79,10 +79,10 @@ Branch: `feat/004-hardening`
   válido (201 com `id` e `receivedAt`), corpo inválido (400) e envio repetido devolvendo o mesmo
   `id`.
 
-# Fase 05: Documentação e validação final []
+# Fase 05: Documentação e validação final [x]
 Branch: `feat/004-docs`
 
-- [] Task 01: Reescrever o `README.md`. Arquivo: `README.md`. Objetivo: substituir o README padrão
+- [x] Task 01: Reescrever o `README.md`. Arquivo: `README.md`. Objetivo: substituir o README padrão
   do NestJS por documentação do projeto — variáveis de ambiente, como rodar migrations, estrutura da
   tabela `waitlist_entries` e o contrato de `POST /waitlist` com erros e nota de idempotência,
   conforme a regra 4 do clauderc.
