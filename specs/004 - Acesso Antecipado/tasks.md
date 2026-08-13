@@ -35,7 +35,7 @@ Branch: `feat/004-modelo-de-dados`
   `src/database/migrations/<timestamp>-CreateWaitlistEntries.ts`. Objetivo: criar a tabela com
   `gen_random_uuid()` como default do `id`, `created_at` com `now()`, índice único em `email` e um
   `down` que derruba tabela e índice.
-- [] Task 03: Criar o repository. Arquivo: `src/waitlist/waitlist.repository.ts`. Objetivo: único
+- [x] Task 03: Criar o repository. Arquivo: `src/waitlist/waitlist.repository.ts`. Objetivo: único
   ponto que toca o TypeORM, com `findByEmail` devolvendo `{ found, entry }` e `create` devolvendo
   `{ entry }` — nunca `null` nem primitivo solto, conforme o clauderc.
 - [] Task 04: Rodar a migration contra o Supabase (o `.env` já está preenchido) e conferir a tabela.
