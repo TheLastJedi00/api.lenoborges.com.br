@@ -62,7 +62,7 @@ Branch: `feat/004-waitlist-endpoint`
 - [x] Task 05: Criar o `WaitlistModule` e importá-lo. Arquivos: `src/waitlist/waitlist.module.ts` e
   `src/app.module.ts`. Objetivo: registrar entity, repository, service e controller no container.
 
-# Fase 04: Endurecimento e documentação da API []
+# Fase 04: Endurecimento e documentação da API [x]
 Branch: `feat/004-hardening`
 
 - [x] Task 01: Instalar e registrar o `@nestjs/throttler`. Arquivos: `package.json`,
@@ -75,7 +75,7 @@ Branch: `feat/004-hardening`
 - [x] Task 04: Anotar DTOs e controller para o Swagger. Arquivos: `src/waitlist/dto/*.ts`,
   `src/waitlist/waitlist.controller.ts`. Objetivo: `/docs` mostrar o corpo esperado, o exemplo de
   recibo e as respostas 400, 429 e 500.
-- [] Task 05: Escrever o teste e2e. Arquivo: `test/waitlist.e2e-spec.ts`. Objetivo: cobrir envio
+- [x] Task 05: Escrever o teste e2e. Arquivo: `test/waitlist.e2e-spec.ts`. Objetivo: cobrir envio
   válido (201 com `id` e `receivedAt`), corpo inválido (400) e envio repetido devolvendo o mesmo
   `id`.
 
