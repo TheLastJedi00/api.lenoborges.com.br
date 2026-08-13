@@ -35,6 +35,18 @@ class EnvironmentVariables {
   @IsString()
   @IsOptional()
   DATABASE_SSL_CA_PATH?: string;
+
+  // Quantidade de proxies na frente da API. Precisa bater com a topologia real,
+  // senao o rate limit por IP pode ser furado com X-Forwarded-For forjado.
+  @IsNumber()
+  @IsOptional()
+  TRUST_PROXY_HOPS?: number;
+
+  // 'true' liga o Swagger em /docs mesmo em producao. Fora de producao ele ja
+  // vem ligado. Ver src/main.ts.
+  @IsString()
+  @IsOptional()
+  SWAGGER_ENABLED?: string;
 }
 
 export function validate(config: Record<string, unknown>) {
