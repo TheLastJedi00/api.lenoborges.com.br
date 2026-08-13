@@ -25,7 +25,7 @@ Branch: `feat/004-fundacao`
   `FRONTEND_URL` (lista separada por vírgula) e `trust proxy` ligado para o rate limit enxergar o
   IP real.
 
-# Fase 02: Modelo de dados []
+# Fase 02: Modelo de dados [x]
 Branch: `feat/004-modelo-de-dados`
 
 - [x] Task 01: Criar a entity. Arquivo: `src/waitlist/entities/waitlist-entry.entity.ts`. Objetivo:
@@ -38,7 +38,7 @@ Branch: `feat/004-modelo-de-dados`
 - [x] Task 03: Criar o repository. Arquivo: `src/waitlist/waitlist.repository.ts`. Objetivo: único
   ponto que toca o TypeORM, com `findByEmail` devolvendo `{ found, entry }` e `create` devolvendo
   `{ entry }` — nunca `null` nem primitivo solto, conforme o clauderc.
-- [] Task 04: Rodar a migration contra o Supabase (o `.env` já está preenchido) e conferir a tabela.
+- [x] Task 04: Rodar a migration contra o Supabase (o `.env` já está preenchido) e conferir a tabela.
   Objetivo: validar `DATABASE_URL`, SSL e porta antes de qualquer lógica depender disso. Se a URL
   apontar para o pooler 6543, usar 5432 só na execução do CLI, sem editar o `.env`.
 
