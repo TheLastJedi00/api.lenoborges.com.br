@@ -45,7 +45,7 @@ Branch: `feat/004-modelo-de-dados`
 # Fase 03: Endpoint da lista de espera (TDD) []
 Branch: `feat/004-waitlist-endpoint`
 
-- [] Task 01: Criar os DTOs. Arquivos: `src/waitlist/dto/create-waitlist-entry.dto.ts` e
+- [x] Task 01: Criar os DTOs. Arquivos: `src/waitlist/dto/create-waitlist-entry.dto.ts` e
   `src/waitlist/dto/waitlist-receipt.dto.ts`. Objetivo: validar `name` (2 a 120), `phone` (10 ou 11
   dígitos após limpar não dígitos), `email` (`IsEmail`) e `consent` (`Equals(true)`), e fixar o
   contrato de saída `{ id, receivedAt }` herdado da spec 003.
