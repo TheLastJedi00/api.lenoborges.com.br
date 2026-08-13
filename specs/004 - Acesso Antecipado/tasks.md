@@ -11,7 +11,7 @@ Branch: `feat/004-fundacao`
 - [x] Task 03: Registrar `ConfigModule.forRoot({ isGlobal: true })` com validação de env. Arquivo:
   `src/app.module.ts`. Objetivo: a aplicação falhar no boot se `DATABASE_URL` faltar, em vez de
   quebrar na primeira requisição.
-- [] Task 04: Criar o `DataSource` compartilhado entre app e CLI. Arquivo:
+- [x] Task 04: Criar o `DataSource` compartilhado entre app e CLI. Arquivo:
   `src/config/typeorm.config.ts`. Objetivo: uma única definição de conexão (URL, SSL com
   `rejectUnauthorized: false`, `synchronize: false`, `entities`, `migrations`) usada tanto pelo
   Nest quanto pelo `typeorm-cli`.
