@@ -65,7 +65,7 @@ Branch: `feat/004-waitlist-endpoint`
 # Fase 04: Endurecimento e documentação da API []
 Branch: `feat/004-hardening`
 
-- [] Task 01: Instalar e registrar o `@nestjs/throttler`. Arquivos: `package.json`,
+- [x] Task 01: Instalar e registrar o `@nestjs/throttler`. Arquivos: `package.json`,
   `src/app.module.ts`. Objetivo: default global de 60 req/60s por IP com o guard aplicado
   globalmente.
 - [] Task 02: Apertar o limite do endpoint público. Arquivo: `src/waitlist/waitlist.controller.ts`.
