@@ -28,7 +28,7 @@ Branch: `feat/004-fundacao`
 # Fase 02: Modelo de dados []
 Branch: `feat/004-modelo-de-dados`
 
-- [] Task 01: Criar a entity. Arquivo: `src/waitlist/entities/waitlist-entry.entity.ts`. Objetivo:
+- [x] Task 01: Criar a entity. Arquivo: `src/waitlist/entities/waitlist-entry.entity.ts`. Objetivo:
   mapear `waitlist_entries` com `id` UUID gerado, `name`, `phone`, `email` (único), `consent`
   booleano e `created_at` com default do banco.
 - [] Task 02: Gerar e revisar a migration. Arquivo:
