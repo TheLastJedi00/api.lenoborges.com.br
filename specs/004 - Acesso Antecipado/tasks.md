@@ -53,7 +53,7 @@ Branch: `feat/004-waitlist-endpoint`
   `src/waitlist/waitlist.service.spec.ts`. Objetivo: cobrir os 8 casos do context.md — criação,
   normalização de nome/telefone/e-mail, recusa sem consentimento, idempotência por e-mail, corrida
   com violação `23505` e erro genérico sem vazar mensagem do driver.
-- [] Task 03: Implementar o `WaitlistService` até a spec da Task 02 passar. Arquivo:
+- [x] Task 03: Implementar o `WaitlistService` até a spec da Task 02 passar. Arquivo:
   `src/waitlist/waitlist.service.ts`. Objetivo: normalizar a entrada, recusar `consent` falso,
   reaproveitar o recibo existente e traduzir a entity em `WaitlistReceipt`.
 - [] Task 04: Criar o controller e sua spec. Arquivos: `src/waitlist/waitlist.controller.ts` e
