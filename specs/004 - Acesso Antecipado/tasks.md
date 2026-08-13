@@ -31,7 +31,7 @@ Branch: `feat/004-modelo-de-dados`
 - [x] Task 01: Criar a entity. Arquivo: `src/waitlist/entities/waitlist-entry.entity.ts`. Objetivo:
   mapear `waitlist_entries` com `id` UUID gerado, `name`, `phone`, `email` (único), `consent`
   booleano e `created_at` com default do banco.
-- [] Task 02: Gerar e revisar a migration. Arquivo:
+- [x] Task 02: Gerar e revisar a migration. Arquivo:
   `src/database/migrations/<timestamp>-CreateWaitlistEntries.ts`. Objetivo: criar a tabela com
   `gen_random_uuid()` como default do `id`, `created_at` com `now()`, índice único em `email` e um
   `down` que derruba tabela e índice.
