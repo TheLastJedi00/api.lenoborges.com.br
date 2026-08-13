@@ -4,6 +4,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { validate } from './config/env.validation';
 import { DatabaseModule } from './database/database.module';
+import { WaitlistModule } from './waitlist/waitlist.module';
 
 @Module({
   imports: [
@@ -12,6 +13,7 @@ import { DatabaseModule } from './database/database.module';
       validate,
     }),
     DatabaseModule,
+    WaitlistModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -42,7 +42,7 @@ Branch: `feat/004-modelo-de-dados`
   Objetivo: validar `DATABASE_URL`, SSL e porta antes de qualquer lógica depender disso. Se a URL
   apontar para o pooler 6543, usar 5432 só na execução do CLI, sem editar o `.env`.
 
-# Fase 03: Endpoint da lista de espera (TDD) []
+# Fase 03: Endpoint da lista de espera (TDD) [x]
 Branch: `feat/004-waitlist-endpoint`
 
 - [x] Task 01: Criar os DTOs. Arquivos: `src/waitlist/dto/create-waitlist-entry.dto.ts` e
@@ -59,7 +59,7 @@ Branch: `feat/004-waitlist-endpoint`
 - [x] Task 04: Criar o controller e sua spec. Arquivos: `src/waitlist/waitlist.controller.ts` e
   `src/waitlist/waitlist.controller.spec.ts`. Objetivo: `POST /waitlist` respondendo 201 nos dois
   caminhos (novo e já existente) e delegando ao service.
-- [] Task 05: Criar o `WaitlistModule` e importá-lo. Arquivos: `src/waitlist/waitlist.module.ts` e
+- [x] Task 05: Criar o `WaitlistModule` e importá-lo. Arquivos: `src/waitlist/waitlist.module.ts` e
   `src/app.module.ts`. Objetivo: registrar entity, repository, service e controller no container.
 
 # Fase 04: Endurecimento e documentação da API []
