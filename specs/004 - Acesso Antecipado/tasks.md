@@ -15,7 +15,7 @@ Branch: `feat/004-fundacao`
   `src/config/typeorm.config.ts`. Objetivo: uma única definição de conexão (URL, SSL com
   `rejectUnauthorized: false`, `synchronize: false`, `entities`, `migrations`) usada tanto pelo
   Nest quanto pelo `typeorm-cli`.
-- [] Task 05: Criar o `DatabaseModule` com `TypeOrmModule.forRootAsync` lendo o `ConfigService`.
+- [x] Task 05: Criar o `DatabaseModule` com `TypeOrmModule.forRootAsync` lendo o `ConfigService`.
   Arquivo: `src/database/database.module.ts`, importado em `src/app.module.ts`. Objetivo: injetar a
   conexão no container do Nest sem duplicar a configuração da Task 04.
 - [] Task 06: Adicionar scripts de migration. Arquivo: `package.json`. Objetivo: `migration:generate`,
