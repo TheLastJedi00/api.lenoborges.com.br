@@ -49,7 +49,7 @@ Branch: `feat/004-waitlist-endpoint`
   `src/waitlist/dto/waitlist-receipt.dto.ts`. Objetivo: validar `name` (2 a 120), `phone` (10 ou 11
   dígitos após limpar não dígitos), `email` (`IsEmail`) e `consent` (`Equals(true)`), e fixar o
   contrato de saída `{ id, receivedAt }` herdado da spec 003.
-- [] Task 02 (TDD): Escrever a spec do service **antes** da lógica. Arquivo:
+- [x] Task 02 (TDD): Escrever a spec do service **antes** da lógica. Arquivo:
   `src/waitlist/waitlist.service.spec.ts`. Objetivo: cobrir os 8 casos do context.md — criação,
   normalização de nome/telefone/e-mail, recusa sem consentimento, idempotência por e-mail, corrida
   com violação `23505` e erro genérico sem vazar mensagem do driver.
