@@ -1,7 +1,7 @@
 # Fase 01: Fundação (config, banco e globais) []
 Branch: `feat/004-fundacao`
 
-- [] Task 01: Instalar dependências — `@nestjs/config`, `@nestjs/typeorm`, `typeorm`, `pg`,
+- [x] Task 01: Instalar dependências — `@nestjs/config`, `@nestjs/typeorm`, `typeorm`, `pg`,
   `class-validator`, `class-transformer`. Arquivo: `package.json`. Objetivo: ter o runtime de
   configuração, ORM e validação disponíveis.
 - [] Task 02: Documentar as variáveis de ambiente. Arquivos: `.env.example`, `.env`. Objetivo:
