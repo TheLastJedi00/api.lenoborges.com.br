@@ -29,7 +29,7 @@ depois de três fases construídas custaria as três.
 - [x] Task 06: Apagar o script de prova. Arquivo: `scratch/`. Objetivo: não deixar código com service
   role solto no repositório; o conhecimento fica no `context.md`, não no `.ts`.
 
-# Fase 02: Fundação (dependências, env, cliente Supabase, globais) []
+# Fase 02: Fundação (dependências, env, cliente Supabase, globais) [x]
 Branch: `feat/005-fundacao`
 
 - [x] Task 01: Instalar dependências. Arquivo: `package.json`. Objetivo: `@supabase/supabase-js` para
@@ -57,7 +57,7 @@ Branch: `feat/005-fundacao`
   ponto do projeto que instancia `@supabase/supabase-js`, expondo dois clientes com papéis separados
   (admin com service role, público com anon key), ambos com `persistSession: false` e
   `autoRefreshToken: false`, porque o backend é sem estado.
-- [] Task 08: Registrar o `cookie-parser` e ampliar o CORS. Arquivo: `src/main.ts`. Objetivo: ler
+- [x] Task 08: Registrar o `cookie-parser` e ampliar o CORS. Arquivo: `src/main.ts`. Objetivo: ler
   cookies no pipeline, ligar `credentials: true` no CORS (a spec 004 não tinha) e incluir `PATCH` nos
   métodos, mantendo a lista de origens vinda de `FRONTEND_URL` e nunca `origin: true`, que com
   credenciais abriria a API para qualquer site.
