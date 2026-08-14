@@ -6,6 +6,11 @@ import {
 import { WaitlistRepository } from './waitlist.repository';
 import { CreateWaitlistEntryDto } from './dto/create-waitlist-entry.dto';
 import { WaitlistReceiptDto } from './dto/waitlist-receipt.dto';
+import {
+  normalizeEmail,
+  normalizePhone,
+  normalizeName,
+} from '../common/normalize';
 
 @Injectable()
 export class WaitlistService {
@@ -16,9 +21,9 @@ export class WaitlistService {
       throw new BadRequestException('Consent is required');
     }
 
-    const normalizedEmail = dto.email.trim().toLowerCase();
-    const normalizedPhone = dto.phone.replace(/\D/g, '');
-    const normalizedName = dto.name.trim().replace(/\s+/g, ' ');
+    const normalizedEmail = normalizeEmail(dto.email);
+    const normalizedPhone = normalizePhone(dto.phone);
+    const normalizedName = normalizeName(dto.name);
 
     try {
       const existing = await this.repository.findByEmail(normalizedEmail);

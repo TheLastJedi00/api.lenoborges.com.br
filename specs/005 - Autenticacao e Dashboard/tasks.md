@@ -46,7 +46,7 @@ Branch: `feat/005-fundacao`
   `src/common/normalize.spec.ts`. Objetivo: mover trim com colapso de espaços do nome, dígitos do
   telefone e lowercase do e-mail para um único lugar, com os casos de teste migrados do
   `waitlist.service.spec.ts`.
-- [] Task 05: Passar o `WaitlistService` a usar o utilitário. Arquivos:
+- [x] Task 05: Passar o `WaitlistService` a usar o utilitário. Arquivos:
   `src/waitlist/waitlist.service.ts`, `src/waitlist/waitlist.service.spec.ts`. Objetivo: remover a
   normalização duplicada sem alterar comportamento; a suíte da spec 004 continua verde sem edição de
   expectativa.
