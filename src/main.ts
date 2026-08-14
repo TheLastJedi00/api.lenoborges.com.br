@@ -3,11 +3,14 @@ import { ValidationPipe } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   const configService = app.get(ConfigService);
+
+  app.use(cookieParser());
 
   // O limite por IP do ThrottlerGuard e o unico controle de abuso do endpoint
   // publico, e ele passa a ler o IP do X-Forwarded-For. O numero de hops precisa
@@ -24,6 +27,8 @@ async function bootstrap() {
 
   app.enableCors({
     origin: allowedOrigins,
+    credentials: true,
+    methods: ['GET', 'POST', 'PATCH', 'OPTIONS', 'PUT', 'DELETE'],
   });
 
   app.useGlobalPipes(
@@ -46,6 +51,7 @@ async function bootstrap() {
     const config = new DocumentBuilder()
       .setTitle('Eduleno API')
       .setVersion('1.0')
+      .addBearerAuth()
       .build();
     const documentFactory = () => SwaggerModule.createDocument(app, config);
     SwaggerModule.setup('docs', app, documentFactory);
