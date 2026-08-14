@@ -101,7 +101,7 @@ npm run migration:push             # aplica as pendentes
 - **Identidade vs Dados de Negócio**: Identidade (criação de usuários, login, envio de e-mails, tokens) é gerenciada via Supabase Auth (`@supabase/supabase-js`). Dados de negócio continuam sob TypeORM. A service role key fica confinada exclusivamente ao `SupabaseService`.
 - **Tokens de Sessão**:
   - **Access Token**: Enviado no corpo JSON da resposta (`SessionResponseDto`) para ser mantido em memória no frontend.
-  - **Refresh Token**: Gravado em cookie HTTP seguro (`eduleno_rt`) com flags `HttpOnly`, `Path=/auth`, `SameSite` e `Secure` configuráveis por variáveis de ambiente.
+  - **Refresh Token**: Gravado em cookie HTTP seguro (`eduleno_rt`) com flags `HttpOnly`, `Path=/auth`, `SameSite` e `Secure` configuráveis por variáveis de ambiente. `AUTH_COOKIE_SAMESITE` aceita só `lax`, `strict` ou `none`, e `AUTH_COOKIE_SECURE` só `true` ou `false`. A combinação `none` sem `true` **derruba a aplicação no boot**: o navegador descarta cookie `SameSite=None` sem `Secure`, e sem essa checagem o login responderia `200` enquanto a sessão nunca persistiria, sem erro em log nenhum.
   - **Rotação de Refresh**: A cada chamada a `POST /auth/refresh`, o Supabase rotaciona o refresh token e a API emite o novo cookie. No caso de refresh inválido (401), o cookie é limpo imediatamente.
 - **Autenticação Local**: Rotas sob `/me` são protegidas pelo `SupabaseAuthGuard`, que valida a assinatura e expiração do JWT localmente com `jose` (usando JWKS remoto com cache ou segredo HS256) sem fazer requisições de rede ao GoTrue a cada chamada.
 

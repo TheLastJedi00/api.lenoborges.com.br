@@ -1,5 +1,6 @@
 import { plainToInstance } from 'class-transformer';
 import {
+  IsIn,
   IsNotEmpty,
   IsString,
   IsNumber,
@@ -66,11 +67,13 @@ class EnvironmentVariables {
   SUPABASE_JWT_SECRET?: string;
 
   // Cookie de refresh token
-  @IsString()
+  @IsIn(['true', 'false'])
   @IsOptional()
   AUTH_COOKIE_SECURE?: string;
 
-  @IsString()
+  // Enum fechado: o CookieService repassa este valor direto para o Express, e um
+  // valor invalido viraria um atributo SameSite que o navegador ignora.
+  @IsIn(['lax', 'strict', 'none'])
   @IsOptional()
   AUTH_COOKIE_SAMESITE?: string;
 
@@ -90,5 +93,20 @@ export function validate(config: Record<string, unknown>) {
   if (errors.length > 0) {
     throw new Error(errors.toString());
   }
+
+  // SameSite=None so vale acompanhado de Secure: o navegador descarta o cookie em
+  // silencio quando falta. Sem esta checagem, o login responde 200, o cookie de
+  // refresh nunca chega ao navegador e todo F5 desloga, sem erro em log nenhum.
+  // Falhar no boot e o unico jeito de isso aparecer antes de estar em producao.
+  if (
+    validatedConfig.AUTH_COOKIE_SAMESITE === 'none' &&
+    validatedConfig.AUTH_COOKIE_SECURE !== 'true'
+  ) {
+    throw new Error(
+      'AUTH_COOKIE_SAMESITE=none exige AUTH_COOKIE_SECURE=true. ' +
+        'O navegador descarta cookie SameSite=None sem Secure, e a sessao nunca persiste.',
+    );
+  }
+
   return validatedConfig;
 }
