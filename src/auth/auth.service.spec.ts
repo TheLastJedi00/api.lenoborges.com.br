@@ -310,4 +310,182 @@ describe('AuthService', () => {
       expect(supabaseService.adminClient.auth.admin.updateUserById).not.toHaveBeenCalled();
     });
   });
+
+  describe('login', () => {
+    it('caso 10: deve fazer login com credenciais validas e devolver session e refreshToken', async () => {
+      supabaseService.publicClient.auth.signInWithPassword.mockResolvedValue({
+        data: {
+          session: {
+            access_token: 'access-jwt',
+            expires_in: 3600,
+            refresh_token: 'refresh-rt',
+          },
+          user: {
+            id: 'user-id-123',
+            email: 'aluno@email.com',
+          },
+        },
+        error: null,
+      });
+
+      profileRepository.findById.mockResolvedValue({
+        found: true,
+        entry: {
+          id: 'user-id-123',
+          grade: 2,
+          completedAt: new Date('2026-08-14T10:00:00.000Z'),
+        },
+      });
+
+      const result = await service.login({
+        email: '  Aluno@Email.com  ',
+        password: 'password123',
+      });
+
+      expect(result).toEqual({
+        session: {
+          accessToken: 'access-jwt',
+          expiresIn: 3600,
+          user: {
+            id: 'user-id-123',
+            email: 'aluno@email.com',
+          },
+          profileCompleted: true,
+          grade: 2,
+        },
+        refreshToken: 'refresh-rt',
+      });
+      expect(supabaseService.publicClient.auth.signInWithPassword).toHaveBeenCalledWith({
+        email: 'aluno@email.com',
+        password: 'password123',
+      });
+    });
+
+    it('caso 11: deve lancar UnauthorizedException com a mesma mensagem para credencial errada ou usuario inexistente', async () => {
+      supabaseService.publicClient.auth.signInWithPassword.mockResolvedValue({
+        data: { session: null, user: null },
+        error: { message: 'Invalid login credentials', status: 400 },
+      });
+
+      await expect(
+        service.login({
+          email: 'errado@email.com',
+          password: 'wrongpassword',
+        }),
+      ).rejects.toThrow('E-mail ou senha inválidos.');
+    });
+
+    it('caso 12: deve criar o perfil na hora caso o usuario nao possua perfil ao logar', async () => {
+      supabaseService.publicClient.auth.signInWithPassword.mockResolvedValue({
+        data: {
+          session: {
+            access_token: 'access-jwt-2',
+            expires_in: 3600,
+            refresh_token: 'refresh-rt-2',
+          },
+          user: {
+            id: 'user-sem-perfil',
+            email: 'novo@email.com',
+          },
+        },
+        error: null,
+      });
+
+      profileRepository.findById.mockResolvedValue({ found: false, entry: null });
+      waitlistRepository.findByEmail.mockResolvedValue({ found: false, entry: null });
+      profileRepository.create.mockResolvedValue({
+        entry: {
+          id: 'user-sem-perfil',
+          grade: 1,
+          completedAt: null,
+        },
+      });
+
+      const result = await service.login({
+        email: 'novo@email.com',
+        password: 'password123',
+      });
+
+      expect(result.session.profileCompleted).toBe(false);
+      expect(result.session.grade).toBe(1);
+      expect(profileRepository.create).toHaveBeenCalledWith({
+        id: 'user-sem-perfil',
+        name: null,
+        phone: null,
+        bio: null,
+        grade: 1,
+        completedAt: null,
+        waitlistEntryId: null,
+      });
+    });
+  });
+
+  describe('refresh', () => {
+    it('caso 13: refresh valido devolve access novo e refresh rotacionado', async () => {
+      supabaseService.publicClient.auth.refreshSession.mockResolvedValue({
+        data: {
+          session: {
+            access_token: 'new-access-jwt',
+            expires_in: 3600,
+            refresh_token: 'new-refresh-rt',
+          },
+          user: {
+            id: 'user-id-123',
+            email: 'aluno@email.com',
+          },
+        },
+        error: null,
+      });
+
+      profileRepository.findById.mockResolvedValue({
+        found: true,
+        entry: {
+          id: 'user-id-123',
+          grade: 1,
+          completedAt: null,
+        },
+      });
+
+      const result = await service.refresh('old-refresh-rt');
+
+      expect(result).toEqual({
+        session: {
+          accessToken: 'new-access-jwt',
+          expiresIn: 3600,
+          user: {
+            id: 'user-id-123',
+            email: 'aluno@email.com',
+          },
+          profileCompleted: false,
+          grade: 1,
+        },
+        refreshToken: 'new-refresh-rt',
+      });
+      expect(supabaseService.publicClient.auth.refreshSession).toHaveBeenCalledWith({
+        refresh_token: 'old-refresh-rt',
+      });
+    });
+
+    it('caso 14: refresh invalido ou ausente lanca UnauthorizedException', async () => {
+      await expect(service.refresh(undefined)).rejects.toThrow('Sessão expirada ou inválida.');
+
+      supabaseService.publicClient.auth.refreshSession.mockResolvedValue({
+        data: { session: null, user: null },
+        error: { message: 'Invalid refresh token', status: 401 },
+      });
+
+      await expect(service.refresh('token-invalido')).rejects.toThrow('Sessão expirada ou inválida.');
+    });
+  });
+
+  describe('logout', () => {
+    it('caso 15: logout sem cookie resolve sem erro de forma idempotente', async () => {
+      await expect(service.logout(undefined)).resolves.toBeUndefined();
+      expect(supabaseService.publicClient.auth.signOut).not.toHaveBeenCalled();
+
+      supabaseService.publicClient.auth.signOut.mockResolvedValue({ error: null });
+      await expect(service.logout('some-refresh-token')).resolves.toBeUndefined();
+      expect(supabaseService.publicClient.auth.signOut).toHaveBeenCalled();
+    });
+  });
 });

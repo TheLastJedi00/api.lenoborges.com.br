@@ -118,29 +118,29 @@ Branch: `feat/005-cadastro`
   Objetivo: registrar `SupabaseService`, `AuthService` e o controller, importando o `ProfileModule`
   para alcançar o repository de perfis.
 
-# Fase 05: Login, refresh e logout (TDD) []
+# Fase 05: Login, refresh e logout (TDD) [x]
 Branch: `feat/005-sessao`
 
-- [] Task 01: Criar os DTOs de sessão. Arquivos: `src/auth/dto/login.dto.ts` e
+- [x] Task 01: Criar os DTOs de sessão. Arquivos: `src/auth/dto/login.dto.ts` e
   `src/auth/dto/session.dto.ts`. Objetivo: validar as credenciais e fixar o contrato de saída
   `{ accessToken, expiresIn, user, profileCompleted, grade }`, que é o mesmo no login e no refresh.
-- [] Task 02: Criar o `CookieService`. Arquivo: `src/auth/cookie.service.ts`. Objetivo: um único
+- [x] Task 02: Criar o `CookieService`. Arquivo: `src/auth/cookie.service.ts`. Objetivo: um único
   lugar que monta e limpa o cookie `eduleno_rt`, lendo `HttpOnly`, `Secure`, `SameSite`, `Path=/auth`
   e `Max-Age` das variáveis de ambiente, para não haver `if (NODE_ENV)` espalhado pelo código.
-- [] Task 03 (TDD): Escrever a spec de login. Arquivo: `src/auth/auth.service.spec.ts`. Objetivo:
+- [x] Task 03 (TDD): Escrever a spec de login. Arquivo: `src/auth/auth.service.spec.ts`. Objetivo:
   cobrir os casos 10 a 12 — login válido devolvendo `profileCompleted` e `grade`, credencial errada e
   usuário inexistente com a **mesma** mensagem, e login de usuário sem perfil criando o perfil na
   hora.
-- [] Task 04: Implementar `login`. Arquivo: `src/auth/auth.service.ts`. Objetivo:
+- [x] Task 04: Implementar `login`. Arquivo: `src/auth/auth.service.ts`. Objetivo:
   `signInWithPassword` pelo cliente público, buscar ou criar o perfil, e devolver a sessão junto do
   estado do perfil, para o front decidir o destino sem uma segunda ida à rede.
-- [] Task 05 (TDD): Escrever a spec de refresh e logout. Arquivo: `src/auth/auth.service.spec.ts`.
+- [x] Task 05 (TDD): Escrever a spec de refresh e logout. Arquivo: `src/auth/auth.service.spec.ts`.
   Objetivo: cobrir os casos 13 a 15 — refresh válido devolvendo access **e refresh novos**, refresh
   inválido em 401, e logout sem cookie resolvendo sem erro.
-- [] Task 06: Implementar `refresh` e `logout`. Arquivo: `src/auth/auth.service.ts`. Objetivo:
+- [x] Task 06: Implementar `refresh` e `logout`. Arquivo: `src/auth/auth.service.ts`. Objetivo:
   `refreshSession` propagando o refresh rotacionado, já que sem gravar o novo a segunda renovação
   falharia, e `signOut` idempotente.
-- [] Task 07: Ligar as três rotas ao cookie. Arquivo: `src/auth/auth.controller.ts`. Objetivo:
+- [x] Task 07: Ligar as três rotas ao cookie. Arquivo: `src/auth/auth.controller.ts`. Objetivo:
   `POST /auth/login` e `POST /auth/refresh` gravando o cookie e devolvendo 200, `POST /auth/logout`
   limpando e devolvendo 204, e o refresh **limpando o cookie também no 401**, para um cookie inútil
   não provocar erro em toda visita.
