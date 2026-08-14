@@ -198,9 +198,9 @@ Branch: `feat/005-hardening`
 - [x] Task 07: Rodar `npm run lint`, `npm test`, `npm run test:e2e` e `npm run build`. Objetivo: suíte
   verde e build limpo antes de liberar o contrato para o front.
 
-# Fase 08: Release []
-- [] Task 01: Abrir `release/005-autenticacao` unindo as branches `feat/005-*`.
-- [] Task 02: Merge da release em `dev` e PR contra a `main` (se houver origin; se não, merge local).
+# Fase 08: Release [x]
+- [x] Task 01: Abrir `release/005-autenticacao` unindo as branches `feat/005-*`.
+- [x] Task 02: Merge da release em `dev` e PR contra a `main` (se houver origin; se não, merge local).
 
 ## Checklist final
 - [x] Fluxo de e-mail provado no projeto real, com o resultado registrado no `context.md`
