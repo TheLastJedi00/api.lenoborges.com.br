@@ -80,7 +80,7 @@ Branch: `feat/005-modelo-de-dados`
   `public.profiles` com `@PrimaryColumn('uuid') id`, sem relação para `auth.users` (o TypeORM não
   enxerga o schema `auth`) e com `waitlist_entry_id` como coluna uuid simples, sem `@ManyToOne`, já
   que esta spec grava o id e nunca navega a relação.
-- [] Task 05: Criar o repository. Arquivo: `src/profile/profile.repository.ts`. Objetivo: único ponto
+- [x] Task 05: Criar o repository. Arquivo: `src/profile/profile.repository.ts`. Objetivo: único ponto
   que toca o TypeORM para perfis, com `findById` devolvendo `{ found, entry }`, e `create` e `update`
   devolvendo `{ entry }`, conforme a regra do clauderc de nunca devolver `null` solto.
 - [] Task 06: Criar o `ProfileModule`. Arquivo: `src/profile/profile.module.ts`, importado em
