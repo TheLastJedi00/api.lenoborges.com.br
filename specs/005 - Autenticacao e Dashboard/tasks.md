@@ -76,7 +76,7 @@ Branch: `feat/005-modelo-de-dados`
   chave anon; a API acessa pela `DATABASE_URL`, que ignora RLS, então nada quebra.
 - [x] Task 03: Aplicar a migration. Comando: `npm run migration:push`. Objetivo: conferir no painel
   que a tabela existe com as duas FKs e o check do grau, antes de qualquer código depender disso.
-- [] Task 04: Criar a entity. Arquivo: `src/auth/entities/profile.entity.ts`. Objetivo: mapear
+- [x] Task 04: Criar a entity. Arquivo: `src/profile/entities/profile.entity.ts`. Objetivo: mapear
   `public.profiles` com `@PrimaryColumn('uuid') id`, sem relação para `auth.users` (o TypeORM não
   enxerga o schema `auth`) e com `waitlist_entry_id` como coluna uuid simples, sem `@ManyToOne`, já
   que esta spec grava o id e nunca navega a relação.
