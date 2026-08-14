@@ -65,6 +65,12 @@ class EnvironmentVariables {
   @IsOptional()
   SUPABASE_JWT_SECRET?: string;
 
+  // Emissor esperado no JWT. Default: SUPABASE_URL + /auth/v1. Ver
+  // src/auth/guards/supabase-auth.guard.ts.
+  @IsString()
+  @IsOptional()
+  SUPABASE_JWT_ISSUER?: string;
+
   // Cookie de refresh token
   @IsString()
   @IsOptional()
