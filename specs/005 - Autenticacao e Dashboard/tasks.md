@@ -62,7 +62,7 @@ Branch: `feat/005-fundacao`
   métodos, mantendo a lista de origens vinda de `FRONTEND_URL` e nunca `origin: true`, que com
   credenciais abriria a API para qualquer site.
 
-# Fase 03: Modelo de dados do perfil []
+# Fase 03: Modelo de dados do perfil [x]
 Branch: `feat/005-modelo-de-dados`
 
 - [x] Task 01: Criar a migration da tabela. Arquivo:
@@ -83,7 +83,7 @@ Branch: `feat/005-modelo-de-dados`
 - [x] Task 05: Criar o repository. Arquivo: `src/profile/profile.repository.ts`. Objetivo: único ponto
   que toca o TypeORM para perfis, com `findById` devolvendo `{ found, entry }`, e `create` e `update`
   devolvendo `{ entry }`, conforme a regra do clauderc de nunca devolver `null` solto.
-- [] Task 06: Criar o `ProfileModule`. Arquivo: `src/profile/profile.module.ts`, importado em
+- [x] Task 06: Criar o `ProfileModule`. Arquivo: `src/profile/profile.module.ts`, importado em
   `src/app.module.ts`. Objetivo: registrar entity e repository no container e importar o
   `WaitlistModule` para alcançar o repository exportado na Fase 02.
 
