@@ -35,7 +35,7 @@ Branch: `feat/005-fundacao`
 - [x] Task 01: Instalar dependências. Arquivo: `package.json`. Objetivo: `@supabase/supabase-js` para
   identidade, `jose` para verificar o JWT localmente e `cookie-parser` (mais `@types/cookie-parser`)
   para ler o refresh token do cookie.
-- [] Task 02: Documentar as variáveis novas. Arquivos: `.env.example`, `.env`. Objetivo: acrescentar
+- [x] Task 02: Documentar as variáveis novas. Arquivos: `.env.example`, `.env`. Objetivo: acrescentar
   `SUPABASE_ANON_KEY`, `AUTH_COOKIE_SECURE`, `AUTH_COOKIE_SAMESITE`, `AUTH_COOKIE_MAX_AGE_DAYS` e o
   `SUPABASE_JWT_SECRET` opcional, e **remover** o comentário "Reserved for future use (not currently
   read by API)" de `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY`, que passou a ser mentira.
