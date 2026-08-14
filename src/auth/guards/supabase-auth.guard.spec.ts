@@ -8,6 +8,8 @@ describe('SupabaseAuthGuard', () => {
   let guard: SupabaseAuthGuard;
   let configService: ConfigService;
   const secretKey = 'super-secret-jwt-key-for-testing-123456';
+  const supabaseUrl = 'https://test.supabase.co';
+  const issuer = `${supabaseUrl}/auth/v1`;
   let secretUint8: Uint8Array;
 
   beforeAll(() => {
@@ -18,13 +20,37 @@ describe('SupabaseAuthGuard', () => {
     configService = {
       get: jest.fn((key: string) => {
         if (key === 'SUPABASE_JWT_SECRET') return secretKey;
-        if (key === 'SUPABASE_URL') return 'https://test.supabase.co';
+        if (key === 'SUPABASE_URL') return supabaseUrl;
         return undefined;
       }),
     } as unknown as ConfigService;
 
     guard = new SupabaseAuthGuard(configService);
   });
+
+  /**
+   * Token no formato que o GoTrue emite para usuario autenticado: `aud` e `role`
+   * iguais a `authenticated` e `iss` apontando para o /auth/v1 do projeto.
+   */
+  function signToken(
+    overrides: Record<string, unknown> = {},
+    key: Uint8Array = secretUint8,
+    expiration = '1h',
+  ): Promise<string> {
+    return new SignJWT({
+      sub: 'user-uuid-123',
+      email: 'test@lenoborges.com.br',
+      role: 'authenticated',
+      ...overrides,
+    })
+      .setProtectedHeader({ alg: 'HS256' })
+      .setIssuer(typeof overrides.iss === 'string' ? overrides.iss : issuer)
+      .setAudience(
+        typeof overrides.aud === 'string' ? overrides.aud : 'authenticated',
+      )
+      .setExpirationTime(expiration)
+      .sign(key);
+  }
 
   function createMockContext(authHeader?: string) {
     const request = {
@@ -42,15 +68,7 @@ describe('SupabaseAuthGuard', () => {
   }
 
   it('deve autorizar e popular request.user quando o token JWT for valido', async () => {
-    const validToken = await new SignJWT({
-      sub: 'user-uuid-123',
-      email: 'test@lenoborges.com.br',
-    })
-      .setProtectedHeader({ alg: 'HS256' })
-      .setExpirationTime('1h')
-      .sign(secretUint8);
-
-    const context = createMockContext(`Bearer ${validToken}`);
+    const context = createMockContext(`Bearer ${await signToken()}`);
     const canActivate = await guard.canActivate(context);
 
     expect(canActivate).toBe(true);
@@ -69,15 +87,9 @@ describe('SupabaseAuthGuard', () => {
   });
 
   it('deve lancar UnauthorizedException quando o token JWT estiver expirado', async () => {
-    const expiredToken = await new SignJWT({
-      sub: 'user-uuid-123',
-      email: 'test@lenoborges.com.br',
-    })
-      .setProtectedHeader({ alg: 'HS256' })
-      .setExpirationTime('-10s')
-      .sign(secretUint8);
-
-    const context = createMockContext(`Bearer ${expiredToken}`);
+    const context = createMockContext(
+      `Bearer ${await signToken({}, secretUint8, '-10s')}`,
+    );
     await expect(guard.canActivate(context)).rejects.toThrow(
       UnauthorizedException,
     );
@@ -87,17 +99,58 @@ describe('SupabaseAuthGuard', () => {
     const otherSecret = new TextEncoder().encode(
       'other-different-secret-key-987654',
     );
-    const invalidSignatureToken = await new SignJWT({
-      sub: 'user-uuid-123',
-      email: 'test@lenoborges.com.br',
-    })
-      .setProtectedHeader({ alg: 'HS256' })
-      .setExpirationTime('1h')
-      .sign(otherSecret);
-
-    const context = createMockContext(`Bearer ${invalidSignatureToken}`);
+    const context = createMockContext(
+      `Bearer ${await signToken({}, otherSecret)}`,
+    );
     await expect(guard.canActivate(context)).rejects.toThrow(
       UnauthorizedException,
     );
+  });
+
+  it('deve recusar token com audience diferente de authenticated', async () => {
+    const context = createMockContext(
+      `Bearer ${await signToken({ aud: 'outro-servico' })}`,
+    );
+    await expect(guard.canActivate(context)).rejects.toThrow(
+      UnauthorizedException,
+    );
+  });
+
+  it('deve recusar token emitido por outro projeto do Supabase', async () => {
+    const context = createMockContext(
+      `Bearer ${await signToken({ iss: 'https://outro.supabase.co/auth/v1' })}`,
+    );
+    await expect(guard.canActivate(context)).rejects.toThrow(
+      UnauthorizedException,
+    );
+  });
+
+  it('deve recusar token com role diferente de authenticated', async () => {
+    // A chave anon do projeto e um JWT assinado com o mesmo segredo legado, e ela
+    // e publica por natureza: circula no bundle do front. Ver achado A3 do review.
+    const context = createMockContext(
+      `Bearer ${await signToken({ role: 'anon' })}`,
+    );
+    await expect(guard.canActivate(context)).rejects.toThrow(
+      UnauthorizedException,
+    );
+  });
+
+  it('deve aceitar issuer customizado por SUPABASE_JWT_ISSUER', async () => {
+    configService = {
+      get: jest.fn((key: string) => {
+        if (key === 'SUPABASE_JWT_SECRET') return secretKey;
+        if (key === 'SUPABASE_URL') return supabaseUrl;
+        if (key === 'SUPABASE_JWT_ISSUER') return 'https://legado/auth/v1';
+        return undefined;
+      }),
+    } as unknown as ConfigService;
+    guard = new SupabaseAuthGuard(configService);
+
+    const context = createMockContext(
+      `Bearer ${await signToken({ iss: 'https://legado/auth/v1' })}`,
+    );
+
+    await expect(guard.canActivate(context)).resolves.toBe(true);
   });
 });

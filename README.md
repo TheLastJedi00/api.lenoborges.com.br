@@ -103,7 +103,7 @@ npm run migration:push             # aplica as pendentes
   - **Access Token**: Enviado no corpo JSON da resposta (`SessionResponseDto`) para ser mantido em memória no frontend.
   - **Refresh Token**: Gravado em cookie HTTP seguro (`eduleno_rt`) com flags `HttpOnly`, `Path=/auth`, `SameSite` e `Secure` configuráveis por variáveis de ambiente.
   - **Rotação de Refresh**: A cada chamada a `POST /auth/refresh`, o Supabase rotaciona o refresh token e a API emite o novo cookie. No caso de refresh inválido (401), o cookie é limpo imediatamente.
-- **Autenticação Local**: Rotas sob `/me` são protegidas pelo `SupabaseAuthGuard`, que valida a assinatura e expiração do JWT localmente com `jose` (usando JWKS remoto com cache ou segredo HS256) sem fazer requisições de rede ao GoTrue a cada chamada.
+- **Autenticação Local**: Rotas sob `/me` são protegidas pelo `SupabaseAuthGuard`, que valida o JWT localmente com `jose` (usando JWKS remoto com cache ou segredo HS256) sem fazer requisições de rede ao GoTrue a cada chamada. A verificação exige assinatura, expiração, `aud` igual a `authenticated`, `iss` igual a `SUPABASE_URL + /auth/v1` (ou `SUPABASE_JWT_ISSUER`, se definido) e `role` igual a `authenticated`. Checar só a assinatura deixaria passar qualquer JWT emitido com a mesma chave, incluindo a `anon key`, que é pública e circula no bundle do frontend.
 
 ## Endpoints da API
 
