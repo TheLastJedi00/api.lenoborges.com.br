@@ -28,8 +28,19 @@ cliente do Supabase e afirma que `signOut` foi chamado, sem poder observar em qu
 
 | achado | situação |
 |--------|-----------|
-| A1, A2, B4 | **corrigidos** em `fix/005-sessao-por-requisicao` (commit `b00cb56`) |
-| A3, A4, A5, A6, B1, B2, B3, B5 | em aberto |
+| A1, A2, B4 | **corrigidos** em `fix/005-sessao-por-requisicao` |
+| A3, B1 | **corrigidos** em `fix/005-guard-aud-iss` |
+| A4 | **corrigido** em `fix/005-cookie-env-coerente` |
+| A5, A6, B2, B3, B5 | em aberto |
+
+As três branches estão unidas em `release/005-correcoes-do-review`, com a suíte em 70 testes verdes
+(eram 55), `npm run lint` e `npm run build` limpos. Toda a exposição de segurança do review está
+fechada; o que resta é observabilidade (A5, A6) e limpeza (B2, B3, B5).
+
+**Validação pendente contra o projeto real:** A3 passou a exigir `iss` igual a
+`SUPABASE_URL + /auth/v1`. Isso é o que o Supabase hospedado emite, mas precisa de uma conferência
+com um token de verdade antes de ir para produção. Se o projeto tiver `GOTRUE_JWT_ISSUER`
+customizado, a variável `SUPABASE_JWT_ISSUER` cobre o caso sem mexer em código.
 
 ---
 
@@ -94,6 +105,11 @@ navegador) continua renovando sessão por um mês. O `context.md` promete "inval
 Supabase (`signOut` com o refresh token)".
 
 ### A3. O guard não verifica `aud` nem `iss`
+> **Corrigido em `fix/005-guard-aud-iss`.** `jwtVerify` passou a exigir `audience: 'authenticated'` e
+> `issuer` derivado de `SUPABASE_URL`, mais `role === 'authenticated'` no payload.
+> `SUPABASE_JWT_ISSUER` existe como escapatoria para projeto customizado. Três casos novos na spec do
+> guard, incluindo o da chave `anon`. B1 (ternário morto) saiu junto.
+
 **Arquivo:** `src/auth/guards/supabase-auth.guard.ts:57`
 
 `jwtVerify(token, key)` é chamado sem `{ audience, issuer }`. O `context.md` especifica
@@ -108,6 +124,10 @@ escrita para outro fim. Com `SUPABASE_JWT_SECRET` configurado, isso é uma marge
 `jwtVerify`, e recusar payload com `role` diferente de `authenticated`.
 
 ### A4. Nada impede `SameSite=none` sem `Secure`
+> **Corrigido em `fix/005-cookie-env-coerente`.** `AUTH_COOKIE_SAMESITE` e `AUTH_COOKIE_SECURE` viraram
+> enums fechados, e a combinação `none` sem `true` derruba a aplicação no boot. `env.validation.spec.ts`
+> é novo e cobre os seis casos.
+
 **Arquivos:** `src/config/env.validation.ts`, `src/auth/cookie.service.ts:16-21`
 
 `AUTH_COOKIE_SAMESITE` é validado como string livre e o `CookieService` faz cast direto para
