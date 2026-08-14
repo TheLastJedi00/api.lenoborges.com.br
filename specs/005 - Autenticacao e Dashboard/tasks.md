@@ -90,7 +90,7 @@ Branch: `feat/005-modelo-de-dados`
 # Fase 04: Cadastro e definição de senha (TDD) []
 Branch: `feat/005-cadastro`
 
-- [] Task 01: Criar os DTOs de entrada. Arquivos: `src/auth/dto/signup.dto.ts` e
+- [x] Task 01: Criar os DTOs de entrada. Arquivos: `src/auth/dto/signup.dto.ts` e
   `src/auth/dto/set-password.dto.ts`. Objetivo: validar `email` com `IsEmail`, `emailConfirmation`,
   `tokenHash` obrigatório e `password` com mínimo de 8 caracteres, sem exigência de símbolo ou
   maiúscula, porque regra decorativa só empurra o usuário para `Senha@123`.
