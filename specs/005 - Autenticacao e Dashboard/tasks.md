@@ -65,16 +65,16 @@ Branch: `feat/005-fundacao`
 # Fase 03: Modelo de dados do perfil []
 Branch: `feat/005-modelo-de-dados`
 
-- [] Task 01: Criar a migration da tabela. Arquivo:
-  `supabase/migrations/<timestamp>_create_profiles.sql`, gerado por `npm run migration:new
+- [x] Task 01: Criar a migration da tabela. Arquivo:
+  `supabase/migrations/20260814121341_create_profiles.sql`, gerado por `npm run migration:new
   create_profiles`. Objetivo: criar `public.profiles` com `id` uuid PK referenciando
   `auth.users(id) on delete cascade`, `name`, `phone`, `bio`, `grade smallint not null default 1
   check (grade between 1 and 33)`, `completed_at`, `waitlist_entry_id` com FK opcional para
   `waitlist_entries(id) on delete set null`, e `created_at`/`updated_at` em `timestamptz`.
-- [] Task 02: Ligar RLS sem policy na mesma migration. Arquivo: mesma migration da Task 01.
+- [x] Task 02: Ligar RLS sem policy na mesma migration. Arquivo: mesma migration da Task 01.
   Objetivo: `enable row level security` sem nenhuma policy, fechando a tabela para o PostgREST e a
   chave anon; a API acessa pela `DATABASE_URL`, que ignora RLS, então nada quebra.
-- [] Task 03: Aplicar a migration. Comando: `npm run migration:push`. Objetivo: conferir no painel
+- [x] Task 03: Aplicar a migration. Comando: `npm run migration:push`. Objetivo: conferir no painel
   que a tabela existe com as duas FKs e o check do grau, antes de qualquer código depender disso.
 - [] Task 04: Criar a entity. Arquivo: `src/auth/entities/profile.entity.ts`. Objetivo: mapear
   `public.profiles` com `@PrimaryColumn('uuid') id`, sem relação para `auth.users` (o TypeORM não
