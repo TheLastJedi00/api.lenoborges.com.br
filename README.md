@@ -139,6 +139,9 @@ Acesse `/docs` para visualizar o Swagger com os esquemas e exemplos.
 ### `POST /auth/logout`
 - Entrada: Leitura do cookie `eduleno_rt`
 - Resposta: `204 No Content` + Cookie `eduleno_rt` limpo (idempotente)
+- Comportamento: a sessão é carregada a partir do refresh token do próprio cookie antes de ser
+  revogada no Supabase, com escopo `local` (derruba só esta sessão, não os outros dispositivos).
+  Cookie ausente, expirado ou forjado não revoga nada e ainda responde `204`.
 
 ### `GET /me`
 - Header: `Authorization: Bearer <accessToken>`

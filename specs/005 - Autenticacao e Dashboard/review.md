@@ -24,9 +24,23 @@ cliente do Supabase e afirma que `signOut` foi chamado, sem poder observar em qu
 
 ---
 
+## Status das correções
+
+| achado | situação |
+|--------|-----------|
+| A1, A2, B4 | **corrigidos** em `fix/005-sessao-por-requisicao` (commit `b00cb56`) |
+| A3, A4, A5, A6, B1, B2, B3, B5 | em aberto |
+
+---
+
 ## Crítico
 
 ### A1. Um logout anônimo derruba a sessão de outro usuário
+> **Corrigido em `fix/005-sessao-por-requisicao`.** `SupabaseService` não expõe mais cliente público
+> compartilhado: `createUserClient()` devolve uma instância nova por operação de usuário. O `logout`
+> passou a carregar a sessão a partir do refresh token do próprio chamador antes do `signOut`, com
+> escopo `local`, e cookie forjado não revoga nada. Cobertura nova nos casos 16 a 19 do
+> `auth.service.spec.ts` e na spec do `SupabaseService`.
 **Arquivos:** `src/auth/supabase.service.ts:24`, `src/auth/auth.service.ts:200`
 
 `SupabaseService` cria **um** `publicClient` no construtor e o compartilha entre todas as
@@ -65,6 +79,9 @@ com o bug presente e continuaria passando depois da correção, então precisa s
 ## Sérios
 
 ### A2. O logout não invalida a sessão de quem pediu
+> **Corrigido junto de A1.** O `refreshToken` do cookie agora é usado de fato, o que também encerra
+> B4 (parâmetro morto).
+
 **Arquivo:** `src/auth/auth.service.ts:194-204`
 
 Consequência direta de A1, mas vale como achado próprio: o `refreshToken` recebido é usado só para
