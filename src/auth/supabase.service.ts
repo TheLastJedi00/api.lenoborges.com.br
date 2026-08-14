@@ -4,8 +4,8 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 @Injectable()
 export class SupabaseService {
-  readonly adminClient: SupabaseClient;
-  readonly publicClient: SupabaseClient;
+  readonly adminClient: SupabaseClient<any, any, any>;
+  readonly publicClient: SupabaseClient<any, any, any>;
 
   constructor(private readonly configService: ConfigService) {
     const supabaseUrl = this.configService.getOrThrow<string>('SUPABASE_URL');
@@ -29,11 +29,11 @@ export class SupabaseService {
     });
   }
 
-  get admin(): SupabaseClient {
+  get admin(): SupabaseClient<any, any, any> {
     return this.adminClient;
   }
 
-  get public(): SupabaseClient {
+  get public(): SupabaseClient<any, any, any> {
     return this.publicClient;
   }
 }

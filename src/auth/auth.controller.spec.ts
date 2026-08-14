@@ -96,7 +96,10 @@ describe('AuthController', () => {
     const result = await controller.login(dto, res);
 
     expect(result).toEqual(sessionData);
-    expect(cookieService.setRefreshToken).toHaveBeenCalledWith(res, 'refresh-rt');
+    expect(cookieService.setRefreshToken).toHaveBeenCalledWith(
+      res,
+      'refresh-rt',
+    );
   });
 
   it('should perform refresh, set new cookie on POST /auth/refresh', async () => {
@@ -113,23 +116,32 @@ describe('AuthController', () => {
     });
     cookieService.getRefreshToken.mockReturnValue('old-refresh-rt');
 
-    const req = { cookies: { eduleno_rt: 'old-refresh-rt' } } as unknown as Request;
+    const req = {
+      cookies: { eduleno_rt: 'old-refresh-rt' },
+    } as unknown as Request;
     const res = {} as Response;
 
     const result = await controller.refresh(req, res);
 
     expect(result).toEqual(sessionData);
-    expect(cookieService.setRefreshToken).toHaveBeenCalledWith(res, 'new-refresh-rt');
+    expect(cookieService.setRefreshToken).toHaveBeenCalledWith(
+      res,
+      'new-refresh-rt',
+    );
   });
 
   it('should clear cookie on failed refresh 401 on POST /auth/refresh', async () => {
     cookieService.getRefreshToken.mockReturnValue('invalid-rt');
-    authService.refresh.mockRejectedValue(new UnauthorizedException('Sessão expirada ou inválida.'));
+    authService.refresh.mockRejectedValue(
+      new UnauthorizedException('Sessão expirada ou inválida.'),
+    );
 
     const req = { cookies: { eduleno_rt: 'invalid-rt' } } as unknown as Request;
     const res = {} as Response;
 
-    await expect(controller.refresh(req, res)).rejects.toThrow(UnauthorizedException);
+    await expect(controller.refresh(req, res)).rejects.toThrow(
+      UnauthorizedException,
+    );
     expect(cookieService.clearRefreshToken).toHaveBeenCalledWith(res);
   });
 
@@ -137,7 +149,9 @@ describe('AuthController', () => {
     cookieService.getRefreshToken.mockReturnValue('rt-to-logout');
     authService.logout.mockResolvedValue(undefined);
 
-    const req = { cookies: { eduleno_rt: 'rt-to-logout' } } as unknown as Request;
+    const req = {
+      cookies: { eduleno_rt: 'rt-to-logout' },
+    } as unknown as Request;
     const res = {} as Response;
 
     await controller.logout(req, res);

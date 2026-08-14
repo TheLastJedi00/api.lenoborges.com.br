@@ -1,7 +1,8 @@
 import { ExecutionContext, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { SignJWT, generateSecret } from 'jose';
+import { SignJWT } from 'jose';
 import { SupabaseAuthGuard } from './supabase-auth.guard';
+import { AuthenticatedRequest } from '../decorators/current-user.decorator';
 
 describe('SupabaseAuthGuard', () => {
   let guard: SupabaseAuthGuard;
@@ -9,7 +10,7 @@ describe('SupabaseAuthGuard', () => {
   const secretKey = 'super-secret-jwt-key-for-testing-123456';
   let secretUint8: Uint8Array;
 
-  beforeAll(async () => {
+  beforeAll(() => {
     secretUint8 = new TextEncoder().encode(secretKey);
   });
 
@@ -30,8 +31,8 @@ describe('SupabaseAuthGuard', () => {
       headers: {
         authorization: authHeader,
       },
-      user: undefined as any,
-    };
+      user: undefined,
+    } as unknown as AuthenticatedRequest;
 
     return {
       switchToHttp: () => ({
@@ -53,7 +54,7 @@ describe('SupabaseAuthGuard', () => {
     const canActivate = await guard.canActivate(context);
 
     expect(canActivate).toBe(true);
-    const req = context.switchToHttp().getRequest();
+    const req = context.switchToHttp().getRequest<AuthenticatedRequest>();
     expect(req.user).toEqual({
       id: 'user-uuid-123',
       email: 'test@lenoborges.com.br',
@@ -62,7 +63,9 @@ describe('SupabaseAuthGuard', () => {
 
   it('deve lancar UnauthorizedException quando o header Authorization estiver ausente', async () => {
     const context = createMockContext(undefined);
-    await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
+    await expect(guard.canActivate(context)).rejects.toThrow(
+      UnauthorizedException,
+    );
   });
 
   it('deve lancar UnauthorizedException quando o token JWT estiver expirado', async () => {
@@ -75,11 +78,15 @@ describe('SupabaseAuthGuard', () => {
       .sign(secretUint8);
 
     const context = createMockContext(`Bearer ${expiredToken}`);
-    await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
+    await expect(guard.canActivate(context)).rejects.toThrow(
+      UnauthorizedException,
+    );
   });
 
   it('deve lancar UnauthorizedException quando a assinatura for de outra chave', async () => {
-    const otherSecret = new TextEncoder().encode('other-different-secret-key-987654');
+    const otherSecret = new TextEncoder().encode(
+      'other-different-secret-key-987654',
+    );
     const invalidSignatureToken = await new SignJWT({
       sub: 'user-uuid-123',
       email: 'test@lenoborges.com.br',
@@ -89,6 +96,8 @@ describe('SupabaseAuthGuard', () => {
       .sign(otherSecret);
 
     const context = createMockContext(`Bearer ${invalidSignatureToken}`);
-    await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
+    await expect(guard.canActivate(context)).rejects.toThrow(
+      UnauthorizedException,
+    );
   });
 });

@@ -6,6 +6,8 @@ describe('CookieService', () => {
   let service: CookieService;
   let configService: ConfigService;
   let res: Response;
+  let mockCookie: jest.Mock;
+  let mockClearCookie: jest.Mock;
 
   beforeEach(() => {
     configService = {
@@ -25,16 +27,18 @@ describe('CookieService', () => {
 
     service = new CookieService(configService);
 
+    mockCookie = jest.fn();
+    mockClearCookie = jest.fn();
     res = {
-      cookie: jest.fn(),
-      clearCookie: jest.fn(),
+      cookie: mockCookie,
+      clearCookie: mockClearCookie,
     } as unknown as Response;
   });
 
   it('should set refresh token cookie with HttpOnly, lax, secure=false, path=/auth and 30 days maxAge', () => {
     service.setRefreshToken(res, 'test-refresh-token');
 
-    expect(res.cookie).toHaveBeenCalledWith(
+    expect(mockCookie).toHaveBeenCalledWith(
       REFRESH_TOKEN_COOKIE_NAME,
       'test-refresh-token',
       {
@@ -50,7 +54,7 @@ describe('CookieService', () => {
   it('should clear refresh token cookie with matching options', () => {
     service.clearRefreshToken(res);
 
-    expect(res.clearCookie).toHaveBeenCalledWith(REFRESH_TOKEN_COOKIE_NAME, {
+    expect(mockClearCookie).toHaveBeenCalledWith(REFRESH_TOKEN_COOKIE_NAME, {
       httpOnly: true,
       secure: false,
       sameSite: 'lax',
@@ -59,7 +63,10 @@ describe('CookieService', () => {
   });
 
   it('should extract refresh token from cookies object', () => {
-    const cookies = { [REFRESH_TOKEN_COOKIE_NAME]: 'my-refresh-token', other: 'val' };
+    const cookies = {
+      [REFRESH_TOKEN_COOKIE_NAME]: 'my-refresh-token',
+      other: 'val',
+    };
     expect(service.getRefreshToken(cookies)).toBe('my-refresh-token');
     expect(service.getRefreshToken({})).toBeUndefined();
     expect(service.getRefreshToken(undefined)).toBeUndefined();

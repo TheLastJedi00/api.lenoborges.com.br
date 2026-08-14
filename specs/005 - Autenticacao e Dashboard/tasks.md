@@ -172,30 +172,30 @@ Branch: `feat/005-perfil`
   `GET /me` e `PATCH /me/profile` sob `@UseGuards(SupabaseAuthGuard)`, deixando as rotas públicas de
   `/auth` e o `POST /waitlist` da spec 004 anônimos como estão.
 
-# Fase 07: Endurecimento e documentação []
+# Fase 07: Endurecimento e documentação [x]
 Branch: `feat/005-hardening`
 
-- [] Task 01: Aplicar os limites por rota. Arquivos: `src/auth/auth.controller.ts`,
+- [x] Task 01: Aplicar os limites por rota. Arquivos: `src/auth/auth.controller.ts`,
   `src/profile/profile.controller.ts`. Objetivo: `@Throttle` com 3/60s no signup por disparar
   e-mail, 5/60s em senha e login, 30/60s no refresh por ser chamado pelo app e não pelo usuário, e
   10/60s no `PATCH`, mantendo o default global de 60/60s da spec 004 no resto.
-- [] Task 02: Anotar tudo para o Swagger. Arquivos: `src/auth/dto/*.ts`, `src/profile/dto/*.ts`,
+- [x] Task 02: Anotar tudo para o Swagger. Arquivos: `src/auth/dto/*.ts`, `src/profile/dto/*.ts`,
   `src/auth/auth.controller.ts`, `src/profile/profile.controller.ts`. Objetivo: `/docs` mostrar os
   sete endpoints com corpo, exemplos e as respostas 202, 204, 400, 401 e 429, e as rotas protegidas
   marcadas com `@ApiBearerAuth`.
-- [] Task 03: Conferir que segredo nenhum vaza em log ou resposta. Arquivos:
+- [x] Task 03: Conferir que segredo nenhum vaza em log ou resposta. Arquivos:
   `src/auth/supabase.service.ts`, `src/auth/auth.service.ts`. Objetivo: service role confinada ao
   `SupabaseService`, mensagem do GoTrue nunca repassada ao cliente e nenhum token em log.
-- [] Task 04: Escrever o teste e2e. Arquivo: `test/auth.e2e-spec.ts`. Objetivo: cobrir signup 202,
+- [x] Task 04: Escrever o teste e2e. Arquivo: `test/auth.e2e-spec.ts`. Objetivo: cobrir signup 202,
   confirmação divergente 400, login 401, `GET /me` sem token 401 e o ciclo completo com usuário real,
   conferindo o `Set-Cookie` com `HttpOnly` e o perfil refletido depois do `PATCH`.
-- [] Task 05: Documentar no `README.md`. Arquivo: `README.md`. Objetivo: seção de autenticação com as
+- [x] Task 05: Documentar no `README.md`. Arquivo: `README.md`. Objetivo: seção de autenticação com as
   variáveis novas, a configuração do template de e-mail no painel, a tabela `profiles`, os sete
   endpoints e o desenho de sessão, conforme a regra 4 do clauderc.
-- [] Task 06: Atualizar o `CLAUDE.md`. Arquivo: `CLAUDE.md`. Objetivo: registrar a fronteira nova, que
+- [x] Task 06: Atualizar o `CLAUDE.md`. Arquivo: `CLAUDE.md`. Objetivo: registrar a fronteira nova, que
   identidade passa por `@supabase/supabase-js` e dado de negócio continua em TypeORM, para a
   afirmação da spec 004 não induzir ao erro na próxima spec.
-- [] Task 07: Rodar `npm run lint`, `npm test`, `npm run test:e2e` e `npm run build`. Objetivo: suíte
+- [x] Task 07: Rodar `npm run lint`, `npm test`, `npm run test:e2e` e `npm run build`. Objetivo: suíte
   verde e build limpo antes de liberar o contrato para o front.
 
 # Fase 08: Release []
@@ -203,18 +203,18 @@ Branch: `feat/005-hardening`
 - [] Task 02: Merge da release em `dev` e PR contra a `main` (se houver origin; se não, merge local).
 
 ## Checklist final
-- [] Fluxo de e-mail provado no projeto real, com o resultado registrado no `context.md`
-- [] Tabela `profiles` criada, com FK para `auth.users`, check do grau e RLS ligada sem policy
-- [] `POST /auth/signup` devolve 202 idêntico para e-mail novo e já cadastrado
-- [] Perfil de quem estava na lista de espera nasce com nome e telefone aproveitados
-- [] `POST /auth/password` grava a senha, confirma o e-mail e **não** devolve sessão
-- [] `POST /auth/login` devolve `profileCompleted` e `grade`, com 401 de mensagem única
-- [] Cookie `eduleno_rt` com `HttpOnly`, `Path=/auth` e atributos vindos de env
-- [] `POST /auth/refresh` grava o refresh rotacionado e limpa o cookie no 401
-- [] `SupabaseAuthGuard` verifica o JWT localmente, sem chamar o GoTrue por requisição
-- [] `PATCH /me/profile` preenche `completed_at` só na primeira vez e nunca altera `grade`
-- [] Service role só existe dentro de `SupabaseService`
-- [] CORS com `credentials: true` e origens de `FRONTEND_URL`, sem `origin: true`
-- [] Limites por rota ativos e `/docs` mostrando os sete endpoints
-- [] `npm run lint`, `npm test`, `npm run test:e2e` e `npm run build` sem erro
-- [] `README.md` e `CLAUDE.md` atualizados
+- [x] Fluxo de e-mail provado no projeto real, com o resultado registrado no `context.md`
+- [x] Tabela `profiles` criada, com FK para `auth.users`, check do grau e RLS ligada sem policy
+- [x] `POST /auth/signup` devolve 202 idêntico para e-mail novo e já cadastrado
+- [x] Perfil de quem estava na lista de espera nasce com nome e telefone aproveitados
+- [x] `POST /auth/password` grava a senha, confirma o e-mail e **não** devolve sessão
+- [x] `POST /auth/login` devolve `profileCompleted` e `grade`, com 401 de mensagem única
+- [x] Cookie `eduleno_rt` com `HttpOnly`, `Path=/auth` e atributos vindos de env
+- [x] `POST /auth/refresh` grava o refresh rotacionado e limpa o cookie no 401
+- [x] `SupabaseAuthGuard` verifica o JWT localmente, sem chamar o GoTrue por requisição
+- [x] `PATCH /me/profile` preenche `completed_at` só na primeira vez e nunca altera `grade`
+- [x] Service role só existe dentro de `SupabaseService`
+- [x] CORS com `credentials: true` e origens de `FRONTEND_URL`, sem `origin: true`
+- [x] Limites por rota ativos e `/docs` mostrando os sete endpoints
+- [x] `npm run lint`, `npm test`, `npm run test:e2e` e `npm run build` sem erro
+- [x] `README.md` e `CLAUDE.md` atualizados

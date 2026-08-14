@@ -13,6 +13,7 @@ describe('AuthService', () => {
         admin: {
           createUser: jest.Mock;
           getUserById: jest.Mock;
+          updateUserById: jest.Mock;
         };
         resetPasswordForEmail: jest.Mock;
       };
@@ -98,7 +99,10 @@ describe('AuthService', () => {
         data: { user: { id: 'user-uuid-123', email: 'novo@email.com' } },
         error: null,
       });
-      waitlistRepository.findByEmail.mockResolvedValue({ found: false, entry: null });
+      waitlistRepository.findByEmail.mockResolvedValue({
+        found: false,
+        entry: null,
+      });
       profileRepository.create.mockResolvedValue({
         entry: { id: 'user-uuid-123', grade: 1 },
       });
@@ -113,7 +117,9 @@ describe('AuthService', () => {
       });
 
       expect(result).toEqual({ status: 'confirmation_sent' });
-      expect(supabaseService.adminClient.auth.admin.createUser).toHaveBeenCalledWith({
+      expect(
+        supabaseService.adminClient.auth.admin.createUser,
+      ).toHaveBeenCalledWith({
         email: 'novo@email.com',
         email_confirm: false,
       });
@@ -126,9 +132,9 @@ describe('AuthService', () => {
         completedAt: null,
         waitlistEntryId: null,
       });
-      expect(supabaseService.adminClient.auth.resetPasswordForEmail).toHaveBeenCalledWith(
-        'novo@email.com',
-      );
+      expect(
+        supabaseService.adminClient.auth.resetPasswordForEmail,
+      ).toHaveBeenCalledWith('novo@email.com');
     });
 
     it('caso 2: deve retornar a mesma resposta para email ja existente disparando recovery sem criar perfil duplicado', async () => {
@@ -148,9 +154,9 @@ describe('AuthService', () => {
 
       expect(result).toEqual({ status: 'confirmation_sent' });
       expect(profileRepository.create).not.toHaveBeenCalled();
-      expect(supabaseService.adminClient.auth.resetPasswordForEmail).toHaveBeenCalledWith(
-        'existente@email.com',
-      );
+      expect(
+        supabaseService.adminClient.auth.resetPasswordForEmail,
+      ).toHaveBeenCalledWith('existente@email.com');
     });
 
     it('caso 3: deve lancar BadRequestException se a confirmacao de email for divergente', async () => {
@@ -161,7 +167,9 @@ describe('AuthService', () => {
         }),
       ).rejects.toThrow(BadRequestException);
 
-      expect(supabaseService.adminClient.auth.admin.createUser).not.toHaveBeenCalled();
+      expect(
+        supabaseService.adminClient.auth.admin.createUser,
+      ).not.toHaveBeenCalled();
       expect(profileRepository.create).not.toHaveBeenCalled();
     });
 
@@ -183,7 +191,9 @@ describe('AuthService', () => {
       });
 
       expect(result).toEqual({ status: 'confirmation_sent' });
-      expect(supabaseService.adminClient.auth.admin.createUser).toHaveBeenCalledWith({
+      expect(
+        supabaseService.adminClient.auth.admin.createUser,
+      ).toHaveBeenCalledWith({
         email: 'fulano@email.com',
         email_confirm: false,
       });
@@ -294,7 +304,9 @@ describe('AuthService', () => {
           password: 'nova-senha-segura',
           passwordConfirmation: 'nova-senha-segura',
         }),
-      ).rejects.toThrow(new BadRequestException('Link inválido ou expirado, peça um novo.'));
+      ).rejects.toThrow(
+        new BadRequestException('Link inválido ou expirado, peça um novo.'),
+      );
     });
 
     it('caso 9: deve lancar BadRequestException se senhas forem divergentes sem tocar no Supabase', async () => {
@@ -306,8 +318,12 @@ describe('AuthService', () => {
         }),
       ).rejects.toThrow(new BadRequestException('Senhas não conferem.'));
 
-      expect(supabaseService.publicClient.auth.verifyOtp).not.toHaveBeenCalled();
-      expect(supabaseService.adminClient.auth.admin.updateUserById).not.toHaveBeenCalled();
+      expect(
+        supabaseService.publicClient.auth.verifyOtp,
+      ).not.toHaveBeenCalled();
+      expect(
+        supabaseService.adminClient.auth.admin.updateUserById,
+      ).not.toHaveBeenCalled();
     });
   });
 
@@ -355,7 +371,9 @@ describe('AuthService', () => {
         },
         refreshToken: 'refresh-rt',
       });
-      expect(supabaseService.publicClient.auth.signInWithPassword).toHaveBeenCalledWith({
+      expect(
+        supabaseService.publicClient.auth.signInWithPassword,
+      ).toHaveBeenCalledWith({
         email: 'aluno@email.com',
         password: 'password123',
       });
@@ -391,8 +409,14 @@ describe('AuthService', () => {
         error: null,
       });
 
-      profileRepository.findById.mockResolvedValue({ found: false, entry: null });
-      waitlistRepository.findByEmail.mockResolvedValue({ found: false, entry: null });
+      profileRepository.findById.mockResolvedValue({
+        found: false,
+        entry: null,
+      });
+      waitlistRepository.findByEmail.mockResolvedValue({
+        found: false,
+        entry: null,
+      });
       profileRepository.create.mockResolvedValue({
         entry: {
           id: 'user-sem-perfil',
@@ -461,20 +485,26 @@ describe('AuthService', () => {
         },
         refreshToken: 'new-refresh-rt',
       });
-      expect(supabaseService.publicClient.auth.refreshSession).toHaveBeenCalledWith({
+      expect(
+        supabaseService.publicClient.auth.refreshSession,
+      ).toHaveBeenCalledWith({
         refresh_token: 'old-refresh-rt',
       });
     });
 
     it('caso 14: refresh invalido ou ausente lanca UnauthorizedException', async () => {
-      await expect(service.refresh(undefined)).rejects.toThrow('Sessão expirada ou inválida.');
+      await expect(service.refresh(undefined)).rejects.toThrow(
+        'Sessão expirada ou inválida.',
+      );
 
       supabaseService.publicClient.auth.refreshSession.mockResolvedValue({
         data: { session: null, user: null },
         error: { message: 'Invalid refresh token', status: 401 },
       });
 
-      await expect(service.refresh('token-invalido')).rejects.toThrow('Sessão expirada ou inválida.');
+      await expect(service.refresh('token-invalido')).rejects.toThrow(
+        'Sessão expirada ou inválida.',
+      );
     });
   });
 
@@ -483,8 +513,12 @@ describe('AuthService', () => {
       await expect(service.logout(undefined)).resolves.toBeUndefined();
       expect(supabaseService.publicClient.auth.signOut).not.toHaveBeenCalled();
 
-      supabaseService.publicClient.auth.signOut.mockResolvedValue({ error: null });
-      await expect(service.logout('some-refresh-token')).resolves.toBeUndefined();
+      supabaseService.publicClient.auth.signOut.mockResolvedValue({
+        error: null,
+      });
+      await expect(
+        service.logout('some-refresh-token'),
+      ).resolves.toBeUndefined();
       expect(supabaseService.publicClient.auth.signOut).toHaveBeenCalled();
     });
   });

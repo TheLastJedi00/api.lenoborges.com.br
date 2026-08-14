@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createRemoteJWKSet, jwtVerify, JWTVerifyGetKey } from 'jose';
+import { AuthenticatedRequest } from '../decorators/current-user.decorator';
 
 @Injectable()
 export class SupabaseAuthGuard implements CanActivate {
@@ -30,7 +31,7 @@ export class SupabaseAuthGuard implements CanActivate {
   }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const request = context.switchToHttp().getRequest();
+    const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
     const authHeader = request.headers?.authorization;
 
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -47,10 +48,12 @@ export class SupabaseAuthGuard implements CanActivate {
     }
 
     try {
-      const { payload } =
+      const verifyResult =
         typeof this.getKey === 'function'
           ? await jwtVerify(token, this.getKey)
           : await jwtVerify(token, this.getKey);
+
+      const payload = verifyResult.payload;
 
       if (!payload.sub) {
         throw new UnauthorizedException(
@@ -60,7 +63,7 @@ export class SupabaseAuthGuard implements CanActivate {
 
       request.user = {
         id: payload.sub,
-        email: payload.email as string,
+        email: typeof payload.email === 'string' ? payload.email : '',
       };
 
       return true;

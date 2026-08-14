@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project state
 
-`eduleno-back` is a NestJS 11 backend. It uses TypeORM with PostgreSQL (Supabase) for data persistence. The project follows a simple MVC layout with modules, controllers, services, and repositories. Repositories always return objects `{ found, entry }`, never primitive `null` directly, to simplify the service logic.
+`eduleno-back` is a NestJS 11 backend. It uses TypeORM with PostgreSQL (Supabase) for business data persistence (`waitlist_entries`, `profiles`), and `@supabase/supabase-js` exclusively for identity operations (auth signup, email recovery, password verification, login, refresh, logout). The project follows a simple MVC layout with modules, controllers, services, and repositories. Repositories always return objects `{ found, entry }`, never primitive `null` directly, to simplify the service logic. Service role keys remain strictly confined to `SupabaseService`.
 
 The database schema belongs to the Supabase CLI: migrations are plain SQL under `supabase/migrations/` applied with `supabase db push`. TypeORM always runs with `synchronize: false` and neither generates nor applies migrations — it only maps and queries. A schema change therefore requires editing both sides by hand: the SQL migration and the matching entity under `src/**/entities/`.
 

@@ -29,7 +29,9 @@ describe('Normalize Utils', () => {
 
   describe('normalizeBio', () => {
     it('should trim leading and trailing whitespaces', () => {
-      expect(normalizeBio('  Estudando back-end.  ')).toBe('Estudando back-end.');
+      expect(normalizeBio('  Estudando back-end.  ')).toBe(
+        'Estudando back-end.',
+      );
     });
   });
 });

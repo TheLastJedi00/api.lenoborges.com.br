@@ -35,7 +35,8 @@ export class AuthService {
       });
 
     if (!error && data?.user) {
-      const waitlist = await this.waitlistRepository.findByEmail(normalizedEmail);
+      const waitlist =
+        await this.waitlistRepository.findByEmail(normalizedEmail);
       const waitlistEntry =
         waitlist.found && waitlist.entry ? waitlist.entry : null;
 
@@ -102,7 +103,8 @@ export class AuthService {
 
     let profile = await this.profileRepository.findById(data.user.id);
     if (!profile.found || !profile.entry) {
-      const waitlist = await this.waitlistRepository.findByEmail(normalizedEmail);
+      const waitlist =
+        await this.waitlistRepository.findByEmail(normalizedEmail);
       const waitlistEntry =
         waitlist.found && waitlist.entry ? waitlist.entry : null;
 

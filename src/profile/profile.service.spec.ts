@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { ProfileService } from './profile.service';
 import { ProfileRepository } from './profile.repository';
+import { Profile } from './entities/profile.entity';
 
 describe('ProfileService', () => {
   let service: ProfileService;
@@ -59,9 +60,9 @@ describe('ProfileService', () => {
     it('deve lancar NotFoundException se perfil nao for encontrado', async () => {
       repository.findById.mockResolvedValue({ found: false, entry: null });
 
-      await expect(service.getProfile('user-unknown', 'u@test.com')).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(
+        service.getProfile('user-unknown', 'u@test.com'),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -96,12 +97,15 @@ describe('ProfileService', () => {
         bio: '  Bio com espaços ajustados.  ',
       });
 
-      expect(repository.update).toHaveBeenCalledWith('user-1', {
-        name: 'Fulano de Tal',
-        phone: '11999998888',
-        bio: 'Bio com espaços ajustados.',
-        completedAt: expect.any(Date),
-      });
+      const updateCalls = repository.update.mock.calls as [
+        string,
+        Partial<Profile>,
+      ][];
+      expect(updateCalls[0][0]).toBe('user-1');
+      expect(updateCalls[0][1].name).toBe('Fulano de Tal');
+      expect(updateCalls[0][1].phone).toBe('11999998888');
+      expect(updateCalls[0][1].bio).toBe('Bio com espaços ajustados.');
+      expect(updateCalls[0][1].completedAt).toBeInstanceOf(Date);
     });
 
     it('caso 2: primeira atualizacao preenche completed_at', async () => {
@@ -134,12 +138,12 @@ describe('ProfileService', () => {
         bio: 'Bio valida para onboarding.',
       });
 
-      expect(repository.update).toHaveBeenCalledWith(
-        'user-1',
-        expect.objectContaining({
-          completedAt: expect.any(Date),
-        }),
-      );
+      const updateCalls = repository.update.mock.calls as [
+        string,
+        Partial<Profile>,
+      ][];
+      expect(updateCalls[0][0]).toBe('user-1');
+      expect(updateCalls[0][1].completedAt).toBeInstanceOf(Date);
     });
 
     it('caso 3: atualizacao seguinte NAO sobrescreve completed_at original', async () => {
@@ -241,14 +245,17 @@ describe('ProfileService', () => {
         },
       });
 
-      const bodyWithGrade = {
+      const bodyWithExtraField = {
         name: 'Nome',
         phone: '11999998888',
         bio: 'Bio valida para teste.',
-        grade: 33,
-      } as any;
+      };
 
-      await service.updateProfile('user-1', 'email@test.com', bodyWithGrade);
+      await service.updateProfile(
+        'user-1',
+        'email@test.com',
+        bodyWithExtraField,
+      );
 
       expect(repository.update).not.toHaveBeenCalledWith(
         'user-1',

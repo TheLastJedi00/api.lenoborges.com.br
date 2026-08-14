@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Response, CookieOptions } from 'express';
+import type { Response, CookieOptions } from 'express';
 
 export const REFRESH_TOKEN_COOKIE_NAME = 'eduleno_rt';
 

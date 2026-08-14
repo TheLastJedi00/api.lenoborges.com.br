@@ -53,7 +53,10 @@ describe('ProfileController', () => {
     const result = await controller.getProfile(mockUser);
 
     expect(result).toEqual(mockProfile);
-    expect(service.getProfile).toHaveBeenCalledWith('user-123', 'user@email.com');
+    expect(service.getProfile).toHaveBeenCalledWith(
+      'user-123',
+      'user@email.com',
+    );
   });
 
   it('should call profileService.updateProfile on PATCH /me/profile', async () => {

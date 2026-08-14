@@ -4,10 +4,13 @@ API para o serviço da Seita Dev (eduleno-back).
 
 ## Funcionalidades
 - Endpoint para lista de espera (`POST /waitlist`)
-- Integração com Supabase (PostgreSQL): TypeORM para consultas, Supabase CLI para o schema
-- Validação de dados (class-validator) e normalização
-- Rate limit (`@nestjs/throttler`)
-- Documentação de API navegável com Swagger (`/docs`)
+- Autenticação com Supabase Auth (`/auth/*`): cadastro com confirmação de e-mail por redefinição de senha, login com e-mail/senha, renovação de sessão e logout
+- Gestão de perfil e onboarding do membro (`/me` e `/me/profile`) com autenticação local de JWT
+- Sessão segura: access token em memória e refresh token em cookie `HttpOnly` rotacionado
+- Integração com Supabase (PostgreSQL): TypeORM para persistência de dados de negócio, Supabase CLI para migrations de schema
+- Validação estrita de dados (class-validator) e normalização compartilhada
+- Rate limit por rota e proteção contra abuso (`@nestjs/throttler`)
+- Documentação interativa de API com Swagger (`/docs`)
 
 ## Configuração do Ambiente (.env)
 
@@ -19,32 +22,49 @@ PORT=3000
 NODE_ENV=development
 
 # Origens permitidas para CORS (separadas por vírgula)
-FRONTEND_URL=http://localhost:4200
+FRONTEND_URL="http://localhost:4200"
+
+# Quantidade de proxies reversos na frente da API (para rate limit por IP real)
+TRUST_PROXY_HOPS=1
+
+# Swagger em /docs (ativado por padrão fora de produção)
+# SWAGGER_ENABLED=true
 
 # Conexão com o banco (PostgreSQL / Supabase), usada pelo TypeORM em runtime
-# Use a porta 5432 (conexão direta ou session pooler)
-DATABASE_URL=postgresql://postgres:<senha>@<host>:5432/postgres
+DATABASE_URL="postgresql://postgres:<senha>@<host>:5432/postgres"
 
-# TLS do banco. A conexão carrega PII, então a verificação do certificado fica
-# ligada por padrão. O host direto do Supabase usa CA própria: baixe o arquivo em
-# Settings > Database > SSL Configuration e aponte o caminho abaixo.
-DATABASE_SSL_CA_PATH=./certs/prod-ca.crt
-# Desliga a verificação. Apenas banco local ou descartável, nunca em produção.
+# TLS do banco
+DATABASE_SSL_CA_PATH="./certs/prod-ca.crt"
 # DATABASE_SSL_REJECT_UNAUTHORIZED=false
 
-# As variáveis abaixo estão reservadas para funcionalidades futuras (Auth/Storage)
-# e não são utilizadas atualmente pela API
-# SUPABASE_URL=https://<id>.supabase.co
-# SUPABASE_SERVICE_ROLE_KEY=<service-role-key>
+# Supabase Auth (spec 005)
+SUPABASE_URL="https://seu-id.supabase.co"
+SUPABASE_ANON_KEY="sua-chave-anon"
+SUPABASE_SERVICE_ROLE_KEY="sua-chave-service-role"
+
+# Verificação local do JWT (JWKS derivado de SUPABASE_URL ou segredo HS256 legado)
+# SUPABASE_JWT_SECRET="segredo-legado-hs256"
+
+# Cookie do refresh token
+AUTH_COOKIE_SECURE=false          # true em produção (exigido por SameSite=None)
+AUTH_COOKIE_SAMESITE=lax          # none em produção (front e API em domínios distintos)
+AUTH_COOKIE_MAX_AGE_DAYS=30
 ```
+
+## Configuração no Painel do Supabase
+
+1. **Email Templates > Reset Password**:
+   O corpo do e-mail de redefinição deve apontar para:
+   ```
+   {{ .SiteURL }}/definir-senha?token_hash={{ .TokenHash }}&type=recovery
+   ```
+   Isso permite que o token chegue na query URL para ser consumido diretamente pela API sem depender de `supabase-js` no frontend.
+2. **Authentication > URL Configuration**:
+   Cadastre o `Site URL` e as `Redirect URLs` correspondentes aos domínios do frontend (ex: `http://localhost:4200` e a URL de produção).
 
 ## Banco de Dados e Migrations
 
-O schema pertence ao **Supabase**, não ao TypeORM. As migrations são arquivos SQL versionados em
-`supabase/migrations/` e aplicadas pelo Supabase CLI. O TypeORM roda sempre com
-`synchronize: false` e nunca gera nem aplica migration: ele só mapeia e consulta.
-
-Um `git push` **não** altera o banco. O passo de aplicar é explícito:
+O schema pertence ao **Supabase**, não ao TypeORM. As migrations são arquivos SQL versionados em `supabase/migrations/` e aplicadas pelo Supabase CLI. O TypeORM roda sempre com `synchronize: false` e nunca gera nem aplica migration: ele só mapeia e consulta.
 
 ```bash
 npx supabase login                 # uma vez por máquina
@@ -55,11 +75,7 @@ npm run migration:list             # compara local com o remoto
 npm run migration:push             # aplica as pendentes
 ```
 
-Ao mudar a estrutura de uma tabela, altere **os dois lados**: o SQL da migration e a entity
-correspondente em `src/**/entities/`. Nada sincroniza um a partir do outro.
-
-### Tabela `waitlist_entries`
-
+### Tabela `waitlist_entries` (spec 004)
 - `id` (uuid, Primary Key, default `gen_random_uuid()`)
 - `name` (varchar, Not Null)
 - `phone` (varchar, Not Null)
@@ -67,27 +83,70 @@ correspondente em `src/**/entities/`. Nada sincroniza um a partir do outro.
 - `consent` (boolean, Not Null)
 - `created_at` (timestamptz, Not Null, default `now()`)
 
-`created_at` é `timestamptz` de propósito: como `timestamp` sem fuso, o valor seria gravado no fuso
-da sessão do banco e lido no fuso do processo Node, deslocando o `receivedAt` que a API anuncia
-como UTC.
+### Tabela `profiles` (spec 005)
+- `id` (uuid, Primary Key, FK para `auth.users(id)` com `on delete cascade`)
+- `name` (text, nulo até o onboarding)
+- `phone` (text, nulo até o onboarding, somente dígitos)
+- `bio` (text, nulo até o onboarding)
+- `grade` (smallint, Not Null default 1, `check (grade between 1 and 33)`)
+- `completed_at` (timestamptz, preenchido na primeira atualização do onboarding)
+- `waitlist_entry_id` (uuid, FK opcional para `waitlist_entries(id)` com `on delete set null`)
+- `created_at` (timestamptz, Not Null, default `now()`)
+- `updated_at` (timestamptz, Not Null, default `now()`)
 
-## Documentação da API (Swagger)
+*RLS:* A tabela `profiles` possui Row Level Security (RLS) habilitada sem policies. Isso bloqueia acesso direto do cliente via PostgREST ou anon key; a API acessa os dados diretamente através da `DATABASE_URL`.
 
-Com a aplicação rodando, acesse `/docs` no navegador para ver a documentação interativa gerada pelo Swagger.
+## Arquitetura de Sessão e Segurança
+
+- **Identidade vs Dados de Negócio**: Identidade (criação de usuários, login, envio de e-mails, tokens) é gerenciada via Supabase Auth (`@supabase/supabase-js`). Dados de negócio continuam sob TypeORM. A service role key fica confinada exclusivamente ao `SupabaseService`.
+- **Tokens de Sessão**:
+  - **Access Token**: Enviado no corpo JSON da resposta (`SessionResponseDto`) para ser mantido em memória no frontend.
+  - **Refresh Token**: Gravado em cookie HTTP seguro (`eduleno_rt`) com flags `HttpOnly`, `Path=/auth`, `SameSite` e `Secure` configuráveis por variáveis de ambiente.
+  - **Rotação de Refresh**: A cada chamada a `POST /auth/refresh`, o Supabase rotaciona o refresh token e a API emite o novo cookie. No caso de refresh inválido (401), o cookie é limpo imediatamente.
+- **Autenticação Local**: Rotas sob `/me` são protegidas pelo `SupabaseAuthGuard`, que valida a assinatura e expiração do JWT localmente com `jose` (usando JWKS remoto com cache ou segredo HS256) sem fazer requisições de rede ao GoTrue a cada chamada.
+
+## Endpoints da API
+
+Acesse `/docs` para visualizar o Swagger com os esquemas e exemplos.
 
 ### `POST /waitlist`
+- Entrada: `{ name, phone, email, consent }`
+- Resposta: `201` `{ id, receivedAt }`
+- Rate limit: 5 req / 60s
 
-Recebe os dados do formulário de acesso antecipado e armazena no banco de dados.
+### `POST /auth/signup`
+- Entrada: `{ email, emailConfirmation }`
+- Resposta: `202` `{ status: "confirmation_sent" }`
+- Comportamento: Idêntico para e-mails novos ou já cadastrados (anti-enumeração de usuários). Vincula dados da waitlist no perfil inicial se existirem.
+- Rate limit: 3 req / 60s
 
-**Request Body:**
-- `name` (string): 2 a 120 caracteres.
-- `phone` (string): 10 ou 11 dígitos.
-- `email` (string): Formato válido de e-mail.
-- `consent` (boolean): Deve ser exatamente `true`.
+### `POST /auth/password`
+- Entrada: `{ tokenHash, password, passwordConfirmation }`
+- Resposta: `204 No Content` (sem sessão no corpo)
+- Comportamento: Valida OTP no Supabase, grava a senha e confirma o e-mail da conta.
+- Rate limit: 5 req / 60s
 
-**Response:**
-- `201 Created`: Inscrição recebida. Retorna `{ id, receivedAt }`.
-  - *Nota de Idempotência:* Enviar um e-mail já existente não gera erro. A API retorna `201` com o recibo original da primeira inscrição (mesmo `id` e `receivedAt`).
-- `400 Bad Request`: Erro de validação ou consentimento ausente.
-- `429 Too Many Requests`: Limite de requisições excedido (5 requisições por minuto por IP).
-- `500 Internal Server Error`: Erro interno no banco de dados.
+### `POST /auth/login`
+- Entrada: `{ email, password }`
+- Resposta: `200` `{ accessToken, expiresIn, user: { id, email }, profileCompleted, grade }` + Cookie `eduleno_rt`
+- Rate limit: 5 req / 60s
+
+### `POST /auth/refresh`
+- Entrada: Leitura automática do cookie `eduleno_rt`
+- Resposta: `200` `{ accessToken, expiresIn, user: { id, email }, profileCompleted, grade }` + Cookie `eduleno_rt` rotacionado
+- Rate limit: 30 req / 60s
+
+### `POST /auth/logout`
+- Entrada: Leitura do cookie `eduleno_rt`
+- Resposta: `204 No Content` + Cookie `eduleno_rt` limpo (idempotente)
+
+### `GET /me`
+- Header: `Authorization: Bearer <accessToken>`
+- Resposta: `200` `{ id, email, name, phone, bio, grade, profileCompleted }`
+
+### `PATCH /me/profile`
+- Header: `Authorization: Bearer <accessToken>`
+- Entrada: `{ name, phone, bio }`
+- Resposta: `200` `{ id, email, name, phone, bio, grade, profileCompleted }`
+- Comportamento: Preenche `completed_at` na primeira execução e não sobrescreve nas seguintes.
+- Rate limit: 10 req / 60s
