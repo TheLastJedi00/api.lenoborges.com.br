@@ -87,34 +87,34 @@ Branch: `feat/005-modelo-de-dados`
   `src/app.module.ts`. Objetivo: registrar entity e repository no container e importar o
   `WaitlistModule` para alcançar o repository exportado na Fase 02.
 
-# Fase 04: Cadastro e definição de senha (TDD) []
+# Fase 04: Cadastro e definição de senha (TDD) [x]
 Branch: `feat/005-cadastro`
 
 - [x] Task 01: Criar os DTOs de entrada. Arquivos: `src/auth/dto/signup.dto.ts` e
   `src/auth/dto/set-password.dto.ts`. Objetivo: validar `email` com `IsEmail`, `emailConfirmation`,
   `tokenHash` obrigatório e `password` com mínimo de 8 caracteres, sem exigência de símbolo ou
   maiúscula, porque regra decorativa só empurra o usuário para `Senha@123`.
-- [] Task 02 (TDD): Escrever a spec do cadastro **antes** da lógica. Arquivo:
+- [x] Task 02 (TDD): Escrever a spec do cadastro **antes** da lógica. Arquivo:
   `src/auth/auth.service.spec.ts`. Objetivo: cobrir os casos 1 a 6 e 9 do `context.md` — e-mail novo,
   e-mail já cadastrado devolvendo a mesma resposta, confirmação divergente, normalização antes da
   comparação, vínculo com a lista de espera e ausência de vínculo.
-- [] Task 03: Implementar `signup` no `AuthService`. Arquivo: `src/auth/auth.service.ts`. Objetivo:
+- [x] Task 03: Implementar `signup` no `AuthService`. Arquivo: `src/auth/auth.service.ts`. Objetivo:
   normalizar e comparar os e-mails, criar o usuário pelo cliente admin, criar o perfil aproveitando
   `name` e `phone` da waitlist quando o e-mail estiver lá, e disparar o e-mail de redefinição.
-- [] Task 04: Garantir a resposta idêntica para e-mail existente. Arquivo:
+- [x] Task 04: Garantir a resposta idêntica para e-mail existente. Arquivo:
   `src/auth/auth.service.ts`. Objetivo: e-mail já cadastrado dispara a redefinição e devolve o mesmo
   `202 { status: 'confirmation_sent' }`, porque responder 409 transformaria o endpoint em um oráculo
   de quem tem conta.
-- [] Task 05 (TDD): Escrever a spec da definição de senha. Arquivo:
+- [x] Task 05 (TDD): Escrever a spec da definição de senha. Arquivo:
   `src/auth/auth.service.spec.ts`. Objetivo: cobrir os casos 7 a 9 — token válido atualizando a senha
   sem devolver sessão, token inválido com mensagem genérica sem vazar o texto do GoTrue, e senhas
   divergentes barradas sem tocar no Supabase.
-- [] Task 06: Implementar `setPassword`. Arquivo: `src/auth/auth.service.ts`. Objetivo:
+- [x] Task 06: Implementar `setPassword`. Arquivo: `src/auth/auth.service.ts`. Objetivo:
   `verifyOtp({ type: 'recovery' })` seguido de `updateUser({ password })` pelo cliente público, sem
   emitir sessão, para que um link de e-mail não valha por um login completo.
-- [] Task 07: Criar o controller com as duas rotas. Arquivo: `src/auth/auth.controller.ts`.
+- [x] Task 07: Criar o controller com as duas rotas. Arquivo: `src/auth/auth.controller.ts`.
   Objetivo: `POST /auth/signup` respondendo 202 e `POST /auth/password` respondendo 204 sem corpo.
-- [] Task 08: Criar o `AuthModule`. Arquivos: `src/auth/auth.module.ts` e `src/app.module.ts`.
+- [x] Task 08: Criar o `AuthModule`. Arquivos: `src/auth/auth.module.ts` e `src/app.module.ts`.
   Objetivo: registrar `SupabaseService`, `AuthService` e o controller, importando o `ProfileModule`
   para alcançar o repository de perfis.
 
