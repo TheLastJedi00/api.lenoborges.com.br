@@ -50,7 +50,7 @@ Branch: `feat/005-fundacao`
   `src/waitlist/waitlist.service.ts`, `src/waitlist/waitlist.service.spec.ts`. Objetivo: remover a
   normalização duplicada sem alterar comportamento; a suíte da spec 004 continua verde sem edição de
   expectativa.
-- [] Task 06: Exportar o `WaitlistRepository`. Arquivo: `src/waitlist/waitlist.module.ts`. Objetivo:
+- [x] Task 06: Exportar o `WaitlistRepository`. Arquivo: `src/waitlist/waitlist.module.ts`. Objetivo:
   permitir que o perfil consulte a lista de espera pelo repository existente, em vez de duplicar a
   consulta em outro módulo.
 - [] Task 07: Criar o `SupabaseService`. Arquivo: `src/auth/supabase.service.ts`. Objetivo: único

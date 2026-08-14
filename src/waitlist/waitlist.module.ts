@@ -9,6 +9,6 @@ import { WaitlistController } from './waitlist.controller';
   imports: [TypeOrmModule.forFeature([WaitlistEntry])],
   controllers: [WaitlistController],
   providers: [WaitlistRepository, WaitlistService],
-  exports: [WaitlistService],
+  exports: [WaitlistService, WaitlistRepository],
 })
 export class WaitlistModule {}
