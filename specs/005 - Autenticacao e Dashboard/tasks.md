@@ -32,7 +32,7 @@ depois de três fases construídas custaria as três.
 # Fase 02: Fundação (dependências, env, cliente Supabase, globais) []
 Branch: `feat/005-fundacao`
 
-- [] Task 01: Instalar dependências. Arquivo: `package.json`. Objetivo: `@supabase/supabase-js` para
+- [x] Task 01: Instalar dependências. Arquivo: `package.json`. Objetivo: `@supabase/supabase-js` para
   identidade, `jose` para verificar o JWT localmente e `cookie-parser` (mais `@types/cookie-parser`)
   para ler o refresh token do cookie.
 - [] Task 02: Documentar as variáveis novas. Arquivos: `.env.example`, `.env`. Objetivo: acrescentar
