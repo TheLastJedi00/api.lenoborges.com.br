@@ -39,7 +39,7 @@ Branch: `feat/005-fundacao`
   `SUPABASE_ANON_KEY`, `AUTH_COOKIE_SECURE`, `AUTH_COOKIE_SAMESITE`, `AUTH_COOKIE_MAX_AGE_DAYS` e o
   `SUPABASE_JWT_SECRET` opcional, e **remover** o comentário "Reserved for future use (not currently
   read by API)" de `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY`, que passou a ser mentira.
-- [] Task 03: Exigir as variáveis no boot. Arquivo: `src/config/env.validation.ts`. Objetivo:
+- [x] Task 03: Exigir as variáveis no boot. Arquivo: `src/config/env.validation.ts`. Objetivo:
   `SUPABASE_URL`, `SUPABASE_ANON_KEY` e `SUPABASE_SERVICE_ROLE_KEY` como obrigatórias, e as de cookie
   como opcionais com default, para a aplicação falhar ao subir em vez de na primeira requisição.
 - [] Task 04: Extrair a normalização compartilhada. Arquivos: `src/common/normalize.ts` e

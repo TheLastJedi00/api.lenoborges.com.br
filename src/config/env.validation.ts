@@ -47,6 +47,36 @@ class EnvironmentVariables {
   @IsString()
   @IsOptional()
   SWAGGER_ENABLED?: string;
+
+  // Supabase Auth (spec 005)
+  @IsString()
+  @IsNotEmpty()
+  SUPABASE_URL: string;
+
+  @IsString()
+  @IsNotEmpty()
+  SUPABASE_ANON_KEY: string;
+
+  @IsString()
+  @IsNotEmpty()
+  SUPABASE_SERVICE_ROLE_KEY: string;
+
+  @IsString()
+  @IsOptional()
+  SUPABASE_JWT_SECRET?: string;
+
+  // Cookie de refresh token
+  @IsString()
+  @IsOptional()
+  AUTH_COOKIE_SECURE?: string;
+
+  @IsString()
+  @IsOptional()
+  AUTH_COOKIE_SAMESITE?: string;
+
+  @IsNumber()
+  @IsOptional()
+  AUTH_COOKIE_MAX_AGE_DAYS?: number;
 }
 
 export function validate(config: Record<string, unknown>) {
