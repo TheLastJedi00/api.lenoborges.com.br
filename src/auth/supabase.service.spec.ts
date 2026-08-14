@@ -24,11 +24,20 @@ describe('SupabaseService', () => {
     service = new SupabaseService(configService);
   });
 
-  it('should be defined and expose admin and public clients', () => {
+  it('should be defined and expose a shared admin client', () => {
     expect(service).toBeDefined();
     expect(service.adminClient).toBeDefined();
-    expect(service.publicClient).toBeDefined();
     expect(service.admin).toBe(service.adminClient);
-    expect(service.public).toBe(service.publicClient);
+  });
+
+  it('deve devolver uma instancia nova a cada createUserClient', () => {
+    // Cliente de usuario compartilhado carregaria a sessao de quem passou por
+    // ele por ultimo. Ver o achado A1 do review da spec 005.
+    const first = service.createUserClient();
+    const second = service.createUserClient();
+
+    expect(first).toBeDefined();
+    expect(second).toBeDefined();
+    expect(first).not.toBe(second);
   });
 });

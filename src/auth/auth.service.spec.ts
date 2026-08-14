@@ -18,15 +18,19 @@ describe('AuthService', () => {
         resetPasswordForEmail: jest.Mock;
       };
     };
-    publicClient: {
-      auth: {
-        resetPasswordForEmail: jest.Mock;
-        verifyOtp: jest.Mock;
-        updateUser: jest.Mock;
-        signInWithPassword: jest.Mock;
-        refreshSession: jest.Mock;
-        signOut: jest.Mock;
-      };
+    createUserClient: jest.Mock;
+  };
+  // Cliente por requisicao: o service pede um novo a cada operacao de usuario.
+  // O mock devolve sempre o mesmo objeto para as assercoes, mas conta as chamadas
+  // da fabrica, que e o que prova o isolamento entre requisicoes.
+  let userClient: {
+    auth: {
+      resetPasswordForEmail: jest.Mock;
+      verifyOtp: jest.Mock;
+      updateUser: jest.Mock;
+      signInWithPassword: jest.Mock;
+      refreshSession: jest.Mock;
+      signOut: jest.Mock;
     };
   };
   let profileRepository: {
@@ -50,15 +54,17 @@ describe('AuthService', () => {
           resetPasswordForEmail: jest.fn(),
         },
       },
-      publicClient: {
-        auth: {
-          resetPasswordForEmail: jest.fn(),
-          verifyOtp: jest.fn(),
-          updateUser: jest.fn(),
-          signInWithPassword: jest.fn(),
-          refreshSession: jest.fn(),
-          signOut: jest.fn(),
-        },
+      createUserClient: jest.fn(() => userClient),
+    };
+
+    userClient = {
+      auth: {
+        resetPasswordForEmail: jest.fn(),
+        verifyOtp: jest.fn(),
+        updateUser: jest.fn(),
+        signInWithPassword: jest.fn(),
+        refreshSession: jest.fn(),
+        signOut: jest.fn(),
       },
     };
 
@@ -266,7 +272,7 @@ describe('AuthService', () => {
 
   describe('setPassword', () => {
     it('caso 7: deve verificar o token e atualizar a senha com sucesso sem devolver sessao', async () => {
-      supabaseService.publicClient.auth.verifyOtp.mockResolvedValue({
+      userClient.auth.verifyOtp.mockResolvedValue({
         data: {
           user: { id: 'user-uuid-123', email: 'user@email.com' },
           session: { access_token: 'valid-token' },
@@ -286,14 +292,14 @@ describe('AuthService', () => {
         }),
       ).resolves.toBeUndefined();
 
-      expect(supabaseService.publicClient.auth.verifyOtp).toHaveBeenCalledWith({
+      expect(userClient.auth.verifyOtp).toHaveBeenCalledWith({
         token_hash: 'valid-hash-token',
         type: 'recovery',
       });
     });
 
     it('caso 8: deve lancar BadRequestException com mensagem generica se token for invalido ou expirado', async () => {
-      supabaseService.publicClient.auth.verifyOtp.mockResolvedValue({
+      userClient.auth.verifyOtp.mockResolvedValue({
         data: { user: null, session: null },
         error: { message: 'Token has expired or is invalid', status: 400 },
       });
@@ -318,9 +324,7 @@ describe('AuthService', () => {
         }),
       ).rejects.toThrow(new BadRequestException('Senhas não conferem.'));
 
-      expect(
-        supabaseService.publicClient.auth.verifyOtp,
-      ).not.toHaveBeenCalled();
+      expect(userClient.auth.verifyOtp).not.toHaveBeenCalled();
       expect(
         supabaseService.adminClient.auth.admin.updateUserById,
       ).not.toHaveBeenCalled();
@@ -329,7 +333,7 @@ describe('AuthService', () => {
 
   describe('login', () => {
     it('caso 10: deve fazer login com credenciais validas e devolver session e refreshToken', async () => {
-      supabaseService.publicClient.auth.signInWithPassword.mockResolvedValue({
+      userClient.auth.signInWithPassword.mockResolvedValue({
         data: {
           session: {
             access_token: 'access-jwt',
@@ -371,16 +375,14 @@ describe('AuthService', () => {
         },
         refreshToken: 'refresh-rt',
       });
-      expect(
-        supabaseService.publicClient.auth.signInWithPassword,
-      ).toHaveBeenCalledWith({
+      expect(userClient.auth.signInWithPassword).toHaveBeenCalledWith({
         email: 'aluno@email.com',
         password: 'password123',
       });
     });
 
     it('caso 11: deve lancar UnauthorizedException com a mesma mensagem para credencial errada ou usuario inexistente', async () => {
-      supabaseService.publicClient.auth.signInWithPassword.mockResolvedValue({
+      userClient.auth.signInWithPassword.mockResolvedValue({
         data: { session: null, user: null },
         error: { message: 'Invalid login credentials', status: 400 },
       });
@@ -394,7 +396,7 @@ describe('AuthService', () => {
     });
 
     it('caso 12: deve criar o perfil na hora caso o usuario nao possua perfil ao logar', async () => {
-      supabaseService.publicClient.auth.signInWithPassword.mockResolvedValue({
+      userClient.auth.signInWithPassword.mockResolvedValue({
         data: {
           session: {
             access_token: 'access-jwt-2',
@@ -446,7 +448,7 @@ describe('AuthService', () => {
 
   describe('refresh', () => {
     it('caso 13: refresh valido devolve access novo e refresh rotacionado', async () => {
-      supabaseService.publicClient.auth.refreshSession.mockResolvedValue({
+      userClient.auth.refreshSession.mockResolvedValue({
         data: {
           session: {
             access_token: 'new-access-jwt',
@@ -485,9 +487,7 @@ describe('AuthService', () => {
         },
         refreshToken: 'new-refresh-rt',
       });
-      expect(
-        supabaseService.publicClient.auth.refreshSession,
-      ).toHaveBeenCalledWith({
+      expect(userClient.auth.refreshSession).toHaveBeenCalledWith({
         refresh_token: 'old-refresh-rt',
       });
     });
@@ -497,7 +497,7 @@ describe('AuthService', () => {
         'Sessão expirada ou inválida.',
       );
 
-      supabaseService.publicClient.auth.refreshSession.mockResolvedValue({
+      userClient.auth.refreshSession.mockResolvedValue({
         data: { session: null, user: null },
         error: { message: 'Invalid refresh token', status: 401 },
       });
@@ -511,15 +511,75 @@ describe('AuthService', () => {
   describe('logout', () => {
     it('caso 15: logout sem cookie resolve sem erro de forma idempotente', async () => {
       await expect(service.logout(undefined)).resolves.toBeUndefined();
-      expect(supabaseService.publicClient.auth.signOut).not.toHaveBeenCalled();
+      expect(supabaseService.createUserClient).not.toHaveBeenCalled();
+      expect(userClient.auth.signOut).not.toHaveBeenCalled();
+    });
 
-      supabaseService.publicClient.auth.signOut.mockResolvedValue({
+    it('caso 16: logout com cookie valido revoga a sessao daquele refresh token', async () => {
+      userClient.auth.refreshSession.mockResolvedValue({
+        data: {
+          session: { access_token: 'access-da-vitima' },
+          user: { id: 'user-uuid-123' },
+        },
         error: null,
       });
-      await expect(
-        service.logout('some-refresh-token'),
-      ).resolves.toBeUndefined();
-      expect(supabaseService.publicClient.auth.signOut).toHaveBeenCalled();
+      userClient.auth.signOut.mockResolvedValue({ error: null });
+
+      await expect(service.logout('refresh-valido')).resolves.toBeUndefined();
+
+      // A sessao precisa ser carregada no cliente a partir do token do chamador
+      // antes do signOut, senao o signOut derruba a sessao de outra pessoa.
+      expect(userClient.auth.refreshSession).toHaveBeenCalledWith({
+        refresh_token: 'refresh-valido',
+      });
+      expect(userClient.auth.signOut).toHaveBeenCalledWith({ scope: 'local' });
+    });
+
+    it('caso 17: cookie invalido nao revoga sessao nenhuma e ainda resolve', async () => {
+      // Regressao do achado A1 do review: antes, qualquer cookie sem valor real
+      // derrubava a sessao de quem tivesse logado por ultimo no processo.
+      userClient.auth.refreshSession.mockResolvedValue({
+        data: { session: null, user: null },
+        error: { message: 'Invalid refresh token', status: 401 },
+      });
+
+      await expect(service.logout('cookie-forjado')).resolves.toBeUndefined();
+
+      expect(userClient.auth.signOut).not.toHaveBeenCalled();
+    });
+
+    it('caso 18: falha do Supabase no logout nao vira erro para o chamador', async () => {
+      userClient.auth.refreshSession.mockRejectedValue(new Error('rede caiu'));
+
+      await expect(service.logout('refresh-valido')).resolves.toBeUndefined();
+    });
+  });
+
+  describe('isolamento entre requisicoes', () => {
+    it('caso 19: cada operacao de usuario pede um cliente novo, nunca um compartilhado', async () => {
+      // O cliente do supabase-js guarda a sessao em memoria mesmo com
+      // persistSession: false, entao reaproveitar uma instancia entre
+      // requisicoes mistura a sessao de usuarios diferentes.
+      userClient.auth.signInWithPassword.mockResolvedValue({
+        data: {
+          session: {
+            access_token: 'access',
+            refresh_token: 'refresh',
+            expires_in: 3600,
+          },
+          user: { id: 'user-1', email: 'um@email.com' },
+        },
+        error: null,
+      });
+      profileRepository.findById.mockResolvedValue({
+        found: true,
+        entry: { id: 'user-1', grade: 1, completedAt: null },
+      });
+
+      await service.login({ email: 'um@email.com', password: 'senha-1234' });
+      await service.login({ email: 'um@email.com', password: 'senha-1234' });
+
+      expect(supabaseService.createUserClient).toHaveBeenCalledTimes(2);
     });
   });
 });

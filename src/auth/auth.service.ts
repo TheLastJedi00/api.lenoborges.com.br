@@ -63,8 +63,9 @@ export class AuthService {
       throw new BadRequestException('Senhas não conferem.');
     }
 
-    const { data: verifyData, error: verifyError } =
-      await this.supabaseService.publicClient.auth.verifyOtp({
+    const { data: verifyData, error: verifyError } = await this.supabaseService
+      .createUserClient()
+      .auth.verifyOtp({
         token_hash: dto.tokenHash,
         type: 'recovery',
       });
@@ -91,8 +92,9 @@ export class AuthService {
   ): Promise<{ session: SessionResponseDto; refreshToken: string }> {
     const normalizedEmail = normalizeEmail(dto.email);
 
-    const { data, error } =
-      await this.supabaseService.publicClient.auth.signInWithPassword({
+    const { data, error } = await this.supabaseService
+      .createUserClient()
+      .auth.signInWithPassword({
         email: normalizedEmail,
         password: dto.password,
       });
@@ -144,8 +146,9 @@ export class AuthService {
       throw new UnauthorizedException('Sessão expirada ou inválida.');
     }
 
-    const { data, error } =
-      await this.supabaseService.publicClient.auth.refreshSession({
+    const { data, error } = await this.supabaseService
+      .createUserClient()
+      .auth.refreshSession({
         refresh_token: refreshToken,
       });
 
@@ -191,15 +194,39 @@ export class AuthService {
     };
   }
 
+  /**
+   * Encerra a sessao correspondente ao refresh token do cookie.
+   *
+   * O cliente e novo e a sessao e carregada a partir do token de quem chamou,
+   * antes do signOut. Sem esse passo, o signOut dispararia sobre a sessao que
+   * estivesse na memoria do cliente, que e a do ultimo usuario que passou por
+   * ele, e nao a de quem pediu para sair.
+   *
+   * Cookie ausente, forjado ou expirado nao revoga nada e mesmo assim resolve:
+   * logout e idempotente, o objetivo e o estado final "deslogado".
+   *
+   * Escopo `local` derruba so esta sessao. Sair no computador do laboratorio nao
+   * pode deslogar a mesma pessoa no celular dela.
+   */
   async logout(refreshToken?: string): Promise<void> {
     if (!refreshToken) {
       return;
     }
 
     try {
-      await this.supabaseService.publicClient.auth.signOut();
+      const client = this.supabaseService.createUserClient();
+
+      const { data, error } = await client.auth.refreshSession({
+        refresh_token: refreshToken,
+      });
+
+      if (error || !data?.session) {
+        return;
+      }
+
+      await client.auth.signOut({ scope: 'local' });
     } catch {
-      // Idempotent: ignore error
+      // Idempotente: falha de rede nao pode prender o usuario dentro da conta.
     }
   }
 }
