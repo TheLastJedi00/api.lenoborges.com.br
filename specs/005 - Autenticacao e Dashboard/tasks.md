@@ -53,7 +53,7 @@ Branch: `feat/005-fundacao`
 - [x] Task 06: Exportar o `WaitlistRepository`. Arquivo: `src/waitlist/waitlist.module.ts`. Objetivo:
   permitir que o perfil consulte a lista de espera pelo repository existente, em vez de duplicar a
   consulta em outro módulo.
-- [] Task 07: Criar o `SupabaseService`. Arquivo: `src/auth/supabase.service.ts`. Objetivo: único
+- [x] Task 07: Criar o `SupabaseService`. Arquivo: `src/auth/supabase.service.ts`. Objetivo: único
   ponto do projeto que instancia `@supabase/supabase-js`, expondo dois clientes com papéis separados
   (admin com service role, público com anon key), ambos com `persistSession: false` e
   `autoRefreshToken: false`, porque o backend é sem estado.
