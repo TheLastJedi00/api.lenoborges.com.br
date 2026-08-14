@@ -42,7 +42,7 @@ Branch: `feat/005-fundacao`
 - [x] Task 03: Exigir as variáveis no boot. Arquivo: `src/config/env.validation.ts`. Objetivo:
   `SUPABASE_URL`, `SUPABASE_ANON_KEY` e `SUPABASE_SERVICE_ROLE_KEY` como obrigatórias, e as de cookie
   como opcionais com default, para a aplicação falhar ao subir em vez de na primeira requisição.
-- [] Task 04: Extrair a normalização compartilhada. Arquivos: `src/common/normalize.ts` e
+- [x] Task 04: Extrair a normalização compartilhada. Arquivos: `src/common/normalize.ts` e
   `src/common/normalize.spec.ts`. Objetivo: mover trim com colapso de espaços do nome, dígitos do
   telefone e lowercase do e-mail para um único lugar, com os casos de teste migrados do
   `waitlist.service.spec.ts`.
