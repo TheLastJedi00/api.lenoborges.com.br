@@ -145,30 +145,30 @@ Branch: `feat/005-sessao`
   limpando e devolvendo 204, e o refresh **limpando o cookie também no 401**, para um cookie inútil
   não provocar erro em toda visita.
 
-# Fase 06: Rotas autenticadas e perfil (TDD) []
+# Fase 06: Rotas autenticadas e perfil (TDD) [x]
 Branch: `feat/005-perfil`
 
-- [] Task 01 (TDD): Escrever a spec do guard **antes** do guard. Arquivo:
+- [x] Task 01 (TDD): Escrever a spec do guard **antes** do guard. Arquivo:
   `src/auth/guards/supabase-auth.guard.spec.ts`. Objetivo: token válido populando `request.user`, e
   401 para header ausente, token expirado e assinatura de outra chave.
-- [] Task 02: Implementar o `SupabaseAuthGuard`. Arquivo:
+- [x] Task 02: Implementar o `SupabaseAuthGuard`. Arquivo:
   `src/auth/guards/supabase-auth.guard.ts`. Objetivo: verificar o JWT localmente com `jose`, por JWKS
   do projeto ou pelo segredo HS256 legado, sem chamar `getUser()` a cada requisição, que colocaria
   uma ida à rede no caminho de toda leitura e derrubaria a API junto com o Auth.
-- [] Task 03: Criar o decorator do usuário. Arquivo:
+- [x] Task 03: Criar o decorator do usuário. Arquivo:
   `src/auth/decorators/current-user.decorator.ts`. Objetivo: entregar `{ id, email }` ao controller
   sem ninguém tocar em `request` diretamente.
-- [] Task 04: Criar os DTOs do perfil. Arquivos: `src/profile/dto/update-profile.dto.ts` e
+- [x] Task 04: Criar os DTOs do perfil. Arquivos: `src/profile/dto/update-profile.dto.ts` e
   `src/profile/dto/profile.dto.ts`. Objetivo: validar `name` de 2 a 120, `phone` com 10 ou 11 dígitos
   após limpar não dígitos e `bio` de 10 a 500, e fixar a saída com `grade` e `profileCompleted`.
-- [] Task 05 (TDD): Escrever a spec do `ProfileService`. Arquivo:
+- [x] Task 05 (TDD): Escrever a spec do `ProfileService`. Arquivo:
   `src/profile/profile.service.spec.ts`. Objetivo: cobrir os 6 casos do `context.md` — normalização,
   `completed_at` preenchido na primeira atualização e **não** sobrescrito nas seguintes, bio fora dos
   limites, perfil inexistente e `grade` não alterável por este endpoint.
-- [] Task 06: Implementar o `ProfileService`. Arquivo: `src/profile/profile.service.ts`. Objetivo:
+- [x] Task 06: Implementar o `ProfileService`. Arquivo: `src/profile/profile.service.ts`. Objetivo:
   normalizar com o utilitário da Fase 02, gravar `completed_at` só na primeira vez porque a data do
   onboarding é histórico e não "última edição", e mexer em `updated_at` sempre.
-- [] Task 07: Criar o controller do perfil. Arquivo: `src/profile/profile.controller.ts`. Objetivo:
+- [x] Task 07: Criar o controller do perfil. Arquivo: `src/profile/profile.controller.ts`. Objetivo:
   `GET /me` e `PATCH /me/profile` sob `@UseGuards(SupabaseAuthGuard)`, deixando as rotas públicas de
   `/auth` e o `POST /waitlist` da spec 004 anônimos como estão.
 
