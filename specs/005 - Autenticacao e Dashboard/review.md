@@ -156,8 +156,13 @@ quando alguém reclama que o e-mail não chegou.
 A resposta uniforme para o cliente é correta e deve continuar. O que falta é distinguir, **no log**,
 "e-mail já existe" (esperado, silencioso) de "o Supabase recusou a operação" (incidente).
 
-### A6. `resetPasswordForEmail` sem `redirectTo`
+### A6. `resetPasswordForEmail` sem `redirectTo` (corrigido)
 **Arquivo:** `src/auth/auth.service.ts:54`
+
+> **Corrigido em 2026-08-15**, branch `fix/005-recovery-redirect-to`. `AuthService` passou a ler
+> `FRONTEND_URL` (primeira origem da lista, já que o CORS aceita várias) e a passar
+> `{ redirectTo: FRONTEND_URL + '/definir-senha' }` na chamada. O Site URL do painel deixa de ser a
+> única fonte da URL do link; a allow-list de Redirect URLs continua obrigatória.
 
 A chamada não passa `redirectTo`, então o link do e-mail depende inteiramente de o Site URL do painel
 estar certo e de o template usar `{{ .SiteURL }}`. Funciona hoje porque a Fase 01 configurou as duas

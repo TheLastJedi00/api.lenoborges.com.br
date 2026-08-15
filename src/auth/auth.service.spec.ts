@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { AuthService } from './auth.service';
 import { SupabaseService } from './supabase.service';
 import { ProfileRepository } from '../profile/profile.repository';
@@ -93,6 +94,16 @@ describe('AuthService', () => {
           provide: WaitlistRepository,
           useValue: waitlistRepository,
         },
+        {
+          provide: ConfigService,
+          // Lista com duas origens e barra sobrando de proposito: o service
+          // precisa ficar com a primeira, sem a barra.
+          useValue: {
+            getOrThrow: jest
+              .fn()
+              .mockReturnValue('http://localhost:4200/, http://outra.origem'),
+          },
+        },
       ],
     }).compile();
 
@@ -140,7 +151,9 @@ describe('AuthService', () => {
       });
       expect(
         supabaseService.adminClient.auth.resetPasswordForEmail,
-      ).toHaveBeenCalledWith('novo@email.com');
+      ).toHaveBeenCalledWith('novo@email.com', {
+        redirectTo: 'http://localhost:4200/definir-senha',
+      });
     });
 
     it('caso 2: deve retornar a mesma resposta para email ja existente disparando recovery sem criar perfil duplicado', async () => {
@@ -162,7 +175,9 @@ describe('AuthService', () => {
       expect(profileRepository.create).not.toHaveBeenCalled();
       expect(
         supabaseService.adminClient.auth.resetPasswordForEmail,
-      ).toHaveBeenCalledWith('existente@email.com');
+      ).toHaveBeenCalledWith('existente@email.com', {
+        redirectTo: 'http://localhost:4200/definir-senha',
+      });
     });
 
     it('caso 3: deve lancar BadRequestException se a confirmacao de email for divergente', async () => {

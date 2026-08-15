@@ -62,6 +62,8 @@ AUTH_COOKIE_MAX_AGE_DAYS=30
 2. **Authentication > URL Configuration**:
    Cadastre o `Site URL` e as `Redirect URLs` correspondentes aos domínios do frontend (ex: `http://localhost:4200` e a URL de produção).
 
+   As `Redirect URLs` são obrigatórias: o backend passa `redirectTo: FRONTEND_URL + '/definir-senha'` no `resetPasswordForEmail`, e o Supabase só honra esse destino se ele estiver na allow-list. Fora dela, o link volta a cair no `Site URL`, que nasce `http://127.0.0.1:3000` no scaffolding e leva o usuário para a porta da API em vez da do front.
+
 ## Banco de Dados e Migrations
 
 O schema pertence ao **Supabase**, não ao TypeORM. As migrations são arquivos SQL versionados em `supabase/migrations/` e aplicadas pelo Supabase CLI. O TypeORM roda sempre com `synchronize: false` e nunca gera nem aplica migration: ele só mapeia e consulta.
