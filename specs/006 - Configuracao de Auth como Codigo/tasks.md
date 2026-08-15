@@ -19,7 +19,7 @@ qualquer push, uma vez.
   público não expõe esses campos, o CLI não tem `config pull`, e a Management API exigiria um token
   pessoal que não está no ambiente.
 
-# Fase 02: Template de recuperação em código []
+# Fase 02: Template de recuperação em código [x]
 Branch: `feat/006-template-recovery`
 
 - [x] Task 01: Criar o template do e-mail de recuperação. Arquivo: `supabase/templates/recovery.html`.
@@ -32,38 +32,38 @@ Branch: `feat/006-template-recovery`
   `[auth.email.template.recovery]` com `subject` e `content_path = "./supabase/templates/recovery.html"`.
   Objetivo: o `config push` passar a levar o arquivo da Task 01 junto.
 
-# Fase 03: URL configuration em código []
+# Fase 03: URL configuration em código [x]
 Branch: `feat/006-url-config`
 
-- [] Task 01: Corrigir o `site_url`. Arquivo: `supabase/config.toml`. Objetivo: trocar
+- [x] Task 01: Corrigir o `site_url`. Arquivo: `supabase/config.toml`. Objetivo: trocar
   `http://127.0.0.1:3000` por `https://edu.lenoborges.com.br`, com comentário explicando que o campo
   é único, que o projeto hospedado serve dev e produção, e que por isso ele recebe o valor de
   produção enquanto o destino real de cada link vem do `redirectTo`.
-- [] Task 02: Preencher a allow-list. Arquivo: `supabase/config.toml`. Objetivo: trocar
+- [x] Task 02: Preencher a allow-list. Arquivo: `supabase/config.toml`. Objetivo: trocar
   `additional_redirect_urls` por `["https://edu.lenoborges.com.br/definir-senha", "http://localhost:4200/definir-senha"]`,
   que são exatamente as duas URLs que o `AuthService` monta a partir do `FRONTEND_URL`. Sem elas o
   GoTrue descarta o `redirectTo` e o link volta a cair no Site URL.
-- [] Task 03: Neutralizar as divergências encontradas na Fase 01 Task 02. Arquivo:
+- [x] Task 03: Neutralizar as divergências encontradas na Fase 01 Task 02. Arquivo:
   `supabase/config.toml`. Objetivo: alinhar ao que produção já pratica toda chave em que o arquivo
   carregava default de stack local, com atenção a `auth.rate_limit.email_sent` (hoje `2` por hora, o
   item mais perigoso do inventário) e `auth.email.max_frequency` (hoje `"1s"`).
-- [] Task 04: Subir o `minimum_password_length` para `8`. Arquivo: `supabase/config.toml`. Objetivo:
+- [x] Task 04: Subir o `minimum_password_length` para `8`. Arquivo: `supabase/config.toml`. Objetivo:
   fechar a folga entre o piso do servidor e o que a UI promete, já que `definir-senha.page.ts` exige
   8 no front e o backend não revalida tamanho.
 
-# Fase 04: Documentação []
+# Fase 04: Documentação [x]
 Branch: `feat/006-docs`
 
-- [] Task 01: Reescrever a seção "Configuração no Painel do Supabase". Arquivo: `README.md`.
+- [x] Task 01: Reescrever a seção "Configuração no Painel do Supabase". Arquivo: `README.md`.
   Objetivo: ela hoje ensina o template errado (`{{ .SiteURL }}/definir-senha`) e descreve passos de
   painel que passam a viver no repo. Vira "Configuração do Supabase", explicando que a fonte é o
   `config.toml`, que o comando é `supabase config push`, e que o push escreve a seção `[auth]`
   inteira em produção.
-- [] Task 02: Fechar o achado A6 de vez. Arquivo:
+- [x] Task 02: Fechar o achado A6 de vez. Arquivo:
   `specs/005 - Autenticacao e Dashboard/review.md`. Objetivo: a nota de correção atual afirma que
   passar `redirectTo` resolve o link, o que só vale com `{{ .RedirectTo }}` no template. Corrigir a
   afirmação e apontar para esta spec.
-- [] Task 03: Ajustar a pendência 2 do context da spec 005 no front. Arquivo:
+- [x] Task 03: Ajustar a pendência 2 do context da spec 005 no front. Arquivo:
   `../eduleno-front/specs/005 - Autenticacao e Dashboard/context.md`. Objetivo: ela descreve o
   template com `{{ .SiteURL }}` como o formato desejado. Apontar para o formato desta spec. Commit no
   repositório do front, não neste.

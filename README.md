@@ -51,18 +51,43 @@ AUTH_COOKIE_SAMESITE=lax          # none em produção (front e API em domínios
 AUTH_COOKIE_MAX_AGE_DAYS=30
 ```
 
-## Configuração no Painel do Supabase
+## Configuração do Supabase Auth
 
-1. **Email Templates > Reset Password**:
-   O corpo do e-mail de redefinição deve apontar para:
-   ```
-   {{ .SiteURL }}/definir-senha?token_hash={{ .TokenHash }}&type=recovery
-   ```
-   Isso permite que o token chegue na query URL para ser consumido diretamente pela API sem depender de `supabase-js` no frontend.
-2. **Authentication > URL Configuration**:
-   Cadastre o `Site URL` e as `Redirect URLs` correspondentes aos domínios do frontend (ex: `http://localhost:4200` e a URL de produção).
+**A fonte é o `supabase/config.toml`, não o painel.** Template do e-mail de recuperação, Site URL e
+Redirect URLs vivem no repositório e são aplicados por:
 
-   As `Redirect URLs` são obrigatórias: o backend passa `redirectTo: FRONTEND_URL + '/definir-senha'` no `resetPasswordForEmail`, e o Supabase só honra esse destino se ele estiver na allow-list. Fora dela, o link volta a cair no `Site URL`, que nasce `http://127.0.0.1:3000` no scaffolding e leva o usuário para a porta da API em vez da do front.
+```bash
+supabase config push
+```
+
+Editar esses valores no painel funciona, mas o próximo `config push` desfaz. Mude no arquivo.
+
+### O que está no repositório
+
+| Onde | O quê |
+|---|---|
+| `supabase/config.toml`, `[auth]` | `site_url` e `additional_redirect_urls` |
+| `supabase/config.toml`, `[auth.email.template.recovery]` | assunto e caminho do template |
+| `supabase/templates/recovery.html` | o corpo do e-mail |
+
+O link do e-mail usa `{{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=recovery`. **Não use
+`{{ .SiteURL }}`**: ele renderiza a configuração do projeto, não o destino que o
+`resetPasswordForEmail` passou. Como Site URL é campo único e este projeto hospedado atende dev e
+produção ao mesmo tempo, `{{ .SiteURL }}` só conseguiria servir um dos dois ambientes.
+
+O `token_hash` precisa chegar na query, e não no fragmento, porque o front não tem `supabase-js`
+para interpretar o formato padrão: ele só repassa o token para esta API.
+
+As `Redirect URLs` são obrigatórias. O backend passa `redirectTo: FRONTEND_URL + '/definir-senha'`, e
+o GoTrue só honra esse destino se ele estiver na allow-list. Fora dela o valor é descartado em
+silêncio e o link cai no `Site URL`.
+
+### Antes de rodar o push
+
+`config push` escreve a seção `[auth]` **inteira** no projeto hospedado, não só as chaves que você
+mudou, e o CLI não tem `config pull` nem `config diff` para comparar antes. Revise o diff do arquivo
+e confira no painel as chaves que nenhuma leitura externa alcança (`jwt_expiry`, `otp_expiry`).
+O inventário completo está na [spec 006](specs/006%20-%20Configuracao%20de%20Auth%20como%20Codigo/context.md).
 
 ## Banco de Dados e Migrations
 

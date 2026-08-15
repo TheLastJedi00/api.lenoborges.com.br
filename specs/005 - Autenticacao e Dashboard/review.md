@@ -161,8 +161,17 @@ A resposta uniforme para o cliente é correta e deve continuar. O que falta é d
 
 > **Corrigido em 2026-08-15**, branch `fix/005-recovery-redirect-to`. `AuthService` passou a ler
 > `FRONTEND_URL` (primeira origem da lista, já que o CORS aceita várias) e a passar
-> `{ redirectTo: FRONTEND_URL + '/definir-senha' }` na chamada. O Site URL do painel deixa de ser a
-> única fonte da URL do link; a allow-list de Redirect URLs continua obrigatória.
+> `{ redirectTo: FRONTEND_URL + '/definir-senha' }` na chamada.
+>
+> **Correção da correção, no mesmo dia.** A nota original seguia dizendo que "o Site URL do painel
+> deixa de ser a única fonte da URL do link". Isso estava errado. `{{ .SiteURL }}` renderiza a
+> configuração do projeto, e o valor passado na chamada só aparece no template como
+> `{{ .RedirectTo }}`. Com o template daquele momento, o `redirectTo` era aceito na validação e não
+> aparecia no link: o fix estava certo e inerte.
+>
+> O que o torna efetivo é a [spec 006](../006%20-%20Configuracao%20de%20Auth%20como%20Codigo/context.md),
+> que troca o template para `{{ .RedirectTo }}` e leva Site URL e Redirect URLs para o
+> `supabase/config.toml`. Só com as duas partes o achado A6 fecha.
 
 A chamada não passa `redirectTo`, então o link do e-mail depende inteiramente de o Site URL do painel
 estar certo e de o template usar `{{ .SiteURL }}`. Funciona hoje porque a Fase 01 configurou as duas
