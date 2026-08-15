@@ -3,6 +3,7 @@ import {
   BadRequestException,
   UnauthorizedException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { SupabaseService } from './supabase.service';
 import { ProfileRepository } from '../profile/profile.repository';
 import { WaitlistRepository } from '../waitlist/waitlist.repository';
@@ -14,11 +15,34 @@ import { normalizeEmail } from '../common/normalize';
 
 @Injectable()
 export class AuthService {
+  /**
+   * Destino do link que o Supabase manda no e-mail de recuperacao.
+   *
+   * Sem `redirectTo`, o link e montado a partir do Site URL do painel, que nasce
+   * `http://127.0.0.1:3000` no scaffolding e joga o usuario na porta da API em
+   * vez da do front. Com o destino aqui, a intencao fica no codigo e nao depende
+   * de config de painel. O painel ainda precisa ter esta URL na allow-list de
+   * Redirect URLs, senao o Supabase cai de volta no Site URL.
+   */
+  private readonly passwordRedirectUrl: string;
+
   constructor(
     private readonly supabaseService: SupabaseService,
     private readonly profileRepository: ProfileRepository,
     private readonly waitlistRepository: WaitlistRepository,
-  ) {}
+    private readonly configService: ConfigService,
+  ) {
+    // FRONTEND_URL aceita lista separada por virgula, porque o CORS em
+    // src/main.ts permite mais de uma origem. O link do e-mail tem um destino
+    // so: a primeira da lista.
+    const frontendUrl = this.configService
+      .getOrThrow<string>('FRONTEND_URL')
+      .split(',')[0]
+      .trim()
+      .replace(/\/+$/, '');
+
+    this.passwordRedirectUrl = `${frontendUrl}/definir-senha`;
+  }
 
   async signup(dto: SignupDto): Promise<{ status: 'confirmation_sent' }> {
     const normalizedEmail = normalizeEmail(dto.email);
@@ -53,6 +77,7 @@ export class AuthService {
 
     await this.supabaseService.adminClient.auth.resetPasswordForEmail(
       normalizedEmail,
+      { redirectTo: this.passwordRedirectUrl },
     );
 
     return { status: 'confirmation_sent' };
