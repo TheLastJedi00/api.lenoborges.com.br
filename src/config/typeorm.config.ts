@@ -3,6 +3,14 @@ import * as dotenv from 'dotenv';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
+// O TypeORM carrega o driver com `require(name)`, onde `name` e uma variavel
+// (PlatformTools.load). Um require assim e invisivel para o tracer de arquivos
+// da Vercel, que entao nao empacota `pg` na function e o boot morre com
+// DriverPackageNotInstalledError, mesmo com o pacote em dependencies. Este
+// require literal existe so para o tracer enxergar `pg` e inclui-lo no bundle.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+require('pg');
+
 dotenv.config();
 
 // A conexao carrega PII (nome, telefone e e-mail da lista de espera), entao a
