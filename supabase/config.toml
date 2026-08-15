@@ -156,11 +156,23 @@ max_indexes = 5
 enabled = true
 # The base URL of your website. Used as an allow-list for redirects and for constructing URLs used
 # in emails.
-site_url = "http://127.0.0.1:3000"
+#
+# Campo unico, e este projeto hospedado atende dev e producao ao mesmo tempo (o .env de dev aponta
+# para o mesmo ref). Recebe o valor de producao porque e o fallback de quem chega sem redirectTo
+# valido; o destino real de cada link vem do redirectTo, via {{ .RedirectTo }} no template.
+# O valor antigo, http://127.0.0.1:3000, era default de `supabase init` e apontava para a porta da
+# API, nao do front: foi a causa do link de cadastro abrir localhost:3000. Ver specs/006.
+site_url = "https://edu.lenoborges.com.br"
 # The public URL that Auth serves on. Defaults to the API external URL with `/auth/v1` appended.
 # external_url = ""
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
-additional_redirect_urls = ["https://127.0.0.1:3000"]
+#
+# Sao exatamente as duas URLs que o AuthService monta a partir de FRONTEND_URL, uma por ambiente.
+# Fora desta lista o GoTrue descarta o redirectTo em silencio e o link cai no site_url acima.
+additional_redirect_urls = [
+  "https://edu.lenoborges.com.br/definir-senha",
+  "http://localhost:4200/definir-senha",
+]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
 jwt_expiry = 3600
 # JWT issuer URL. If not set, defaults to auth.external_url.
@@ -179,7 +191,10 @@ enable_anonymous_sign_ins = false
 # Allow/disallow testing manual linking of accounts
 enable_manual_linking = false
 # Passwords shorter than this value will be rejected as weak. Minimum 6, recommended 8 or more.
-minimum_password_length = 6
+# 8 para bater com o que a UI promete: definir-senha.page.ts exige minLength(8) e o backend nao
+# revalida tamanho, entao 6 aqui era um piso mais fraco que a tela. Aperto deliberado, nao
+# espelhamento do painel. Ver specs/006.
+minimum_password_length = 8
 # Passwords that do not meet the following requirements will be rejected as weak. Supported values
 # are: `letters_digits`, `lower_upper_letters_digits`, `lower_upper_letters_digits_symbols`
 password_requirements = ""
@@ -223,11 +238,20 @@ enable_signup = true
 # addresses. If disabled, only the new email is required to confirm.
 double_confirm_changes = true
 # If enabled, users need to confirm their email address before signing in.
-enable_confirmations = false
+#
+# `true` para espelhar o projeto hospedado, que hoje responde mailer_autoconfirm: false no
+# GET /auth/v1/settings. O default do scaffolding era `false`, e um config push com ele ligaria o
+# autoconfirm em producao sem ninguem pedir. Nao afeta o cadastro desta API, que nunca chama
+# signUp(): ela usa admin.createUser({ email_confirm: false }) e manda recuperacao. Ver specs/006.
+enable_confirmations = true
 # If enabled, users will need to reauthenticate or have logged in recently to change their password.
 secure_password_change = false
 # Controls the minimum amount of time that must pass before sending another signup confirmation or password reset email.
-max_frequency = "1s"
+#
+# "1s" era default de stack local e afrouxaria o intervalo em producao. "60s" e o default do projeto
+# hospedado: se o painel ja estiver nele, o push nao mexe em nada; se estiver em algo menor, aperta,
+# que e a direcao segura. Confirmar no painel junto com a Fase 01 Task 03. Ver specs/006.
+max_frequency = "60s"
 # Number of characters used in the email OTP.
 otp_length = 6
 # Number of seconds before the email OTP expires (defaults to 1 hour).
