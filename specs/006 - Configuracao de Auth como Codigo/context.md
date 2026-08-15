@@ -223,3 +223,31 @@ produção `https://edu.lenoborges.com.br`. O backend responde em `https://api-l
    for exatamente `https://edu.lenoborges.com.br`, o `redirectTo` sai errado e nada disso funciona.
 3. **Conferir no painel, antes do primeiro push**, as chaves marcadas como "conferir" no inventário
    da decisão 4.
+
+---
+
+## Resultado da aplicação (2026-08-15)
+
+Merge do PR #12 (`dev` para `main`) aplicado. O check **Supabase Preview** fechou `success` no commit
+`5246a83` da `main`, que é o passo de deploy da integração, o mesmo que roda o Configure com este
+`config.toml`. No front, PR #9 mergeado, só documentação.
+
+Conferido depois do merge, pelo `GET /auth/v1/settings`:
+
+| Campo | Valor | Leitura |
+|---|---|---|
+| `mailer_autoconfirm` | `false` | Confere com `enable_confirmations = true`. A divergência da decisão 5 foi fechada sem virar efeito colateral. |
+| `disable_signup` | `false` | Inalterado |
+| `external.email` | `true` | Inalterado |
+
+**O que essa conferência não prova.** O endpoint público não expõe `site_url`,
+`additional_redirect_urls` nem o template, que são justamente as chaves que motivaram a spec. A
+prova real é a Fase 05 Task 04: um cadastro novo, com e-mail que ainda não existe no projeto,
+conferindo se o link recebido aponta para `https://edu.lenoborges.com.br/definir-senha`. Links
+enviados antes deste merge carregam a URL antiga e não servem.
+
+**Riscos aceitos pelo usuário no momento do merge**, registrados por serem dispensas conscientes e
+não esquecimentos: as duas conferências de painel da Fase 05 (o `FRONTEND_URL` de produção, marcado
+como Sensitive na Vercel, e o `jwt_expiry` / `otp_expiry`, que o merge sobrescreveu com `3600`) não
+foram feitas. A justificativa foi que o projeto não tem usuários e é de teste, e que o ajuste manual
+sai depois se preciso.
