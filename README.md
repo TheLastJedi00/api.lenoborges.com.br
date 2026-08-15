@@ -54,13 +54,20 @@ AUTH_COOKIE_MAX_AGE_DAYS=30
 ## Configuração do Supabase Auth
 
 **A fonte é o `supabase/config.toml`, não o painel.** Template do e-mail de recuperação, Site URL e
-Redirect URLs vivem no repositório e são aplicados por:
+Redirect URLs vivem no repositório.
+
+**O merge na `main` aplica.** O branching via GitHub está ligado, com a branch `main` apontando para
+o projeto de produção, e o deploy disparado pelo merge roda um passo *Configure* que atualiza a
+configuração dos serviços a partir deste arquivo. Não há comando a rodar depois: aprovar o PR contra
+a `main` é o que muda a auth em produção.
+
+Existe a saída manual, útil para aplicar fora do ciclo de merge:
 
 ```bash
 supabase config push
 ```
 
-Editar esses valores no painel funciona, mas o próximo `config push` desfaz. Mude no arquivo.
+Editar esses valores no painel funciona, mas o próximo merge na `main` desfaz. Mude no arquivo.
 
 ### O que está no repositório
 
@@ -82,11 +89,11 @@ As `Redirect URLs` são obrigatórias. O backend passa `redirectTo: FRONTEND_URL
 o GoTrue só honra esse destino se ele estiver na allow-list. Fora dela o valor é descartado em
 silêncio e o link cai no `Site URL`.
 
-### Antes de rodar o push
+### Antes de mergear na `main`
 
-`config push` escreve a seção `[auth]` **inteira** no projeto hospedado, não só as chaves que você
+A aplicação escreve a seção `[auth]` **inteira** no projeto hospedado, não só as chaves que você
 mudou, e o CLI não tem `config pull` nem `config diff` para comparar antes. Revise o diff do arquivo
-e confira no painel as chaves que nenhuma leitura externa alcança (`jwt_expiry`, `otp_expiry`).
+no PR e confira no painel as chaves que nenhuma leitura externa alcança (`jwt_expiry`, `otp_expiry`).
 O inventário completo está na [spec 006](specs/006%20-%20Configuracao%20de%20Auth%20como%20Codigo/context.md).
 
 ## Banco de Dados e Migrations

@@ -43,10 +43,11 @@ Branch: `feat/006-url-config`
   `additional_redirect_urls` por `["https://edu.lenoborges.com.br/definir-senha", "http://localhost:4200/definir-senha"]`,
   que são exatamente as duas URLs que o `AuthService` monta a partir do `FRONTEND_URL`. Sem elas o
   GoTrue descarta o `redirectTo` e o link volta a cair no Site URL.
-- [x] Task 03: Neutralizar as divergências encontradas na Fase 01 Task 02. Arquivo:
-  `supabase/config.toml`. Objetivo: alinhar ao que produção já pratica toda chave em que o arquivo
-  carregava default de stack local, com atenção a `auth.rate_limit.email_sent` (hoje `2` por hora, o
-  item mais perigoso do inventário) e `auth.email.max_frequency` (hoje `"1s"`).
+- [x] Task 03: Neutralizar as divergências encontradas na Fase 01. Arquivo: `supabase/config.toml`.
+  Objetivo: alinhar ao que produção já pratica toda chave em que o arquivo carregava default de stack
+  local. Resultado: `enable_confirmations` de `false` para `true` (a divergência real encontrada no
+  GoTrue) e `max_frequency` de `"1s"` para `"60s"`. `auth.rate_limit.email_sent` ficou como está,
+  porque a Fase 01 Task 02 mostrou que `2` é o padrão do provedor embutido, não um default local.
 - [x] Task 04: Subir o `minimum_password_length` para `8`. Arquivo: `supabase/config.toml`. Objetivo:
   fechar a folga entre o piso do servidor e o que a UI promete, já que `definir-senha.page.ts` exige
   8 no front e o backend não revalida tamanho.
@@ -56,9 +57,8 @@ Branch: `feat/006-docs`
 
 - [x] Task 01: Reescrever a seção "Configuração no Painel do Supabase". Arquivo: `README.md`.
   Objetivo: ela hoje ensina o template errado (`{{ .SiteURL }}/definir-senha`) e descreve passos de
-  painel que passam a viver no repo. Vira "Configuração do Supabase", explicando que a fonte é o
-  `config.toml`, que o comando é `supabase config push`, e que o push escreve a seção `[auth]`
-  inteira em produção.
+  painel que passam a viver no repo. Vira "Configuração do Supabase Auth", explicando que a fonte é o
+  `config.toml` e que a aplicação escreve a seção `[auth]` inteira em produção.
 - [x] Task 02: Fechar o achado A6 de vez. Arquivo:
   `specs/005 - Autenticacao e Dashboard/review.md`. Objetivo: a nota de correção atual afirma que
   passar `redirectTo` resolve o link, o que só vale com `{{ .RedirectTo }}` no template. Corrigir a
@@ -68,24 +68,30 @@ Branch: `feat/006-docs`
   template com `{{ .SiteURL }}` como o formato desejado. Apontar para o formato desta spec. Commit no
   repositório do front, não neste.
 
-# Fase 05: Push e verificação de ponta a ponta []
+# Fase 05: Merge em produção e verificação de ponta a ponta []
 Branch: `release/006-config-auth-como-codigo`
 
-Fase com passo humano. As tasks 01 e 02 não são executadas por agente.
+**O merge na `main` é a escrita em produção.** O branching via GitHub roda o passo Configure com este
+`config.toml` (decisão 6 do context), então não existe comando depois do merge: o botão de merge é o
+comando. As tasks 01 a 03 antecedem o merge e não são executadas por agente.
 
 - [] Task 01 (usuário): Confirmar que `FRONTEND_URL` em produção é `https://edu.lenoborges.com.br`.
   Local: painel da Vercel, projeto `api-lenoborges`. Objetivo: a variável está marcada como Sensitive
   e não é legível por `vercel env pull`, então a conferência é visual. Com valor errado, o
   `redirectTo` sai errado e o resto da spec não produz efeito.
-- [] Task 02 (usuário): Rodar `supabase config push` com o diff revisado. Objetivo: aplicar o
-  conteúdo das Fases 02 e 03 no projeto hospedado. É a única escrita em produção desta spec.
-- [] Task 03: Verificar o resultado com um cadastro novo, de um e-mail que ainda não existe no
+- [] Task 02 (usuário): Fechar a Fase 01 Task 03, a conferência do painel. Objetivo: era
+  recomendação e virou pré-requisito. Depois do merge, `jwt_expiry` e `otp_expiry` do arquivo passam
+  a valer em produção, e hoje ninguém sabe se batem com o que está lá.
+- [] Task 03 (usuário): Aprovar e mergear o PR contra a `main` sabendo que isso aplica a
+  configuração de auth em produção. Objetivo: deslocar a revisão para o único momento em que ela
+  ainda muda alguma coisa.
+- [] Task 04: Verificar o resultado com um cadastro novo, de um e-mail que ainda não existe no
   projeto. Objetivo: confirmar que o link recebido aponta para `https://edu.lenoborges.com.br/definir-senha?token_hash=...&type=recovery`
-  e que a senha é aceita. Links de recovery enviados antes do push carregam a URL antiga e não
+  e que a senha é aceita. Links de recovery enviados antes do merge carregam a URL antiga e não
   servem como prova.
-- [] Task 04: Repetir a verificação com o front local em `http://localhost:4200`. Objetivo: provar a
+- [] Task 05: Repetir a verificação com o front local em `http://localhost:4200`. Objetivo: provar a
   decisão 3 do context, que os dois ambientes convivem no mesmo projeto Supabase, que é a razão de o
   template usar `{{ .RedirectTo }}` em vez de `{{ .SiteURL }}`.
-- [] Task 05: Registrar o resultado das tasks 03 e 04. Arquivo:
+- [] Task 06: Registrar o resultado das tasks 04 e 05. Arquivo:
   `specs/006 - Configuracao de Auth como Codigo/context.md`, seção nova "Resultado da verificação".
   Objetivo: deixar escrito o que foi provado e em que data, no mesmo padrão da spec 005.

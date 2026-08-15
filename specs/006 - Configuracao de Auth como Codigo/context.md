@@ -139,12 +139,33 @@ não os expõe e o CLI não tem `config pull` nem `config diff`, apenas `push`. 
 devolveria, mas exige um token pessoal que não está no ambiente. Esses ficam para conferência visual
 no painel, tarefa do usuário, antes do primeiro push.
 
-### 6. O passo manual não desaparece, ele muda de natureza
-Antes: clicar em três lugares do painel, sem rastro em lugar nenhum.
+### 6. O merge na `main` é o push. Não existe passo manual.
+Esta decisão substitui o que a spec dizia antes, que o passo final seria rodar `supabase config push`
+à mão. Está errado neste repositório.
 
-Depois: um comando, `supabase config push`, revisável em diff antes de rodar. Continua sendo escrita
-na configuração de produção, então continua sendo deliberado e humano. Esta spec não automatiza o
-push em CI.
+`supabase branches list` mostra que o **branching via GitHub está ligado**, com a branch git `main`
+apontando para o próprio projeto de produção (`yymyasazpwsmdmpuasjx`, `is_default: true`):
+
+```json
+{"name":"main","project_ref":"yymyasazpwsmdmpuasjx","parent_project_ref":"yymyasazpwsmdmpuasjx",
+ "is_default":true,"git_branch":"main"}
+```
+
+E a [doc de branching](https://supabase.com/docs/guides/deployment/branching) descreve, no deploy
+disparado pelo merge, um passo **Configure** que "updates service configurations based on your
+`config.toml` file", disponível justamente para branching via GitHub.
+
+Ou seja: **merge na `main` aplica este `config.toml` em produção, sem ninguém digitar comando
+nenhum.** O `supabase config push` continua existindo como saída manual, mas aqui ele é redundante e,
+se rodado fora de hora, aplica um estado que ainda não foi revisado em PR.
+
+Duas consequências que reorganizam a Fase 05:
+
+1. **O ponto de decisão é o merge do PR, não um comando depois dele.** É ali que a revisão precisa
+   acontecer, porque é ali que produção muda. A Fase 01 Task 03, a conferência do painel, deixa de
+   ser recomendação e vira pré-requisito de merge.
+2. **A `dev` é segura.** Só a `main` está mapeada como branch do Supabase, então PR e merge em `dev`
+   não tocam em produção. Dá para integrar e revisar à vontade antes.
 
 ---
 
