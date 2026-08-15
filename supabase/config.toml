@@ -248,6 +248,13 @@ otp_expiry = 3600
 # subject = "You have been invited"
 # content_path = "./supabase/templates/invite.html"
 
+# E-mail que o cadastro dispara. O backend cria o usuario sem senha e chama
+# resetPasswordForEmail, entao este template e a porta de entrada do membro
+# novo, nao so o "esqueci minha senha". Ver specs/006.
+[auth.email.template.recovery]
+subject = "Defina sua senha na Seita Dev"
+content_path = "./supabase/templates/recovery.html"
+
 # Uncomment to customize notification email template
 # [auth.email.notification.password_changed]
 # enabled = true
