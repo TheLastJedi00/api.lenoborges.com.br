@@ -4,6 +4,7 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
+import type { Request, Response } from 'express';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
@@ -58,6 +59,28 @@ async function bootstrap() {
   }
 
   const port = configService.get<number>('PORT') ?? 3000;
-  await app.listen(port);
+
+  // O init monta o pipeline sem abrir socket, que e o que o handler serverless
+  // precisa. Quem escuta a porta e o bloco no fim do arquivo.
+  await app.init();
+
+  return { app, port };
 }
-void bootstrap();
+
+const bootstrapPromise = bootstrap();
+
+// A Vercel nao mantem um processo escutando porta: ela importa este modulo e
+// espera um handler exportado ("No exports found in module .../main.js. Did you
+// forget to export a function or a server?"). O handler repassa a requisicao
+// para o mesmo Express que o Nest ja usa por baixo, e a promise garante que o
+// bootstrap rode uma vez so, reaproveitado entre invocacoes na mesma instancia.
+export default async function handler(req: Request, res: Response) {
+  const { app } = await bootstrapPromise;
+  app.getHttpAdapter().getInstance()(req, res);
+}
+
+// Fora da Vercel (start:dev, start:prod, e2e) nada muda: o processo escuta a
+// porta como antes.
+if (!process.env.VERCEL) {
+  void bootstrapPromise.then(({ app, port }) => app.listen(port));
+}
