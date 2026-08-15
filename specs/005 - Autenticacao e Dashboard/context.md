@@ -400,6 +400,24 @@ O `WaitlistModule` passa a exportar seu repository; nada mais muda lá.
 
 ## Configuração no painel do Supabase (não é código, mas a spec depende)
 
+> ## ⚠️ DEPRECATED em 2026-08-15 pela [spec 006](../006%20-%20Configuracao%20de%20Auth%20como%20Codigo/context.md)
+>
+> **Esta seção inteira está superada.** Ela erra em duas frentes:
+>
+> 1. **O template.** `{{ .SiteURL }}` renderiza a configuração de Site URL do projeto, não o destino
+>    passado na chamada. Como Site URL é campo único e este projeto hospedado atende dev e produção
+>    ao mesmo tempo, esse formato não consegue servir os dois. O correto é
+>    `{{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=recovery`.
+> 2. **"não sobrevive em nenhum arquivo do repositório".** Sobrevive. O CLI tem
+>    `supabase config push`, e template, Site URL e Redirect URLs passaram a viver em
+>    `supabase/config.toml` e `supabase/templates/recovery.html`.
+>
+> O item 3 continua verdadeiro e virou explícito: `auth.email.enable_confirmations = true` no
+> arquivo.
+>
+> O que a seção acertou e permanece: o `token_hash` na query é mesmo o formato certo, porque o front
+> não tem `supabase-js` para interpretar o link padrão.
+
 1. **Template de e-mail "Reset Password"** precisa apontar para o front com `token_hash`, e não com
    o link padrão que devolve tokens na URL:
    ```

@@ -10,9 +10,15 @@ depois de três fases construídas custaria as três.
   Authentication > Email Templates > Reset Password. Objetivo: o corpo apontar para
   `{{ .SiteURL }}/definir-senha?token_hash={{ .TokenHash }}&type=recovery`, para o token chegar na
   query e não no fragmento, já que o front não tem `supabase-js` para interpretar o formato padrão.
+  **DEPRECATED pela [spec 006](../006%20-%20Configuracao%20de%20Auth%20como%20Codigo/context.md):**
+  `{{ .SiteURL }}` não renderiza o destino passado na chamada, e o template saiu do painel para
+  `supabase/templates/recovery.html`.
 - [x] Task 02: Registrar Site URL e Redirect URLs. Local: painel do Supabase, Authentication > URL
   Configuration. Objetivo: `http://localhost:4200` e a origem de produção liberadas, senão o link do
   e-mail é recusado no redirecionamento.
+  **DEPRECATED pela [spec 006](../006%20-%20Configuracao%20de%20Auth%20como%20Codigo/context.md):**
+  os dois campos passaram a viver em `supabase/config.toml`, aplicados por `supabase config push`.
+  O Site URL nunca saiu do default `http://127.0.0.1:3000`, que é a causa raiz do link quebrado.
 - [x] Task 03: Escrever um script descartável de prova. Arquivo:
   `scratch/prova-fluxo-recovery.ts` (não versionado, apagado ao fim da fase). Objetivo: com a
   service role, criar um usuário com `email_confirm: false`, disparar `resetPasswordForEmail` e
