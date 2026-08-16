@@ -120,9 +120,9 @@ describe('AuthService', () => {
         emailConfirmation: 'novo@test.com',
       });
 
-      const args = firebase.auth.createUser.mock.calls[0][0] as {
-        password?: string;
-      };
+      const [args] = firebase.auth.createUser.mock.calls[0] as [
+        { password?: string },
+      ];
       expect(typeof args.password).toBe('string');
       expect(args.password!.length).toBeGreaterThan(20);
     });
@@ -143,7 +143,7 @@ describe('AuthService', () => {
       });
 
       const [first, second] = firebase.auth.createUser.mock.calls.map(
-        (call) => (call[0] as { password: string }).password,
+        (call) => (call as [{ password: string }])[0].password,
       );
       expect(first).not.toBe(second);
     });
@@ -422,7 +422,9 @@ describe('AuthService', () => {
     });
 
     it('caso 17: cookie invalido nao revoga nada e ainda resolve', async () => {
-      firebase.secureToken.mockRejectedValue(new Error('INVALID_REFRESH_TOKEN'));
+      firebase.secureToken.mockRejectedValue(
+        new Error('INVALID_REFRESH_TOKEN'),
+      );
 
       await expect(service.logout('forjado')).resolves.toBeUndefined();
       expect(firebase.auth.revokeRefreshTokens).not.toHaveBeenCalled();
@@ -441,7 +443,9 @@ describe('AuthService', () => {
         new Error('rede caiu'),
       );
 
-      await expect(service.logout('refresh-token-valido')).resolves.toBeUndefined();
+      await expect(
+        service.logout('refresh-token-valido'),
+      ).resolves.toBeUndefined();
     });
   });
 });

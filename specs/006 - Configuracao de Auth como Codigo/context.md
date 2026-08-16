@@ -1,3 +1,19 @@
+> **DEPRECATED em 2026-08-16 pela [spec 007](../007%20-%20Firestore%20e%20Firebase%20Auth/context.md).**
+>
+> Esta spec configura um servico que saiu do projeto. O `config.toml`, o `recovery.html` e o
+> `[remotes.main]` foram removidos do repositorio.
+>
+> **O diagnostico continua valendo, e e ele que justifica a spec 007.** O merge do PR #18 provou que
+> o `[remotes]` consertou o que prometia: o passo Configure passou a rodar, e falhou com um 400 do
+> Management API dizendo que projeto free tier com o provedor de e-mail embutido nao aceita
+> modificacao de template. Restricao de plano, nao de mecanismo, e sem contorno por codigo.
+>
+> O objetivo desta spec -- fazer o token chegar na query string -- acabou atingido de lado: o link
+> do Firebase leva `oobCode` na query. So que para uma tela do Google, nao para uma pagina nossa,
+> entao o trabalho daqui nao foi reaproveitado. Fica o aprendizado, nao o codigo.
+
+---
+
 # Spec 006: Configuração do Supabase Auth como código
 
 ## Objetivo
@@ -241,9 +257,22 @@ Merge do PR #12 (`dev` para `main`) aplicado. O check **Supabase Preview** fecho
 
 Conferido depois do merge, pelo `GET /auth/v1/settings`:
 
+> **Correção, 2026-08-16.** A tabela abaixo lê estado pré-existente como efeito de pipeline, e a
+> conclusão sobre o `mailer_autoconfirm` está errada. **O campo nunca mudou:** era `false` antes do
+> merge do PR #12, continuou `false` depois, e continuava `false` na conferência feita durante a spec
+> 007. A divergência da decisão 5 não foi fechada por merge nenhum — ela coincidiu.
+>
+> É o mesmo erro que o `fix.md` desta spec identificou na evidência 1, cometido uma segunda vez, no
+> mesmo documento, poucos parágrafos depois: **"o valor certo está lá" não prova "o pipeline
+> escreveu o valor"** quando o valor já estava certo antes. Fica registrado, e não apagado, porque
+> repetir o mesmo erro de leitura sabendo dele é o dado mais útil que esta spec produziu.
+>
+> O que de fato aconteceu naquele merge está no `fix.md`: o passo Configure foi pulado em silêncio,
+> por falta do bloco `[remotes]`. Nada foi aplicado.
+
 | Campo | Valor | Leitura |
 |---|---|---|
-| `mailer_autoconfirm` | `false` | Confere com `enable_confirmations = true`. A divergência da decisão 5 foi fechada sem virar efeito colateral. |
+| `mailer_autoconfirm` | `false` | ~~Confere com `enable_confirmations = true`. A divergência da decisão 5 foi fechada sem virar efeito colateral.~~ Ver a correção acima: o campo nunca mudou. |
 | `disable_signup` | `false` | Inalterado |
 | `external.email` | `true` | Inalterado |
 

@@ -4,10 +4,10 @@ API para o serviço da Seita Dev (eduleno-back).
 
 ## Funcionalidades
 - Endpoint para lista de espera (`POST /waitlist`)
-- Autenticação com Supabase Auth (`/auth/*`): cadastro com confirmação de e-mail por redefinição de senha, login com e-mail/senha, renovação de sessão e logout
-- Gestão de perfil e onboarding do membro (`/me` e `/me/profile`) com autenticação local de JWT
+- Autenticação com Firebase Auth (`/auth/*`): cadastro por e-mail, login com e-mail/senha, renovação de sessão e logout. **A senha é definida na tela hospedada pelo Firebase**, fora desta API
+- Gestão de perfil e onboarding do membro (`/me` e `/me/profile`), com ID token verificado pelo Admin SDK
 - Sessão segura: access token em memória e refresh token em cookie `HttpOnly` rotacionado
-- Integração com Supabase (PostgreSQL): TypeORM para persistência de dados de negócio, Supabase CLI para migrations de schema
+- Persistência no Firestore pelo Admin SDK, sem ORM, sem migrations e sem schema a versionar
 - Validação estrita de dados (class-validator) e normalização compartilhada
 - Rate limit por rota e proteção contra abuso (`@nestjs/throttler`)
 - Documentação interativa de API com Swagger (`/docs`)
@@ -30,20 +30,13 @@ TRUST_PROXY_HOPS=1
 # Swagger em /docs (ativado por padrão fora de produção)
 # SWAGGER_ENABLED=true
 
-# Conexão com o banco (PostgreSQL / Supabase), usada pelo TypeORM em runtime
-DATABASE_URL="postgresql://postgres:<senha>@<host>:5432/postgres"
+# Firebase (spec 007). Chave de serviço: o JSON inteiro em UMA linha.
+# É credencial de administrador do projeto — nunca comitar um valor real.
+FIREBASE_SERVICE_ACCOUNT_JSON='{"type":"service_account","project_id":"...", ...}'
 
-# TLS do banco
-DATABASE_SSL_CA_PATH="./certs/prod-ca.crt"
-# DATABASE_SSL_REJECT_UNAUTHORIZED=false
-
-# Supabase Auth (spec 005)
-SUPABASE_URL="https://seu-id.supabase.co"
-SUPABASE_ANON_KEY="sua-chave-anon"
-SUPABASE_SERVICE_ROLE_KEY="sua-chave-service-role"
-
-# Verificação local do JWT (JWKS derivado de SUPABASE_URL ou segredo HS256 legado)
-# SUPABASE_JWT_SECRET="segredo-legado-hs256"
+# Chave pública do projeto (Project settings > General > Web API Key).
+# NÃO é segredo: vai no bundle de qualquer app Firebase web por desenho.
+FIREBASE_WEB_API_KEY="sua-web-api-key"
 
 # Cookie do refresh token
 AUTH_COOKIE_SECURE=false          # true em produção (exigido por SameSite=None)
@@ -51,93 +44,132 @@ AUTH_COOKIE_SAMESITE=lax          # none em produção (front e API em domínios
 AUTH_COOKIE_MAX_AGE_DAYS=30
 ```
 
-## Configuração do Supabase Auth
+## Configuração do Firebase Auth
 
-**A fonte é o `supabase/config.toml`, não o painel.** Template do e-mail de recuperação, Site URL e
-Redirect URLs vivem no repositório.
+Identidade e dados vivem no mesmo fornecedor, autenticados pelo mesmo arquivo: a chave de serviço em
+`FIREBASE_SERVICE_ACCOUNT_JSON`. Ela fica confinada ao `FirebaseService`, como a service role key do
+Supabase ficava antes.
 
-**O merge na `main` aplica.** O branching via GitHub está ligado, com a branch `main` apontando para
-o projeto de produção, e o deploy disparado pelo merge roda um passo *Configure* que atualiza a
-configuração dos serviços a partir deste arquivo. Não há comando a rodar depois: aprovar o PR contra
-a `main` é o que muda a auth em produção.
+### A senha é definida fora desta aplicação
 
-Existe a saída manual, útil para aplicar fora do ciclo de merge:
+Este é o ponto que o código não conta e que costuma surpreender quem lê só os endpoints.
 
-```bash
-supabase config push
+O cadastro (`POST /auth/signup`) cria o usuário com uma senha aleatória descartada na mesma linha, e
+dispara o e-mail de definição de senha pelo Firebase. O link desse e-mail leva para a **tela
+hospedada pelo Google**, em `<projeto>.firebaseapp.com/__/auth/action`, e é lá que o usuário digita a
+senha. **Não existe `POST /auth/password`**: o `oobCode` nunca chega nesta API.
+
+```
+signup -> e-mail do Firebase -> tela do Google -> botão de retorno -> <front>/?entrar=1
 ```
 
-Editar esses valores no painel funciona, mas o próximo merge na `main` desfaz. Mude no arquivo.
+O `continueUrl` que a API passa no envio é o que faz esse botão de retorno existir. Sem ele o usuário
+define a senha e fica parado numa página do Google, sem caminho de volta.
 
-### O que está no repositório
+### O que vive no console, e não no repositório
 
-| Onde | O quê |
+Três configurações não têm representação em código, e todas afetam o fluxo:
+
+| Onde | O quê | Por que importa |
+|---|---|---|
+| Authentication > Settings > Password policy | **Mínimo de 8 caracteres** | A tela é do Firebase e aplica a política do projeto, que nasce em 6. O front garantia 8 e deixou de existir; sem configurar, o piso cai sem aviso. |
+| Authentication > Templates | Nome público do projeto e remetente | Aparecem no e-mail e na tela onde a senha é digitada. |
+| Authentication > Sign-in method | Provedor Email/Password ligado | Sem ele, nada do fluxo funciona. |
+
+**Não configure "customize action URL".** Ela desviaria o link para uma página nossa, e a decisão da
+[spec 007](specs/007%20-%20Firestore%20e%20Firebase%20Auth/context.md) é usar a tela do Firebase como
+está — desfazer isso significa ressuscitar página, endpoint, DTO e testes.
+
+### Sessão
+
+| Operação | Como |
 |---|---|
-| `supabase/config.toml`, `[auth]` | `site_url` e `additional_redirect_urls` |
-| `supabase/config.toml`, `[auth.email.template.recovery]` | assunto e caminho do template |
-| `supabase/templates/recovery.html` | o corpo do e-mail |
+| login | REST `accounts:signInWithPassword`, no servidor, com a Web API Key |
+| refresh | `securetoken.googleapis.com`, com o refresh token do cookie HttpOnly |
+| guard | `admin.auth().verifyIdToken()` |
+| logout | `admin.auth().revokeRefreshTokens(uid)` |
 
-O link do e-mail usa `{{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=recovery`. **Não use
-`{{ .SiteURL }}`**: ele renderiza a configuração do projeto, não o destino que o
-`resetPasswordForEmail` passou. Como Site URL é campo único e este projeto hospedado atende dev e
-produção ao mesmo tempo, `{{ .SiteURL }}` só conseguiria servir um dos dois ambientes.
+O login é chamado **pela API**, e não pelo front: o Admin SDK não verifica senha, e a alternativa
+seria o front falar direto com o Google. Isso preserva a decisão da spec 005 de o front nunca receber
+material de sessão do provedor de auth.
 
-O `token_hash` precisa chegar na query, e não no fragmento, porque o front não tem `supabase-js`
-para interpretar o formato padrão: ele só repassa o token para esta API.
+**O logout é global.** O Firebase revoga refresh tokens por usuário, não por sessão: sair em um
+dispositivo desloga todos. A spec 005 tinha escolhido escopo `local` de propósito, e isso se perdeu
+na troca de fornecedor — não há contorno.
 
-As `Redirect URLs` são obrigatórias. O backend passa `redirectTo: FRONTEND_URL + '/definir-senha'`, e
-o GoTrue só honra esse destino se ele estiver na allow-list. Fora dela o valor é descartado em
-silêncio e o link cai no `Site URL`.
+**A revogação não derruba o ID token na hora.** Ela invalida a renovação; um ID token já emitido vale
+até expirar, em no máximo uma hora. O guard tem uma constante `CHECK_REVOKED` que fecha essa janela
+ao custo de uma ida à rede por requisição autenticada, e ela está `false`. O raciocínio está no
+comentário em `src/auth/guards/firebase-auth.guard.ts`.
 
-### Antes de mergear na `main`
+## Banco de Dados
 
-A aplicação escreve a seção `[auth]` **inteira** no projeto hospedado, não só as chaves que você
-mudou, e o CLI não tem `config pull` nem `config diff` para comparar antes. Revise o diff do arquivo
-no PR e confira no painel as chaves que nenhuma leitura externa alcança (`jwt_expiry`, `otp_expiry`).
-O inventário completo está na [spec 006](specs/006%20-%20Configuracao%20de%20Auth%20como%20Codigo/context.md).
-
-## Banco de Dados e Migrations
-
-O schema pertence ao **Supabase**, não ao TypeORM. As migrations são arquivos SQL versionados em `supabase/migrations/` e aplicadas pelo Supabase CLI. O TypeORM roda sempre com `synchronize: false` e nunca gera nem aplica migration: ele só mapeia e consulta.
+Firestore, pelo Admin SDK. **Não há migrations e não há schema a versionar** — nem TypeORM, nem SQL.
+As duas leituras do sistema são por caminho de documento, então também não há índice composto a
+manter.
 
 ```bash
-npx supabase login                 # uma vez por máquina
-npx supabase link --project-ref <ref>
-
-npm run migration:new <nome>       # cria supabase/migrations/<timestamp>_<nome>.sql
-npm run migration:list             # compara local com o remoto
-npm run migration:push             # aplica as pendentes
+npm run emulators        # Auth + Firestore locais (exige o Firebase CLI)
+npm run test:e2e         # sobe o emulador, roda a suíte e derruba
+npm run rules:deploy     # publica firestore.rules no projeto linkado
 ```
 
-### Tabela `waitlist_entries` (spec 004)
-- `id` (uuid, Primary Key, default `gen_random_uuid()`)
-- `name` (varchar, Not Null)
-- `phone` (varchar, Not Null)
-- `email` (varchar, Not Null, Unique)
-- `consent` (boolean, Not Null)
-- `created_at` (timestamptz, Not Null, default `now()`)
+O e2e roda contra o emulador, não contra um projeto real: é offline, descartável, e é o único jeito
+de exercitar as security rules.
 
-### Tabela `profiles` (spec 005)
-- `id` (uuid, Primary Key, FK para `auth.users(id)` com `on delete cascade`)
-- `name` (text, nulo até o onboarding)
-- `phone` (text, nulo até o onboarding, somente dígitos)
-- `bio` (text, nulo até o onboarding)
-- `grade` (smallint, Not Null default 1, `check (grade between 1 and 33)`)
-- `completed_at` (timestamptz, preenchido na primeira atualização do onboarding)
-- `waitlist_entry_id` (uuid, FK opcional para `waitlist_entries(id)` com `on delete set null`)
-- `created_at` (timestamptz, Not Null, default `now()`)
-- `updated_at` (timestamptz, Not Null, default `now()`)
+### Coleção `waitlist_entries` (spec 004, remodelada pela 007)
 
-*RLS:* A tabela `profiles` possui Row Level Security (RLS) habilitada sem policies. Isso bloqueia acesso direto do cliente via PostgREST ou anon key; a API acessa os dados diretamente através da `DATABASE_URL`.
+**ID do documento: o e-mail normalizado.**
+
+- `name` (string)
+- `phone` (string)
+- `email` (string, igual ao ID)
+- `consent` (boolean)
+- `createdAt` (Timestamp)
+
+O e-mail é o ID porque o Firestore não tem constraint `UNIQUE`, e o ID do documento é o único lugar
+onde ele garante unicidade. O `create()` do repository — nunca `set()`, que sobrescreveria em
+silêncio — falha com `ALREADY_EXISTS`, e esse erro ocupa exatamente o lugar que a unique violation
+`23505` do Postgres ocupava, na mesma janela de corrida entre duas inscrições simultâneas.
+
+Consequência no contrato: o `id` do recibo de `POST /waitlist` é o e-mail, não um UUID.
+
+### Coleção `profiles` (spec 005, remodelada pela 007)
+
+**ID do documento: o UID do Firebase.**
+
+- `name`, `phone`, `bio` (string ou null até o onboarding)
+- `grade` (number, 1 a 33, default 1)
+- `completedAt` (Timestamp ou null)
+- `waitlistEntryId` (string ou null — é o e-mail normalizado, o caminho em `waitlist_entries`)
+- `createdAt`, `updatedAt` (Timestamp)
+
+O UID como caminho substitui a FK para `auth.users` com `on delete cascade`: "existe perfil para este
+usuário" vira uma leitura direta, sem consulta e sem índice.
+
+### O que o banco garantia e agora é responsabilidade da aplicação
+
+| Garantia | Era | É |
+|---|---|---|
+| E-mail único na waitlist | `unique` na coluna | ID do documento |
+| Perfil pertence a um usuário | FK + cascade | UID como ID do documento |
+| `grade` entre 1 e 33 | `check` constraint | Validação na aplicação |
+| Campos obrigatórios | `not null` | `class-validator` no DTO e o converter |
+| Acesso direto bloqueado | RLS sem policy | `firestore.rules` com `deny all` |
+
+A última linha não é formalidade. Só a API toca no Firestore, sempre pelo Admin SDK, que **ignora as
+security rules** por ser credencial de administrador. A superfície que as rules fecham é o SDK
+cliente, que fala com o Google a partir de qualquer navegador que tenha a Web API Key — e ela é
+pública. Sem rules explícitas, um projeto Firestore em modo de teste é uma base aberta na internet.
 
 ## Arquitetura de Sessão e Segurança
 
-- **Identidade vs Dados de Negócio**: Identidade (criação de usuários, login, envio de e-mails, tokens) é gerenciada via Supabase Auth (`@supabase/supabase-js`). Dados de negócio continuam sob TypeORM. A service role key fica confinada exclusivamente ao `SupabaseService`.
+- **Identidade e dados, o mesmo fornecedor**: identidade (criação de usuários, envio de e-mails, tokens) e dados de negócio vivem no Firebase, autenticados pela mesma chave de serviço, que fica confinada exclusivamente ao `FirebaseService`. Antes eram dois fornecedores e cinco credenciais.
 - **Tokens de Sessão**:
   - **Access Token**: Enviado no corpo JSON da resposta (`SessionResponseDto`) para ser mantido em memória no frontend.
   - **Refresh Token**: Gravado em cookie HTTP seguro (`eduleno_rt`) com flags `HttpOnly`, `Path=/auth`, `SameSite` e `Secure` configuráveis por variáveis de ambiente. `AUTH_COOKIE_SAMESITE` aceita só `lax`, `strict` ou `none`, e `AUTH_COOKIE_SECURE` só `true` ou `false`. A combinação `none` sem `true` **derruba a aplicação no boot**: o navegador descarta cookie `SameSite=None` sem `Secure`, e sem essa checagem o login responderia `200` enquanto a sessão nunca persistiria, sem erro em log nenhum.
-  - **Rotação de Refresh**: A cada chamada a `POST /auth/refresh`, o Supabase rotaciona o refresh token e a API emite o novo cookie. No caso de refresh inválido (401), o cookie é limpo imediatamente.
-- **Autenticação Local**: Rotas sob `/me` são protegidas pelo `SupabaseAuthGuard`, que valida o JWT localmente com `jose` (usando JWKS remoto com cache ou segredo HS256) sem fazer requisições de rede ao GoTrue a cada chamada. A verificação exige assinatura, expiração, `aud` igual a `authenticated`, `iss` igual a `SUPABASE_URL + /auth/v1` (ou `SUPABASE_JWT_ISSUER`, se definido) e `role` igual a `authenticated`. Checar só a assinatura deixaria passar qualquer JWT emitido com a mesma chave, incluindo a `anon key`, que é pública e circula no bundle do frontend.
+  - **Rotação de Refresh**: A cada chamada a `POST /auth/refresh`, o Firebase rotaciona o refresh token e a API emite o novo cookie. No caso de refresh inválido (401), o cookie é limpo imediatamente.
+- **Autenticação**: Rotas sob `/me` são protegidas pelo `FirebaseAuthGuard`, que valida o ID token com `admin.auth().verifyIdToken()`. Assinatura, expiração, `aud` e `iss` são conferidos pelo próprio SDK, contra o projeto da credencial — a verificação manual desses campos, que o guard anterior precisava escrever à mão, não tem equivalente aqui e refazê-la duplicaria a regra no lugar errado.
 
 ## Endpoints da API
 
@@ -154,11 +186,9 @@ Acesse `/docs` para visualizar o Swagger com os esquemas e exemplos.
 - Comportamento: Idêntico para e-mails novos ou já cadastrados (anti-enumeração de usuários). Vincula dados da waitlist no perfil inicial se existirem.
 - Rate limit: 3 req / 60s
 
-### `POST /auth/password`
-- Entrada: `{ tokenHash, password, passwordConfirmation }`
-- Resposta: `204 No Content` (sem sessão no corpo)
-- Comportamento: Valida OTP no Supabase, grava a senha e confirma o e-mail da conta.
-- Rate limit: 5 req / 60s
+> **`POST /auth/password` não existe.** A senha é definida na tela hospedada pelo Firebase, para onde
+> o link do e-mail aponta, e o `oobCode` nunca chega nesta API. Ver "A senha é definida fora desta
+> aplicação", acima.
 
 ### `POST /auth/login`
 - Entrada: `{ email, password }`
