@@ -1,20 +1,33 @@
 import { ProfileRepository } from './profile.repository';
 import { FirebaseService } from '../auth/firebase.service';
 
+interface DocMock {
+  get: jest.Mock;
+  create: jest.Mock;
+  update: jest.Mock;
+  id: string;
+}
+
+interface CollectionMock {
+  withConverter: jest.Mock;
+  doc: jest.Mock;
+}
+
+// Os tipos sao explicitos porque `withConverter: jest.fn(() => collection)`
+// dentro do proprio literal se auto-referencia, e a inferencia desiste em `any`.
 function buildFirestore() {
-  const doc = {
+  const doc: DocMock = {
     get: jest.fn(),
     create: jest.fn(),
     update: jest.fn(),
     id: 'uid-123',
   };
-  const collection = {
-    withConverter: jest.fn(() => collection),
+  const collection: CollectionMock = {
+    withConverter: jest.fn(),
     doc: jest.fn(() => doc),
   };
-  const firestore = {
-    collection: jest.fn(() => collection),
-  };
+  collection.withConverter.mockReturnValue(collection);
+  const firestore = { collection: jest.fn(() => collection) };
 
   return { firestore, collection, doc };
 }
@@ -128,7 +141,7 @@ describe('ProfileRepository', () => {
       await repository.update('uid-123', { name: 'Novo' });
 
       expect(mocks.doc.update).toHaveBeenCalledWith(
-        expect.objectContaining({ updatedAt: expect.anything() }),
+        expect.objectContaining({ updatedAt: expect.anything() as unknown }),
       );
     });
 

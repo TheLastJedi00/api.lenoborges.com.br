@@ -1,17 +1,22 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
-import { DataSource, In } from 'typeorm';
+import { Firestore } from 'firebase-admin/firestore';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
-import { WaitlistEntry } from './../src/waitlist/entities/waitlist-entry.entity';
+import { FirebaseService } from './../src/auth/firebase.service';
+import { WAITLIST_COLLECTION } from './../src/waitlist/waitlist.repository';
 
-// Esta suite roda contra o banco apontado por DATABASE_URL, que hoje e o projeto
-// real do Supabase. Tudo que ela grava e removido no afterAll: sem isso, cada
-// execucao (inclusive em CI) deixaria uma inscricao de teste permanente na lista.
+// Esta suite roda contra o emulador do Firestore, nao contra um projeto real:
+// `npm run emulators` sobe Auth e Firestore locais, e FIRESTORE_EMULATOR_HOST
+// redireciona o Admin SDK para la.
+//
+// A limpeza do afterAll continua mesmo assim. O emulador e descartavel, mas quem
+// rodar a suite com a variavel apontando para um projeto de verdade -- por
+// engano ou por escolha -- nao pode deixar inscricao de teste na lista real.
 describe('WaitlistController (e2e)', () => {
   let app: INestApplication<App>;
-  let dataSource: DataSource;
+  let firestore: Firestore;
 
   // Registrado a cada requisicao aceita, para a limpeza nao depender de os
   // testes terem passado.
@@ -39,15 +44,18 @@ describe('WaitlistController (e2e)', () => {
     );
 
     await app.init();
-    dataSource = app.get(DataSource);
+    firestore = app.get(FirebaseService).firestore;
   });
 
   afterAll(async () => {
-    if (dataSource?.isInitialized && createdEmails.length > 0) {
-      await dataSource
-        .getRepository(WaitlistEntry)
-        .delete({ email: In(createdEmails) });
-    }
+    // O e-mail normalizado E o ID do documento desde a spec 007, entao a limpeza
+    // e por caminho: sem consulta, sem indice, sem risco de apagar o que nao foi
+    // criado aqui.
+    await Promise.all(
+      createdEmails.map((email) =>
+        firestore.collection(WAITLIST_COLLECTION).doc(email).delete(),
+      ),
+    );
     await app.close();
   });
 

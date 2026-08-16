@@ -4,17 +4,17 @@ import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from '../src/app.module';
-import { SupabaseService } from '../src/auth/supabase.service';
-import { DataSource } from 'typeorm';
-import { Profile } from '../src/profile/entities/profile.entity';
+import { FirebaseService } from '../src/auth/firebase.service';
+import { Firestore } from 'firebase-admin/firestore';
+import { PROFILE_COLLECTION } from '../src/profile/profile.repository';
 import { REFRESH_TOKEN_COOKIE_NAME } from '../src/auth/cookie.service';
 import { SessionResponseDto } from '../src/auth/dto/session.dto';
 import { ProfileDto } from '../src/profile/dto/profile.dto';
 
 describe('Auth & Profile (e2e)', () => {
   let app: INestApplication<App>;
-  let supabaseService: SupabaseService;
-  let dataSource: DataSource;
+  let firebase: FirebaseService;
+  let firestore: Firestore;
   const createdUserIds: string[] = [];
 
   const uniqueEmail = () =>
@@ -36,21 +36,21 @@ describe('Auth & Profile (e2e)', () => {
     );
 
     await app.init();
-    supabaseService = app.get(SupabaseService);
-    dataSource = app.get(DataSource);
+    firebase = app.get(FirebaseService);
+    firestore = firebase.firestore;
   });
 
   afterAll(async () => {
     for (const userId of createdUserIds) {
       try {
-        await supabaseService.adminClient.auth.admin.deleteUser(userId);
+        await firebase.auth.deleteUser(userId);
       } catch {
         // ignore cleanup error
       }
       try {
-        if (dataSource?.isInitialized) {
-          await dataSource.getRepository(Profile).delete({ id: userId });
-        }
+        // O UID e o caminho do documento desde a spec 007, entao a limpeza do
+        // perfil e uma delecao direta, sem consulta.
+        await firestore.collection(PROFILE_COLLECTION).doc(userId).delete();
       } catch {
         // ignore profile cleanup error
       }
@@ -100,17 +100,19 @@ describe('Auth & Profile (e2e)', () => {
     const testEmail = uniqueEmail();
     const testPassword = 'MinhaSenhaSegura123';
 
-    // 1. Criar usuario confirmado via admin para o teste de ciclo
-    const { data: userData, error: userError } =
-      await supabaseService.adminClient.auth.admin.createUser({
-        email: testEmail,
-        password: testPassword,
-        email_confirm: true,
-      });
+    // 1. Criar usuario confirmado via admin para o teste de ciclo.
+    //
+    // Aqui a senha e conhecida de proposito, porque o teste precisa fazer login
+    // com ela. O fluxo real de cadastro nunca faz isso: ele cria com senha
+    // aleatoria descartada e manda o usuario definir a dele na tela do Firebase.
+    const user = await firebase.auth.createUser({
+      email: testEmail,
+      password: testPassword,
+      emailVerified: true,
+    });
 
-    expect(userError).toBeNull();
-    expect(userData.user?.id).toBeDefined();
-    const userId = userData.user!.id;
+    expect(user.uid).toBeDefined();
+    const userId = user.uid;
     createdUserIds.push(userId);
 
     // 2. Login

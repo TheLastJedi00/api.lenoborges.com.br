@@ -1,3 +1,21 @@
+> **DEPRECATED em 2026-08-16 pela [spec 007](../007%20-%20Firestore%20e%20Firebase%20Auth/context.md).**
+>
+> O Supabase saiu do projeto. A autenticacao passou a ser Firebase Auth e `profiles` virou colecao
+> do Firestore, com o UID como ID do documento -- somem a FK para `auth.users`, o cascade, o
+> `check` de `grade` e a RLS.
+>
+> Duas decisoes desta spec foram perdidas, e nao por descuido:
+>
+> - **O logout por sessao.** O escopo `local`, escolhido aqui de proposito para nao deslogar o
+>   celular de quem sai no laboratorio, nao tem equivalente no Firebase, que revoga por usuario.
+> - **A pagina `/definir-senha` e o `POST /auth/password`.** O Firebase hospeda a propria tela de
+>   definicao de senha, e o `oobCode` nunca chega na API.
+>
+> O que sobreviveu: o front nunca fala com o provedor de auth em login, refresh e logout; o access
+> token em memoria; o refresh token em cookie HttpOnly rotacionado.
+
+---
+
 # Spec 005: Autenticação (Supabase Auth) e perfil do membro
 
 ## Objetivo

@@ -235,7 +235,8 @@ export class AuthService {
     const waitlist = email
       ? await this.waitlistRepository.findByEmail(email)
       : { found: false, entry: undefined };
-    const waitlistEntry = waitlist.found && waitlist.entry ? waitlist.entry : null;
+    const waitlistEntry =
+      waitlist.found && waitlist.entry ? waitlist.entry : null;
 
     const created = await this.profileRepository.create({
       id: uid,

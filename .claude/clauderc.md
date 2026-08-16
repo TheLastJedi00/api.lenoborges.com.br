@@ -1,11 +1,15 @@
 # Design da API
 - MVC Simples
-- TypeORM para entidades, repositories e consultas
-- Migrations são do Supabase, não do TypeORM: o schema vive em `supabase/migrations/*.sql` e é
-  aplicado por `supabase db push` (ou pela integração do Supabase com o GitHub). O TypeORM roda
-  sempre com `synchronize: false` e não gera nem aplica migration. Um `git push` não altera o
-  banco por si só: o passo do Supabase é explícito.
-- Repositories sempre devolvem objeto
+- Firestore pelo Admin SDK (`firebase-admin`) para persistência. Tipos e
+  `FirestoreDataConverter` em `src/**/entities/`, acesso só pelos repositories.
+- **Não há migrations e não há schema a versionar.** O Firestore não tem DDL. Em troca, o que o
+  banco garantia passa a ser responsabilidade da aplicação: unicidade vira ID de documento,
+  faixa de valor vira validação, e acesso direto vira `firestore.rules`. Ao mexer em estrutura
+  de dado, pergunte qual garantia está sendo assumida pelo código — a spec 007 lista as que
+  mudaram de lugar.
+- **Repositories sempre devolvem objeto** (`{ found, entry }`, nunca `null` cru). Esta regra é a
+  que fez a migração de Postgres para Firestore caber em duas classes: os services não sabiam o
+  que tinha embaixo e continuaram sem saber. Vale a pena defendê-la.
 - Documentar endpointes e estruturas de dados no [Read Me]("../../../README.md")
 - Alterações em estrutura de dados devem marcar specs anteriores que montaram essa table com Deprecated e referenciá-las na spec atual
 

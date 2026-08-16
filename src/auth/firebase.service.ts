@@ -95,7 +95,10 @@ export class FirebaseService {
     return this.post<T>(`${SECURE_TOKEN}/token?key=${this.webApiKey}`, body);
   }
 
-  private async post<T>(url: string, body: Record<string, unknown>): Promise<T> {
+  private async post<T>(
+    url: string,
+    body: Record<string, unknown>,
+  ): Promise<T> {
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -115,7 +118,7 @@ export class FirebaseService {
         payload.error &&
         typeof payload.error === 'object' &&
         'message' in payload.error
-          ? String((payload.error as { message: unknown }).message)
+          ? String(payload.error.message)
           : `HTTP ${response.status}`;
 
       throw new FirebaseRestError(message, response.status);
