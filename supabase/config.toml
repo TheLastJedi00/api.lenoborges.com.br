@@ -443,3 +443,20 @@ enabled = true
 # declarative_schema_path = "./database"
 # JSON string passed through to pg-delta SQL formatting.
 # format_options = "{\"keywordCase\":\"upper\",\"indent\":2,\"maxWidth\":80,\"commaStyle\":\"trailing\"}"
+
+# Sem este bloco, NADA acima chega em producao. O passo Configure do branching
+# procura um [remotes.*] cujo project_id seja o ref do projeto alvo; se nao
+# achar, ele pula a configuracao inteira em silencio. Era essa a causa do
+# template de recovery nunca ter sido escrito. Ver specs/006/fix.md.
+#
+# O nome do bloco e livre: o CLI casa por project_id, nao pelo nome nem pela
+# branch git. `main` foi escolhido so por espelhar a persistent branch que ja
+# existe apontando para este mesmo ref.
+#
+# Nao ha nada aninhado aqui de proposito. O que este bloco declara e "aplique a
+# config base neste ref", e a config base ja e a de producao. Qualquer chave
+# posta abaixo daqui passa a sobrescrever a base *so* para este projeto, e vira
+# um segundo lugar para procurar quando algo divergir. Manter vazio enquanto
+# der.
+[remotes.main]
+project_id = "yymyasazpwsmdmpuasjx"
