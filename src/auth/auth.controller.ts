@@ -13,7 +13,6 @@ import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { CookieService } from './cookie.service';
 import { SignupDto, SignupResponseDto } from './dto/signup.dto';
-import { SetPasswordDto } from './dto/set-password.dto';
 import { LoginDto } from './dto/login.dto';
 import { SessionResponseDto } from './dto/session.dto';
 
@@ -30,11 +29,18 @@ export class AuthController {
   @HttpCode(HttpStatus.ACCEPTED)
   @ApiOperation({
     summary: 'Cadastrar novo membro (dispara e-mail de definição de senha)',
+    description:
+      'A senha é definida **fora desta API**, na tela hospedada pelo Firebase ' +
+      'para onde o link do e-mail aponta. Não existe endpoint de definir senha: ' +
+      'o oobCode nunca chega aqui. Depois de definida, o usuário volta para o ' +
+      'front pelo botão de retorno e faz login normalmente.',
   })
   @ApiResponse({
     status: 202,
     description:
-      'Solicitação aceita. E-mail de confirmação/redefinição disparado.',
+      'Solicitação aceita. E-mail com o link de definir senha disparado. ' +
+      'Resposta idêntica para e-mail novo e já cadastrado, de propósito: ' +
+      'distinguir transformaria o cadastro em oráculo de enumeração.',
     type: SignupResponseDto,
   })
   @ApiResponse({
@@ -46,23 +52,15 @@ export class AuthController {
     return this.authService.signup(dto);
   }
 
-  @Throttle({ default: { limit: 5, ttl: 60000 } })
-  @Post('password')
-  @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Definir senha e confirmar e-mail com token' })
-  @ApiResponse({
-    status: 204,
-    description: 'Senha definida com sucesso. E-mail confirmado.',
-  })
-  @ApiResponse({
-    status: 400,
-    description:
-      'Token inválido/expirado, senhas divergentes ou erro de validação.',
-  })
-  @ApiResponse({ status: 429, description: 'Limite de requisições excedido.' })
-  async setPassword(@Body() dto: SetPasswordDto): Promise<void> {
-    await this.authService.setPassword(dto);
-  }
+  // Nao existe rota de definir senha, e a ausencia e proposital.
+  //
+  // O Firebase hospeda a propria tela de definicao de senha, e o link do e-mail
+  // leva direto para la. O oobCode nunca chega nesta API: quem o consome e a
+  // tela do Google, que chama o accounts:resetPassword por conta propria.
+  //
+  // Isso encerra o que a spec 006 tentou construir em dois ciclos -- fazer o
+  // token chegar na query string de uma pagina nossa. Sem a pagina, a pergunta
+  // nao se faz. Ver a decisao 3 da spec 007.
 
   @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Post('login')

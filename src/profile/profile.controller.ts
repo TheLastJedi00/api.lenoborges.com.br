@@ -9,14 +9,14 @@ import {
 import { ProfileService } from './profile.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { ProfileDto } from './dto/profile.dto';
-import { SupabaseAuthGuard } from '../auth/guards/supabase-auth.guard';
+import { FirebaseAuthGuard } from '../auth/guards/firebase-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { CurrentUserData } from '../auth/decorators/current-user.decorator';
 
 @ApiTags('me')
 @ApiBearerAuth()
 @Controller('me')
-@UseGuards(SupabaseAuthGuard)
+@UseGuards(FirebaseAuthGuard)
 export class ProfileController {
   constructor(private readonly profileService: ProfileService) {}
 

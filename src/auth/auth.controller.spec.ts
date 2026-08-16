@@ -9,7 +9,6 @@ describe('AuthController', () => {
   let controller: AuthController;
   let authService: {
     signup: jest.Mock;
-    setPassword: jest.Mock;
     login: jest.Mock;
     refresh: jest.Mock;
     logout: jest.Mock;
@@ -23,7 +22,6 @@ describe('AuthController', () => {
   beforeEach(async () => {
     authService = {
       signup: jest.fn(),
-      setPassword: jest.fn(),
       login: jest.fn(),
       refresh: jest.fn(),
       logout: jest.fn(),
@@ -65,17 +63,13 @@ describe('AuthController', () => {
     expect(authService.signup).toHaveBeenCalledWith(dto);
   });
 
-  it('should call authService.setPassword on POST /auth/password', async () => {
-    authService.setPassword.mockResolvedValue(undefined);
-
-    const dto = {
-      tokenHash: 'token-123',
-      password: 'password123',
-      passwordConfirmation: 'password123',
-    };
-    await controller.setPassword(dto);
-
-    expect(authService.setPassword).toHaveBeenCalledWith(dto);
+  it('nao expoe rota de definir senha', () => {
+    // A ausencia e o comportamento, entao ela e testada: o Firebase hospeda a
+    // propria tela e o oobCode nunca chega nesta API. Se alguem reintroduzir o
+    // endpoint sem reabrir a decisao 3 da spec 007, este teste avisa.
+    expect(
+      (controller as unknown as Record<string, unknown>).setPassword,
+    ).toBeUndefined();
   });
 
   it('should perform login, set cookie and return session on POST /auth/login', async () => {
