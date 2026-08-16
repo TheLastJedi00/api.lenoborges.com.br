@@ -1,6 +1,9 @@
 # Fix: o link chega com sessão no fragmento, e não com `token_hash` na query
 
 Aberto em 2026-08-15, depois da verificação da Fase 05 Task 04.
+**Resolvido em 2026-08-16.** A causa não era nenhuma das cinco listadas abaixo. Ela está na
+[seção de diagnóstico](#diagnóstico-2026-08-16), no fim do documento; o que vem antes ficou como
+estava, porque o erro de leitura da evidência 1 é a parte instrutiva.
 
 ## Sintoma
 
@@ -135,3 +138,89 @@ Só vale se o caminho 1 se provar impossível, o que hoje não está demonstrado
 explica: o `verifyOtp` do backend falha com ele, e a mudança trocaria um erro honesto e imediato por
 um erro confuso e tardio. Além disso, como a evidência 4 mostra, o token de recuperação daquela URL
 já foi consumido pelo `/verify`.
+
+---
+
+## Diagnóstico (2026-08-16)
+
+### A evidência 1 estava errada, e ela sustentava tudo
+
+A pergunta inteira acima é "por que o template não aplicou, se a URL aplicou". A resposta é que **a
+URL também não aplicou**. Ela já estava certa no painel, escrita à mão na spec 005, antes de qualquer
+`config.toml` existir. O `edu.lenoborges.com.br` no link não prova que o merge escreveu nada: prova
+só que alguém, algum dia, digitou aquilo no painel.
+
+O recorte que parecia estranho — uma seção aplicando pela metade — nunca existiu. **Nada da seção
+`[auth]` foi aplicado. O passo Configure não rodou.**
+
+### Por que ele não rodou
+
+A [doc de configuração do branching](https://supabase.com/docs/guides/deployment/branching/configuration)
+tem a frase, sobre o merge em persistent branch:
+
+> If no remote is declared or the project ID is incorrect, the configuration step is skipped.
+
+O `config.toml` deste repo não declarava nenhum bloco `[remotes.*]`. O código do CLI confirma o
+mecanismo: `GetRemoteByProjectRef` varre `c.Remotes` procurando um `project_id` igual ao ref do
+projeto alvo e devolve `no remote found for project_id` quando não acha. Sem esse casamento, não há
+config a aplicar, e o passo termina em silêncio — sem erro, sem log de mudança, sem nada que
+aparecesse no e-mail que chegou.
+
+O casamento é **por `project_id`**, não pelo nome do bloco nem pela branch git. Nomear o bloco de
+`main` não teria bastado sozinho; o que faltava era o ref.
+
+### As cinco causas, resolvidas
+
+- **A. Hospedado não aceita `content_path`** — **falsa.** O `config push` monta e envia
+  `mailer_templates_recovery_content` no PATCH de `/v1/projects/{ref}/config/auth`
+  (`config-sync/auth.sync.ts`), e lê o HTML do disco antes disso
+  (`config-sync.auth-email-content.ts`). Template como código funciona em projeto hospedado. A doc de
+  customizing email templates está desatualizada nisto também, exatamente como a decisão 1 do
+  `context.md` já tinha flagrado sobre o comando.
+- **B. Sintaxe inválida com fallback** — **falsa,** e por dois motivos independentes. Primeiro, as
+  expressões citadas no comentário são ações válidas sobre um `map`, e chave ausente em map não é
+  erro de parse nem de execução no Go. Segundo, o `html/template` **remove comentários HTML da
+  saída**. Nunca houve `templatemailer_template_body_parse_error` a encontrar.
+  *Corrigido mesmo assim:* o comentário virou `{{/* ... */}}`. O ponto que a suspeita acertou é real
+  — comentário HTML não protege nada do parser, as ações lá dentro são avaliadas de verdade —, e
+  deixar expressões vivas num trecho que é só prosa é armadilha esperando data.
+- **C. `content_path` resolvido de outro diretório** — **falsa.** O loader resolve caminho relativo a
+  partir da raiz do projeto (o pai de `supabase/`), então `./supabase/templates/recovery.html` está
+  certo. E arquivo faltando **estoura** (`Invalid config for auth.email.template.recovery.content_path`),
+  não cai em fallback silencioso: essa causa nunca poderia produzir este sintoma.
+  A contradição no `config.toml` é real, mas é do scaffolding: só as *notifications* têm o fallback
+  legado relativo a `supabase/`, e o exemplo do `password_changed_notification` reflete isso.
+- **D. O painel nunca teve o template da 005** — **verdadeira, e sem mistério.** Nada nunca escreveu
+  template nenhum no painel: nem a 005, nem o merge da 006. Não houve reversão.
+- **E. Propagação** — **falsa.** Não havia o que propagar.
+
+### O conserto
+
+`[remotes.main]` com `project_id = "yymyasazpwsmdmpuasjx"` no `config.toml`. Sem nada aninhado: o
+bloco existe para ligar o passo Configure neste ref, e a config base já é a de produção.
+
+É o **caminho 1** da seção acima, na variante mais barata — o contrato da spec 005 fica intacto, o
+front continua sem falar com o Supabase, e o template continua versionado. O caminho 2 não chega a
+ser considerado.
+
+### O que isso custa admitir
+
+A decisão 6 do `context.md` — "o merge na `main` é o push, não existe passo manual" — estava certa na
+conclusão e errada no mecanismo, e a parte errada é a que importava: o merge só aplica config se o
+`[remotes]` casar. Ela foi corrigida lá, não reescrita.
+
+E a lição que sobra é sobre a evidência 1, não sobre o Supabase: **"o valor certo chegou" não prova
+"o pipeline escreveu o valor"** quando o valor já estava certo antes. Um estado pré-existente e
+correto é indistinguível de um pipeline funcionando, e foi exatamente essa ambiguidade que mandou a
+investigação atrás do template por um dia.
+
+### O que ainda não está provado
+
+Que o Configure agora aplica. Isso só se verifica depois do merge na `main`, com o painel em
+Authentication > Email Templates > Reset Password mostrando o nosso HTML, e um cadastro real
+chegando com `?token_hash=` na query. Até lá, este conserto é uma hipótese bem sustentada, não um
+fato observado.
+
+Se depois do merge o painel continuar no default, o próximo passo é `supabase config push` avulso —
+que sabemos que envia o template — para separar "o `[remotes]` não bastou" de "o Configure não
+aplica templates".

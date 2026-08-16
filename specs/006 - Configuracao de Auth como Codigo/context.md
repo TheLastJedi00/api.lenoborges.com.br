@@ -159,6 +159,13 @@ Ou seja: **merge na `main` aplica este `config.toml` em produção, sem ninguém
 nenhum.** O `supabase config push` continua existindo como saída manual, mas aqui ele é redundante e,
 se rodado fora de hora, aplica um estado que ainda não foi revisado em PR.
 
+> **Correção, 2026-08-16.** A conclusão acima está certa; o mecanismo, incompleto — e o pedaço que
+> faltava é o que fez o primeiro merge não aplicar nada. O passo Configure procura no `config.toml`
+> um bloco `[remotes.*]` cujo `project_id` seja o ref do projeto alvo, e **pula a configuração
+> inteira, em silêncio, quando não acha**. Branching ligado e branch mapeada não bastam: sem o
+> `[remotes]`, o merge só leva migrations, edge functions e storage buckets. O bloco foi adicionado
+> no fim do arquivo. Ver `fix.md`.
+
 Duas consequências que reorganizam a Fase 05:
 
 1. **O ponto de decisão é o merge do PR, não um comando depois dele.** É ali que a revisão precisa

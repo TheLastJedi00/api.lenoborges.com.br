@@ -1,20 +1,25 @@
-<!--
+{{/*
   E-mail de recuperacao de senha (GoTrue, tipo `recovery`).
+
+  Comentario de template, nao comentario HTML. O GoTrue renderiza com
+  html/template, que parseia acoes tambem dentro de <!-- -->: escrever as
+  expressoes ali as deixa vivas, avaliadas de verdade, num trecho que so
+  deveria ser prosa. Aqui dentro nada e avaliado nem sai no e-mail.
 
   Serve dois caminhos com o mesmo token: o cadastro novo, em que esta e a
   PRIMEIRA senha do membro, e o "esqueci minha senha" mais tarde. O texto e
   escrito para o primeiro caso, que e o mais comum e o mais confuso de receber.
 
-  O link usa {{ .RedirectTo }}, nao {{ .SiteURL }}. Site URL e campo unico no
-  projeto, e este projeto hospedado atende dev e producao ao mesmo tempo, entao
-  {{ .SiteURL }} so conseguiria servir um dos dois. {{ .RedirectTo }} carrega o
-  destino que o backend passou em resetPasswordForEmail, que ja inclui o
-  caminho /definir-senha. Por isso nao ha caminho escrito aqui.
+  O link usa RedirectTo, nao SiteURL. Site URL e campo unico no projeto, e este
+  projeto hospedado atende dev e producao ao mesmo tempo, entao SiteURL so
+  conseguiria servir um dos dois. RedirectTo carrega o destino que o backend
+  passou em resetPasswordForEmail, que ja inclui o caminho /definir-senha. Por
+  isso nao ha caminho escrito aqui.
 
   Se o redirectTo nao estiver na allow-list (auth.additional_redirect_urls), o
-  GoTrue descarta o valor e {{ .RedirectTo }} cai de volta no Site URL. O link
-  volta a quebrar sem nenhum erro visivel. Ver specs/006.
--->
+  GoTrue descarta o valor e RedirectTo cai de volta no Site URL. O link volta a
+  quebrar sem nenhum erro visivel. Ver specs/006.
+*/}}
 <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background-color:#0b0b0f;padding:32px 16px;">
   <tr>
     <td align="center">
