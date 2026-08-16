@@ -1,5 +1,4 @@
 import { Module } from '@nestjs/common';
-import { SupabaseService } from './supabase.service';
 import { AuthService } from './auth.service';
 import { CookieService } from './cookie.service';
 import { AuthController } from './auth.controller';
@@ -9,7 +8,7 @@ import { WaitlistModule } from '../waitlist/waitlist.module';
 @Module({
   imports: [ProfileModule, WaitlistModule],
   controllers: [AuthController],
-  providers: [SupabaseService, AuthService, CookieService],
-  exports: [SupabaseService, AuthService, CookieService],
+  providers: [AuthService, CookieService],
+  exports: [AuthService, CookieService],
 })
 export class AuthModule {}

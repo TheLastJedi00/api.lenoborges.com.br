@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ProfileController } from './profile.controller';
 import { ProfileService } from './profile.service';
-import { SupabaseAuthGuard } from '../auth/guards/supabase-auth.guard';
+import { FirebaseAuthGuard } from '../auth/guards/firebase-auth.guard';
 import { CurrentUserData } from '../auth/decorators/current-user.decorator';
 
 describe('ProfileController', () => {
@@ -31,7 +31,7 @@ describe('ProfileController', () => {
         },
       ],
     })
-      .overrideGuard(SupabaseAuthGuard)
+      .overrideGuard(FirebaseAuthGuard)
       .useValue({ canActivate: () => true })
       .compile();
 

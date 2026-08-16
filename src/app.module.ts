@@ -5,7 +5,7 @@ import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { validate } from './config/env.validation';
-import { DatabaseModule } from './database/database.module';
+import { FirebaseModule } from './auth/firebase.module';
 import { WaitlistModule } from './waitlist/waitlist.module';
 import { ProfileModule } from './profile/profile.module';
 import { AuthModule } from './auth/auth.module';
@@ -22,7 +22,7 @@ import { AuthModule } from './auth/auth.module';
         limit: 60,
       },
     ]),
-    DatabaseModule,
+    FirebaseModule,
     WaitlistModule,
     ProfileModule,
     AuthModule,
