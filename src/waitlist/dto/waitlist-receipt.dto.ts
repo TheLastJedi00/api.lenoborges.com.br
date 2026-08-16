@@ -2,8 +2,11 @@ import { ApiProperty } from '@nestjs/swagger';
 
 export class WaitlistReceiptDto {
   @ApiProperty({
-    example: 'f87e5b22-55e1-4c6e-8b9a-4c9f8a3c8e5d',
-    description: 'ID da inscrição',
+    example: 'aluno@exemplo.com',
+    description:
+      'ID da inscrição, que é o e-mail normalizado. Deixou de ser UUID na ' +
+      'spec 007: o Firestore não tem constraint UNIQUE, e o ID do documento é ' +
+      'o único lugar onde ele garante unicidade de e-mail.',
   })
   id: string;
 

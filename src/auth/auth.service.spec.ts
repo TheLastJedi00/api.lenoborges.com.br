@@ -1,38 +1,29 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AuthService } from './auth.service';
-import { SupabaseService } from './supabase.service';
+import { FirebaseService } from './firebase.service';
 import { ProfileRepository } from '../profile/profile.repository';
 import { WaitlistRepository } from '../waitlist/waitlist.repository';
 
+/**
+ * O caso 19 da versao anterior deste spec ("cada operacao de usuario pede um
+ * cliente novo") saiu com o Supabase. Ele existia porque o cliente do
+ * @supabase/auth-js guardava a sessao do ultimo usuario que passasse por ele,
+ * mesmo com persistSession: false, e um signOut compartilhado derrubaria a
+ * sessao errada. O Admin SDK do Firebase nao tem esse estado: as operacoes sao
+ * requisicoes HTTP sem sessao acumulada, e nao ha o que isolar.
+ */
 describe('AuthService', () => {
   let service: AuthService;
-  let supabaseService: {
-    adminClient: {
-      auth: {
-        admin: {
-          createUser: jest.Mock;
-          getUserById: jest.Mock;
-          updateUserById: jest.Mock;
-        };
-        resetPasswordForEmail: jest.Mock;
-      };
-    };
-    createUserClient: jest.Mock;
-  };
-  // Cliente por requisicao: o service pede um novo a cada operacao de usuario.
-  // O mock devolve sempre o mesmo objeto para as assercoes, mas conta as chamadas
-  // da fabrica, que e o que prova o isolamento entre requisicoes.
-  let userClient: {
+  let firebase: {
     auth: {
-      resetPasswordForEmail: jest.Mock;
-      verifyOtp: jest.Mock;
-      updateUser: jest.Mock;
-      signInWithPassword: jest.Mock;
-      refreshSession: jest.Mock;
-      signOut: jest.Mock;
+      createUser: jest.Mock;
+      getUser: jest.Mock;
+      revokeRefreshTokens: jest.Mock;
     };
+    identityToolkit: jest.Mock;
+    secureToken: jest.Mock;
   };
   let profileRepository: {
     findById: jest.Mock;
@@ -43,30 +34,27 @@ describe('AuthService', () => {
     findByEmail: jest.Mock;
   };
 
-  beforeEach(async () => {
-    supabaseService = {
-      adminClient: {
-        auth: {
-          admin: {
-            createUser: jest.fn(),
-            getUserById: jest.fn(),
-            updateUserById: jest.fn(),
-          },
-          resetPasswordForEmail: jest.fn(),
-        },
-      },
-      createUserClient: jest.fn(() => userClient),
-    };
+  const profileVazio = {
+    id: 'uid-123',
+    name: null,
+    phone: null,
+    bio: null,
+    grade: 1,
+    completedAt: null,
+    waitlistEntryId: null,
+    createdAt: new Date('2026-08-16T12:00:00.000Z'),
+    updatedAt: new Date('2026-08-16T12:00:00.000Z'),
+  };
 
-    userClient = {
+  beforeEach(async () => {
+    firebase = {
       auth: {
-        resetPasswordForEmail: jest.fn(),
-        verifyOtp: jest.fn(),
-        updateUser: jest.fn(),
-        signInWithPassword: jest.fn(),
-        refreshSession: jest.fn(),
-        signOut: jest.fn(),
+        createUser: jest.fn(),
+        getUser: jest.fn(),
+        revokeRefreshTokens: jest.fn(),
       },
+      identityToolkit: jest.fn(),
+      secureToken: jest.fn(),
     };
 
     profileRepository = {
@@ -75,204 +63,195 @@ describe('AuthService', () => {
       update: jest.fn(),
     };
 
-    waitlistRepository = {
-      findByEmail: jest.fn(),
-    };
+    waitlistRepository = { findByEmail: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AuthService,
-        {
-          provide: SupabaseService,
-          useValue: supabaseService,
-        },
-        {
-          provide: ProfileRepository,
-          useValue: profileRepository,
-        },
-        {
-          provide: WaitlistRepository,
-          useValue: waitlistRepository,
-        },
+        { provide: FirebaseService, useValue: firebase },
+        { provide: ProfileRepository, useValue: profileRepository },
+        { provide: WaitlistRepository, useValue: waitlistRepository },
         {
           provide: ConfigService,
-          // Lista com duas origens e barra sobrando de proposito: o service
-          // precisa ficar com a primeira, sem a barra.
           useValue: {
-            getOrThrow: jest
-              .fn()
-              .mockReturnValue('http://localhost:4200/, http://outra.origem'),
+            getOrThrow: jest.fn(() => 'http://localhost:4200'),
           },
         },
       ],
     }).compile();
 
     service = module.get<AuthService>(AuthService);
+    jest.clearAllMocks();
   });
 
   describe('signup', () => {
-    it('caso 1: deve cadastrar novo usuario, criar perfil e disparar recovery retornando confirmation_sent', async () => {
-      supabaseService.adminClient.auth.admin.createUser.mockResolvedValue({
-        data: { user: { id: 'user-uuid-123', email: 'novo@email.com' } },
-        error: null,
-      });
-      waitlistRepository.findByEmail.mockResolvedValue({
-        found: false,
-        entry: null,
-      });
-      profileRepository.create.mockResolvedValue({
-        entry: { id: 'user-uuid-123', grade: 1 },
-      });
-      supabaseService.adminClient.auth.resetPasswordForEmail.mockResolvedValue({
-        data: {},
-        error: null,
-      });
+    it('caso 1: cria usuario, cria perfil e dispara o e-mail de definir senha', async () => {
+      firebase.auth.createUser.mockResolvedValue({ uid: 'uid-123' });
+      waitlistRepository.findByEmail.mockResolvedValue({ found: false });
+      profileRepository.create.mockResolvedValue({ entry: profileVazio });
+      firebase.identityToolkit.mockResolvedValue({});
 
       const result = await service.signup({
-        email: 'novo@email.com',
-        emailConfirmation: 'novo@email.com',
+        email: 'novo@test.com',
+        emailConfirmation: 'novo@test.com',
       });
 
       expect(result).toEqual({ status: 'confirmation_sent' });
-      expect(
-        supabaseService.adminClient.auth.admin.createUser,
-      ).toHaveBeenCalledWith({
-        email: 'novo@email.com',
-        email_confirm: false,
-      });
-      expect(profileRepository.create).toHaveBeenCalledWith({
-        id: 'user-uuid-123',
-        name: null,
-        phone: null,
-        bio: null,
-        grade: 1,
-        completedAt: null,
-        waitlistEntryId: null,
-      });
-      expect(
-        supabaseService.adminClient.auth.resetPasswordForEmail,
-      ).toHaveBeenCalledWith('novo@email.com', {
-        redirectTo: 'http://localhost:4200/definir-senha',
+      expect(profileRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'uid-123', grade: 1 }),
+      );
+      expect(firebase.identityToolkit).toHaveBeenCalledWith('sendOobCode', {
+        requestType: 'PASSWORD_RESET',
+        email: 'novo@test.com',
+        continueUrl: 'http://localhost:4200/?entrar=1',
       });
     });
 
-    it('caso 2: deve retornar a mesma resposta para email ja existente disparando recovery sem criar perfil duplicado', async () => {
-      supabaseService.adminClient.auth.admin.createUser.mockResolvedValue({
-        data: { user: null },
-        error: { message: 'User already registered', status: 422 },
-      });
-      supabaseService.adminClient.auth.resetPasswordForEmail.mockResolvedValue({
-        data: {},
-        error: null,
+    it('caso 1b: cria com senha aleatoria, nunca sem senha', async () => {
+      // createUser({ email }) sozinho cria um usuario sem provedor de senha, e
+      // pedir PASSWORD_RESET nesse estado e caminho nao garantido.
+      firebase.auth.createUser.mockResolvedValue({ uid: 'uid-123' });
+      waitlistRepository.findByEmail.mockResolvedValue({ found: false });
+      profileRepository.create.mockResolvedValue({ entry: profileVazio });
+      firebase.identityToolkit.mockResolvedValue({});
+
+      await service.signup({
+        email: 'novo@test.com',
+        emailConfirmation: 'novo@test.com',
       });
 
+      const [args] = firebase.auth.createUser.mock.calls[0] as [
+        { password?: string },
+      ];
+      expect(typeof args.password).toBe('string');
+      expect(args.password!.length).toBeGreaterThan(20);
+    });
+
+    it('caso 1c: duas chamadas nao geram a mesma senha', async () => {
+      firebase.auth.createUser.mockResolvedValue({ uid: 'uid-123' });
+      waitlistRepository.findByEmail.mockResolvedValue({ found: false });
+      profileRepository.create.mockResolvedValue({ entry: profileVazio });
+      firebase.identityToolkit.mockResolvedValue({});
+
+      await service.signup({
+        email: 'a@test.com',
+        emailConfirmation: 'a@test.com',
+      });
+      await service.signup({
+        email: 'b@test.com',
+        emailConfirmation: 'b@test.com',
+      });
+
+      const [first, second] = firebase.auth.createUser.mock.calls.map(
+        (call) => (call as [{ password: string }])[0].password,
+      );
+      expect(first).not.toBe(second);
+    });
+
+    it('caso 2: e-mail ja cadastrado responde igual, sem criar perfil duplicado', async () => {
+      // Responder diferente para e-mail conhecido transformaria o cadastro em
+      // oraculo de enumeracao.
+      firebase.auth.createUser.mockRejectedValue(
+        Object.assign(new Error('exists'), {
+          code: 'auth/email-already-exists',
+        }),
+      );
+      firebase.identityToolkit.mockResolvedValue({});
+
       const result = await service.signup({
-        email: 'existente@email.com',
-        emailConfirmation: 'existente@email.com',
+        email: 'existente@test.com',
+        emailConfirmation: 'existente@test.com',
       });
 
       expect(result).toEqual({ status: 'confirmation_sent' });
       expect(profileRepository.create).not.toHaveBeenCalled();
-      expect(
-        supabaseService.adminClient.auth.resetPasswordForEmail,
-      ).toHaveBeenCalledWith('existente@email.com', {
-        redirectTo: 'http://localhost:4200/definir-senha',
-      });
+      expect(firebase.identityToolkit).toHaveBeenCalled();
     });
 
-    it('caso 3: deve lancar BadRequestException se a confirmacao de email for divergente', async () => {
+    it('caso 2b: falha no envio do e-mail tambem nao muda a resposta', async () => {
+      firebase.auth.createUser.mockResolvedValue({ uid: 'uid-123' });
+      waitlistRepository.findByEmail.mockResolvedValue({ found: false });
+      profileRepository.create.mockResolvedValue({ entry: profileVazio });
+      firebase.identityToolkit.mockRejectedValue(new Error('EMAIL_NOT_FOUND'));
+
       await expect(
         service.signup({
-          email: 'fulano@email.com',
-          emailConfirmation: 'ciclano@email.com',
+          email: 'novo@test.com',
+          emailConfirmation: 'novo@test.com',
+        }),
+      ).resolves.toEqual({ status: 'confirmation_sent' });
+    });
+
+    it('caso 3: e-mails divergentes lancam BadRequestException', async () => {
+      await expect(
+        service.signup({
+          email: 'a@test.com',
+          emailConfirmation: 'b@test.com',
         }),
       ).rejects.toThrow(BadRequestException);
 
-      expect(
-        supabaseService.adminClient.auth.admin.createUser,
-      ).not.toHaveBeenCalled();
-      expect(profileRepository.create).not.toHaveBeenCalled();
+      expect(firebase.auth.createUser).not.toHaveBeenCalled();
     });
 
-    it('caso 4: deve normalizar os emails antes de comparar', async () => {
-      supabaseService.adminClient.auth.admin.createUser.mockResolvedValue({
-        data: { user: { id: 'uuid-abc', email: 'fulano@email.com' } },
-        error: null,
-      });
+    it('caso 4: normaliza os e-mails antes de comparar', async () => {
+      firebase.auth.createUser.mockResolvedValue({ uid: 'uid-123' });
       waitlistRepository.findByEmail.mockResolvedValue({ found: false });
-      profileRepository.create.mockResolvedValue({ entry: { id: 'uuid-abc' } });
-      supabaseService.adminClient.auth.resetPasswordForEmail.mockResolvedValue({
-        data: {},
-        error: null,
+      profileRepository.create.mockResolvedValue({ entry: profileVazio });
+      firebase.identityToolkit.mockResolvedValue({});
+
+      await service.signup({
+        email: '  Novo@Test.COM  ',
+        emailConfirmation: 'novo@test.com',
       });
 
-      const result = await service.signup({
-        email: '  Fulano@Email.COM  ',
-        emailConfirmation: 'fulano@email.com',
-      });
-
-      expect(result).toEqual({ status: 'confirmation_sent' });
-      expect(
-        supabaseService.adminClient.auth.admin.createUser,
-      ).toHaveBeenCalledWith({
-        email: 'fulano@email.com',
-        email_confirm: false,
-      });
+      expect(firebase.auth.createUser).toHaveBeenCalledWith(
+        expect.objectContaining({ email: 'novo@test.com' }),
+      );
     });
 
-    it('caso 5: deve vincular dados da waitlist no perfil se o email existir na lista de espera', async () => {
-      supabaseService.adminClient.auth.admin.createUser.mockResolvedValue({
-        data: { user: { id: 'user-waitlist-id', email: 'membro@email.com' } },
-        error: null,
-      });
+    it('caso 5: vincula nome, telefone e inscricao quando o e-mail esta na waitlist', async () => {
+      firebase.auth.createUser.mockResolvedValue({ uid: 'uid-123' });
       waitlistRepository.findByEmail.mockResolvedValue({
         found: true,
         entry: {
-          id: 'waitlist-entry-uuid',
-          name: 'Membro Antigo',
-          phone: '11988887777',
+          id: 'novo@test.com',
+          name: 'Fulano',
+          phone: '11999998888',
+          email: 'novo@test.com',
+          consent: true,
+          createdAt: new Date(),
         },
       });
-      profileRepository.create.mockResolvedValue({
-        entry: { id: 'user-waitlist-id' },
-      });
-      supabaseService.adminClient.auth.resetPasswordForEmail.mockResolvedValue({
-        data: {},
-        error: null,
+      profileRepository.create.mockResolvedValue({ entry: profileVazio });
+      firebase.identityToolkit.mockResolvedValue({});
+
+      await service.signup({
+        email: 'novo@test.com',
+        emailConfirmation: 'novo@test.com',
       });
 
-      const result = await service.signup({
-        email: 'membro@email.com',
-        emailConfirmation: 'membro@email.com',
-      });
-
-      expect(result).toEqual({ status: 'confirmation_sent' });
       expect(profileRepository.create).toHaveBeenCalledWith({
-        id: 'user-waitlist-id',
-        name: 'Membro Antigo',
-        phone: '11988887777',
+        id: 'uid-123',
+        name: 'Fulano',
+        phone: '11999998888',
         bio: null,
         grade: 1,
         completedAt: null,
-        waitlistEntryId: 'waitlist-entry-uuid',
+        // O ID da inscricao e o e-mail normalizado: e o caminho do documento em
+        // waitlist_entries desde a spec 007.
+        waitlistEntryId: 'novo@test.com',
       });
     });
 
-    it('caso 6: perfil nasce vazio com waitlist_entry_id nulo se email nao estiver na waitlist', async () => {
-      supabaseService.adminClient.auth.admin.createUser.mockResolvedValue({
-        data: { user: { id: 'novo-id', email: 'novo@email.com' } },
-        error: null,
-      });
+    it('caso 6: perfil nasce vazio com waitlistEntryId nulo fora da waitlist', async () => {
+      firebase.auth.createUser.mockResolvedValue({ uid: 'uid-123' });
       waitlistRepository.findByEmail.mockResolvedValue({ found: false });
-      profileRepository.create.mockResolvedValue({ entry: { id: 'novo-id' } });
-      supabaseService.adminClient.auth.resetPasswordForEmail.mockResolvedValue({
-        data: {},
-        error: null,
-      });
+      profileRepository.create.mockResolvedValue({ entry: profileVazio });
+      firebase.identityToolkit.mockResolvedValue({});
 
       await service.signup({
-        email: 'novo@email.com',
-        emailConfirmation: 'novo@email.com',
+        email: 'novo@test.com',
+        emailConfirmation: 'novo@test.com',
       });
 
       expect(profileRepository.create).toHaveBeenCalledWith(
@@ -285,316 +264,188 @@ describe('AuthService', () => {
     });
   });
 
-  describe('setPassword', () => {
-    it('caso 7: deve verificar o token e atualizar a senha com sucesso sem devolver sessao', async () => {
-      userClient.auth.verifyOtp.mockResolvedValue({
-        data: {
-          user: { id: 'user-uuid-123', email: 'user@email.com' },
-          session: { access_token: 'valid-token' },
-        },
-        error: null,
-      });
-      supabaseService.adminClient.auth.admin.updateUserById.mockResolvedValue({
-        data: { user: { id: 'user-uuid-123' } },
-        error: null,
-      });
-
-      await expect(
-        service.setPassword({
-          tokenHash: 'valid-hash-token',
-          password: 'nova-senha-segura',
-          passwordConfirmation: 'nova-senha-segura',
-        }),
-      ).resolves.toBeUndefined();
-
-      expect(userClient.auth.verifyOtp).toHaveBeenCalledWith({
-        token_hash: 'valid-hash-token',
-        type: 'recovery',
-      });
-    });
-
-    it('caso 8: deve lancar BadRequestException com mensagem generica se token for invalido ou expirado', async () => {
-      userClient.auth.verifyOtp.mockResolvedValue({
-        data: { user: null, session: null },
-        error: { message: 'Token has expired or is invalid', status: 400 },
-      });
-
-      await expect(
-        service.setPassword({
-          tokenHash: 'invalid-hash-token',
-          password: 'nova-senha-segura',
-          passwordConfirmation: 'nova-senha-segura',
-        }),
-      ).rejects.toThrow(
-        new BadRequestException('Link inválido ou expirado, peça um novo.'),
-      );
-    });
-
-    it('caso 9: deve lancar BadRequestException se senhas forem divergentes sem tocar no Supabase', async () => {
-      await expect(
-        service.setPassword({
-          tokenHash: 'valid-hash-token',
-          password: 'senha-digitada-1',
-          passwordConfirmation: 'senha-digitada-2',
-        }),
-      ).rejects.toThrow(new BadRequestException('Senhas não conferem.'));
-
-      expect(userClient.auth.verifyOtp).not.toHaveBeenCalled();
-      expect(
-        supabaseService.adminClient.auth.admin.updateUserById,
-      ).not.toHaveBeenCalled();
-    });
-  });
-
   describe('login', () => {
-    it('caso 10: deve fazer login com credenciais validas e devolver session e refreshToken', async () => {
-      userClient.auth.signInWithPassword.mockResolvedValue({
-        data: {
-          session: {
-            access_token: 'access-jwt',
-            expires_in: 3600,
-            refresh_token: 'refresh-rt',
-          },
-          user: {
-            id: 'user-id-123',
-            email: 'aluno@email.com',
-          },
-        },
-        error: null,
+    it('caso 10: credenciais validas devolvem sessao e refreshToken', async () => {
+      firebase.identityToolkit.mockResolvedValue({
+        idToken: 'id-token',
+        refreshToken: 'refresh-token',
+        expiresIn: '3600',
+        localId: 'uid-123',
+        email: 'membro@test.com',
       });
-
       profileRepository.findById.mockResolvedValue({
         found: true,
-        entry: {
-          id: 'user-id-123',
-          grade: 2,
-          completedAt: new Date('2026-08-14T10:00:00.000Z'),
-        },
+        entry: { ...profileVazio, grade: 5, completedAt: new Date() },
       });
 
       const result = await service.login({
-        email: '  Aluno@Email.com  ',
-        password: 'password123',
+        email: 'membro@test.com',
+        password: 'senha-valida',
       });
 
-      expect(result).toEqual({
-        session: {
-          accessToken: 'access-jwt',
-          expiresIn: 3600,
-          user: {
-            id: 'user-id-123',
-            email: 'aluno@email.com',
-          },
-          profileCompleted: true,
-          grade: 2,
-        },
-        refreshToken: 'refresh-rt',
+      expect(result.refreshToken).toBe('refresh-token');
+      expect(result.session).toEqual({
+        accessToken: 'id-token',
+        // expiresIn chega como string do Identity Toolkit; o contrato do front
+        // e numero, e devolver string quebraria o tipo sem erro visivel.
+        expiresIn: 3600,
+        user: { id: 'uid-123', email: 'membro@test.com' },
+        profileCompleted: true,
+        grade: 5,
       });
-      expect(userClient.auth.signInWithPassword).toHaveBeenCalledWith({
-        email: 'aluno@email.com',
-        password: 'password123',
-      });
+      expect(typeof result.session.expiresIn).toBe('number');
     });
 
-    it('caso 11: deve lancar UnauthorizedException com a mesma mensagem para credencial errada ou usuario inexistente', async () => {
-      userClient.auth.signInWithPassword.mockResolvedValue({
-        data: { session: null, user: null },
-        error: { message: 'Invalid login credentials', status: 400 },
-      });
+    it('caso 11: credencial errada e usuario inexistente dao a mesma resposta', async () => {
+      firebase.identityToolkit.mockRejectedValue(
+        new Error('INVALID_LOGIN_CREDENTIALS'),
+      );
 
       await expect(
-        service.login({
-          email: 'errado@email.com',
-          password: 'wrongpassword',
-        }),
+        service.login({ email: 'membro@test.com', password: 'errada' }),
+      ).rejects.toThrow(UnauthorizedException);
+
+      firebase.identityToolkit.mockRejectedValue(new Error('EMAIL_NOT_FOUND'));
+
+      await expect(
+        service.login({ email: 'ninguem@test.com', password: 'qualquer' }),
       ).rejects.toThrow('E-mail ou senha inválidos.');
     });
 
-    it('caso 12: deve criar o perfil na hora caso o usuario nao possua perfil ao logar', async () => {
-      userClient.auth.signInWithPassword.mockResolvedValue({
-        data: {
-          session: {
-            access_token: 'access-jwt-2',
-            expires_in: 3600,
-            refresh_token: 'refresh-rt-2',
-          },
-          user: {
-            id: 'user-sem-perfil',
-            email: 'novo@email.com',
-          },
-        },
-        error: null,
+    it('caso 12: cria o perfil na hora quando o usuario nao tem', async () => {
+      firebase.identityToolkit.mockResolvedValue({
+        idToken: 'id-token',
+        refreshToken: 'refresh-token',
+        expiresIn: '3600',
+        localId: 'uid-123',
+        email: 'membro@test.com',
       });
-
       profileRepository.findById.mockResolvedValue({
         found: false,
         entry: null,
       });
-      waitlistRepository.findByEmail.mockResolvedValue({
-        found: false,
-        entry: null,
-      });
-      profileRepository.create.mockResolvedValue({
-        entry: {
-          id: 'user-sem-perfil',
-          grade: 1,
-          completedAt: null,
-        },
-      });
+      waitlistRepository.findByEmail.mockResolvedValue({ found: false });
+      profileRepository.create.mockResolvedValue({ entry: profileVazio });
 
       const result = await service.login({
-        email: 'novo@email.com',
-        password: 'password123',
+        email: 'membro@test.com',
+        password: 'senha-valida',
       });
 
+      expect(profileRepository.create).toHaveBeenCalled();
       expect(result.session.profileCompleted).toBe(false);
       expect(result.session.grade).toBe(1);
-      expect(profileRepository.create).toHaveBeenCalledWith({
-        id: 'user-sem-perfil',
-        name: null,
-        phone: null,
-        bio: null,
-        grade: 1,
-        completedAt: null,
-        waitlistEntryId: null,
-      });
     });
   });
 
   describe('refresh', () => {
-    it('caso 13: refresh valido devolve access novo e refresh rotacionado', async () => {
-      userClient.auth.refreshSession.mockResolvedValue({
-        data: {
-          session: {
-            access_token: 'new-access-jwt',
-            expires_in: 3600,
-            refresh_token: 'new-refresh-rt',
-          },
-          user: {
-            id: 'user-id-123',
-            email: 'aluno@email.com',
-          },
-        },
-        error: null,
+    it('caso 13: refresh valido devolve token novo e rotaciona o refresh', async () => {
+      // A resposta do securetoken vem em snake_case, diferente do camelCase do
+      // Identity Toolkit. Sao duas APIs do Google com convencoes diferentes, e
+      // trocar uma pela outra e erro silencioso.
+      firebase.secureToken.mockResolvedValue({
+        id_token: 'id-token-novo',
+        refresh_token: 'refresh-token-novo',
+        expires_in: '3600',
+        user_id: 'uid-123',
       });
-
+      firebase.auth.getUser.mockResolvedValue({ email: 'membro@test.com' });
       profileRepository.findById.mockResolvedValue({
         found: true,
-        entry: {
-          id: 'user-id-123',
-          grade: 1,
-          completedAt: null,
-        },
+        entry: profileVazio,
       });
 
-      const result = await service.refresh('old-refresh-rt');
+      const result = await service.refresh('refresh-token-antigo');
 
-      expect(result).toEqual({
-        session: {
-          accessToken: 'new-access-jwt',
-          expiresIn: 3600,
-          user: {
-            id: 'user-id-123',
-            email: 'aluno@email.com',
-          },
-          profileCompleted: false,
-          grade: 1,
-        },
-        refreshToken: 'new-refresh-rt',
+      expect(firebase.secureToken).toHaveBeenCalledWith({
+        grant_type: 'refresh_token',
+        refresh_token: 'refresh-token-antigo',
       });
-      expect(userClient.auth.refreshSession).toHaveBeenCalledWith({
-        refresh_token: 'old-refresh-rt',
+      expect(result.refreshToken).toBe('refresh-token-novo');
+      expect(result.session.accessToken).toBe('id-token-novo');
+      expect(result.session.user.email).toBe('membro@test.com');
+    });
+
+    it('caso 13b: busca o e-mail no Admin SDK, porque o securetoken so devolve o uid', async () => {
+      firebase.secureToken.mockResolvedValue({
+        id_token: 'id-token-novo',
+        refresh_token: 'refresh-token-novo',
+        expires_in: '3600',
+        user_id: 'uid-123',
       });
+      firebase.auth.getUser.mockResolvedValue({ email: 'membro@test.com' });
+      profileRepository.findById.mockResolvedValue({
+        found: true,
+        entry: profileVazio,
+      });
+
+      await service.refresh('refresh-token-antigo');
+
+      expect(firebase.auth.getUser).toHaveBeenCalledWith('uid-123');
     });
 
     it('caso 14: refresh invalido ou ausente lanca UnauthorizedException', async () => {
       await expect(service.refresh(undefined)).rejects.toThrow(
-        'Sessão expirada ou inválida.',
+        UnauthorizedException,
       );
+      expect(firebase.secureToken).not.toHaveBeenCalled();
 
-      userClient.auth.refreshSession.mockResolvedValue({
-        data: { session: null, user: null },
-        error: { message: 'Invalid refresh token', status: 401 },
-      });
+      firebase.secureToken.mockRejectedValue(new Error('TOKEN_EXPIRED'));
 
-      await expect(service.refresh('token-invalido')).rejects.toThrow(
+      await expect(service.refresh('invalido')).rejects.toThrow(
         'Sessão expirada ou inválida.',
       );
     });
   });
 
   describe('logout', () => {
-    it('caso 15: logout sem cookie resolve sem erro de forma idempotente', async () => {
+    it('caso 15: sem cookie resolve sem erro, de forma idempotente', async () => {
       await expect(service.logout(undefined)).resolves.toBeUndefined();
-      expect(supabaseService.createUserClient).not.toHaveBeenCalled();
-      expect(userClient.auth.signOut).not.toHaveBeenCalled();
+      expect(firebase.auth.revokeRefreshTokens).not.toHaveBeenCalled();
     });
 
-    it('caso 16: logout com cookie valido revoga a sessao daquele refresh token', async () => {
-      userClient.auth.refreshSession.mockResolvedValue({
-        data: {
-          session: { access_token: 'access-da-vitima' },
-          user: { id: 'user-uuid-123' },
-        },
-        error: null,
+    it('caso 16: com cookie valido revoga os tokens do usuario', async () => {
+      // ATENCAO: isto e global, nao por sessao. O Firebase revoga por usuario, e
+      // o escopo `local` que a spec 005 escolheu de proposito nao tem
+      // equivalente. Sair no laboratorio desloga o celular.
+      firebase.secureToken.mockResolvedValue({
+        id_token: 'x',
+        refresh_token: 'y',
+        expires_in: '3600',
+        user_id: 'uid-123',
       });
-      userClient.auth.signOut.mockResolvedValue({ error: null });
+      firebase.auth.revokeRefreshTokens.mockResolvedValue(undefined);
 
-      await expect(service.logout('refresh-valido')).resolves.toBeUndefined();
+      await service.logout('refresh-token-valido');
 
-      // A sessao precisa ser carregada no cliente a partir do token do chamador
-      // antes do signOut, senao o signOut derruba a sessao de outra pessoa.
-      expect(userClient.auth.refreshSession).toHaveBeenCalledWith({
-        refresh_token: 'refresh-valido',
-      });
-      expect(userClient.auth.signOut).toHaveBeenCalledWith({ scope: 'local' });
+      expect(firebase.auth.revokeRefreshTokens).toHaveBeenCalledWith('uid-123');
     });
 
-    it('caso 17: cookie invalido nao revoga sessao nenhuma e ainda resolve', async () => {
-      // Regressao do achado A1 do review: antes, qualquer cookie sem valor real
-      // derrubava a sessao de quem tivesse logado por ultimo no processo.
-      userClient.auth.refreshSession.mockResolvedValue({
-        data: { session: null, user: null },
-        error: { message: 'Invalid refresh token', status: 401 },
-      });
+    it('caso 17: cookie invalido nao revoga nada e ainda resolve', async () => {
+      firebase.secureToken.mockRejectedValue(
+        new Error('INVALID_REFRESH_TOKEN'),
+      );
 
-      await expect(service.logout('cookie-forjado')).resolves.toBeUndefined();
-
-      expect(userClient.auth.signOut).not.toHaveBeenCalled();
+      await expect(service.logout('forjado')).resolves.toBeUndefined();
+      expect(firebase.auth.revokeRefreshTokens).not.toHaveBeenCalled();
     });
 
-    it('caso 18: falha do Supabase no logout nao vira erro para o chamador', async () => {
-      userClient.auth.refreshSession.mockRejectedValue(new Error('rede caiu'));
-
-      await expect(service.logout('refresh-valido')).resolves.toBeUndefined();
-    });
-  });
-
-  describe('isolamento entre requisicoes', () => {
-    it('caso 19: cada operacao de usuario pede um cliente novo, nunca um compartilhado', async () => {
-      // O cliente do supabase-js guarda a sessao em memoria mesmo com
-      // persistSession: false, entao reaproveitar uma instancia entre
-      // requisicoes mistura a sessao de usuarios diferentes.
-      userClient.auth.signInWithPassword.mockResolvedValue({
-        data: {
-          session: {
-            access_token: 'access',
-            refresh_token: 'refresh',
-            expires_in: 3600,
-          },
-          user: { id: 'user-1', email: 'um@email.com' },
-        },
-        error: null,
+    it('caso 18: falha na revogacao nao vira erro para o chamador', async () => {
+      // O objetivo do logout e o estado final "deslogado". Uma falha de rede nao
+      // pode prender o usuario dentro da conta.
+      firebase.secureToken.mockResolvedValue({
+        id_token: 'x',
+        refresh_token: 'y',
+        expires_in: '3600',
+        user_id: 'uid-123',
       });
-      profileRepository.findById.mockResolvedValue({
-        found: true,
-        entry: { id: 'user-1', grade: 1, completedAt: null },
-      });
+      firebase.auth.revokeRefreshTokens.mockRejectedValue(
+        new Error('rede caiu'),
+      );
 
-      await service.login({ email: 'um@email.com', password: 'senha-1234' });
-      await service.login({ email: 'um@email.com', password: 'senha-1234' });
-
-      expect(supabaseService.createUserClient).toHaveBeenCalledTimes(2);
+      await expect(
+        service.logout('refresh-token-valido'),
+      ).resolves.toBeUndefined();
     });
   });
 });

@@ -1,3 +1,14 @@
+> **DEPRECATED em 2026-08-16 pela [spec 007](../007%20-%20Firestore%20e%20Firebase%20Auth/context.md).**
+>
+> A tabela `waitlist_entries` virou colecao do Firestore, com o e-mail normalizado como ID do
+> documento. O `id uuid` gerado pelo banco e o `unique` da coluna `email` deixaram de existir como
+> tais: a unicidade passou a ser a do caminho do documento, e o `id` do recibo agora e o e-mail.
+>
+> O desenho do endpoint, a normalizacao e o tratamento de duplicata continuam valendo. O que mudou
+> foi o armazenamento.
+
+---
+
 # Alteração de escopo (2026-08-13) — as migrations passam do TypeORM para o Supabase
 
 Durante o code review ficou claro que **nada aplicava as migrations automaticamente**. Elas viviam
