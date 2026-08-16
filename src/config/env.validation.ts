@@ -7,6 +7,7 @@ import {
   IsOptional,
   validateSync,
 } from 'class-validator';
+import { parseServiceAccount } from './service-account';
 
 class EnvironmentVariables {
   @IsNumber()
@@ -21,22 +22,6 @@ class EnvironmentVariables {
   @IsNotEmpty()
   FRONTEND_URL: string;
 
-  @IsString()
-  @IsNotEmpty()
-  DATABASE_URL: string;
-
-  // 'false' desliga a verificacao do certificado TLS do banco. Apenas para
-  // banco local ou descartavel; ver src/config/typeorm.config.ts.
-  @IsString()
-  @IsOptional()
-  DATABASE_SSL_REJECT_UNAUTHORIZED?: string;
-
-  // Caminho para o CA do Supabase (Settings > Database > SSL Configuration).
-  // Com ele preenchido a verificacao do certificado funciona de verdade.
-  @IsString()
-  @IsOptional()
-  DATABASE_SSL_CA_PATH?: string;
-
   // Quantidade de proxies na frente da API. Precisa bater com a topologia real,
   // senao o rate limit por IP pode ser furado com X-Forwarded-For forjado.
   @IsNumber()
@@ -49,28 +34,23 @@ class EnvironmentVariables {
   @IsOptional()
   SWAGGER_ENABLED?: string;
 
-  // Supabase Auth (spec 005)
+  // Firebase (spec 007)
+  //
+  // Chave de servico do projeto, o JSON inteiro em uma linha so. E credencial de
+  // administrador: quem a tem emite token de qualquer usuario e le qualquer
+  // documento do Firestore, ignorando as security rules. A validacao do formato
+  // fica em validateServiceAccount, abaixo.
   @IsString()
   @IsNotEmpty()
-  SUPABASE_URL: string;
+  FIREBASE_SERVICE_ACCOUNT_JSON: string;
 
+  // Chave publica do projeto, usada nas chamadas REST ao Identity Toolkit. NAO e
+  // segredo: ela vai no bundle de qualquer app Firebase web por desenho, e
+  // identifica o projeto sem autorizar nada sozinha. Esta aqui por conveniencia
+  // de configuracao, nao por sigilo.
   @IsString()
   @IsNotEmpty()
-  SUPABASE_ANON_KEY: string;
-
-  @IsString()
-  @IsNotEmpty()
-  SUPABASE_SERVICE_ROLE_KEY: string;
-
-  @IsString()
-  @IsOptional()
-  SUPABASE_JWT_SECRET?: string;
-
-  // Emissor esperado no JWT. Default: SUPABASE_URL + /auth/v1. Ver
-  // src/auth/guards/supabase-auth.guard.ts.
-  @IsString()
-  @IsOptional()
-  SUPABASE_JWT_ISSUER?: string;
+  FIREBASE_WEB_API_KEY: string;
 
   // Cookie de refresh token
   @IsIn(['true', 'false'])
@@ -113,6 +93,11 @@ export function validate(config: Record<string, unknown>) {
         'O navegador descarta cookie SameSite=None sem Secure, e a sessao nunca persiste.',
     );
   }
+
+  // Chave de servico malformada so apareceria como erro de PEM invalido dentro
+  // do firebase-admin, na primeira operacao de auth, em producao. Parsear no
+  // boot troca isso por uma mensagem que diz qual campo falta.
+  parseServiceAccount(validatedConfig.FIREBASE_SERVICE_ACCOUNT_JSON);
 
   return validatedConfig;
 }
