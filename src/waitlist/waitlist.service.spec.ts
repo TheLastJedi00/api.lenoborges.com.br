@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { WaitlistService } from './waitlist.service';
-import { WaitlistRepository } from './waitlist.repository';
+import { WaitlistRepository, ALREADY_EXISTS } from './waitlist.repository';
 import {
   BadRequestException,
   InternalServerErrorException,
@@ -148,7 +148,7 @@ describe('WaitlistService', () => {
     expect(repository.create).not.toHaveBeenCalled();
   });
 
-  it('should handle unique violation (23505) and return existing receipt', async () => {
+  it('should handle ALREADY_EXISTS and return existing receipt', async () => {
     repository.findByEmail
       .mockResolvedValueOnce({ found: false })
       .mockResolvedValueOnce({
@@ -159,7 +159,9 @@ describe('WaitlistService', () => {
         },
       });
 
-    repository.create.mockRejectedValue({ code: '23505' });
+    // Era o 23505 do Postgres; com o e-mail como ID do documento, o Firestore
+    // recusa a duplicata pelo mesmo motivo e na mesma janela de corrida.
+    repository.create.mockRejectedValue({ code: ALREADY_EXISTS });
 
     const result = await service.create({
       name: 'Test',
