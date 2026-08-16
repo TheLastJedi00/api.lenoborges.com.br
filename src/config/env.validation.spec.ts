@@ -8,10 +8,13 @@ import { validate } from './env.validation';
  */
 const baseEnv = {
   FRONTEND_URL: 'http://localhost:4200',
-  DATABASE_URL: 'postgresql://postgres:senha@localhost:5432/postgres',
-  SUPABASE_URL: 'https://test.supabase.co',
-  SUPABASE_ANON_KEY: 'anon-key',
-  SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
+  FIREBASE_SERVICE_ACCOUNT_JSON: JSON.stringify({
+    project_id: 'eduleno-test',
+    client_email: 'sa@eduleno-test.iam.gserviceaccount.com',
+    private_key:
+      '-----BEGIN PRIVATE KEY-----\\nMIIEv\\n-----END PRIVATE KEY-----\\n',
+  }),
+  FIREBASE_WEB_API_KEY: 'web-api-key',
 };
 
 describe('validate (env)', () => {
@@ -19,10 +22,31 @@ describe('validate (env)', () => {
     expect(() => validate({ ...baseEnv })).not.toThrow();
   });
 
-  it('falha quando falta uma variavel obrigatoria do Supabase', () => {
-    const { SUPABASE_ANON_KEY, ...semAnonKey } = baseEnv;
-    expect(SUPABASE_ANON_KEY).toBeDefined();
-    expect(() => validate(semAnonKey)).toThrow();
+  it('falha quando falta uma variavel obrigatoria do Firebase', () => {
+    const { FIREBASE_WEB_API_KEY, ...semWebApiKey } = baseEnv;
+    expect(FIREBASE_WEB_API_KEY).toBeDefined();
+    expect(() => validate(semWebApiKey)).toThrow();
+  });
+
+  it('falha no boot quando a chave de servico esta malformada', () => {
+    // O boot e o unico lugar onde isso ainda e barato. Sem esta checagem, o
+    // valor so quebraria na primeira operacao de auth, como PEM invalido dentro
+    // do firebase-admin, longe da causa.
+    expect(() =>
+      validate({ ...baseEnv, FIREBASE_SERVICE_ACCOUNT_JSON: '{ quebrado' }),
+    ).toThrow(/nao e um JSON valido/);
+  });
+
+  it('falha quando a chave de servico nao tem client_email', () => {
+    expect(() =>
+      validate({
+        ...baseEnv,
+        FIREBASE_SERVICE_ACCOUNT_JSON: JSON.stringify({
+          project_id: 'eduleno-test',
+          private_key: 'x',
+        }),
+      }),
+    ).toThrow(/client_email/);
   });
 
   it('aceita os tres valores validos de SameSite', () => {
