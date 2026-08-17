@@ -139,7 +139,7 @@ Consequência no contrato: o `id` do recibo de `POST /waitlist` é o e-mail, nã
 **ID do documento: o UID do Firebase.**
 
 - `name`, `phone`, `bio` (string ou null até o onboarding)
-- `grade` (number, 1 a 33, default 1)
+- `grade` (number, 0 a 13, default 0 — ver spec 008: 1 a 8 são insígnias, 9 a 12 a Elite Four, 13 o pós-game)
 - `completedAt` (Timestamp ou null)
 - `waitlistEntryId` (string ou null — é o e-mail normalizado, o caminho em `waitlist_entries`)
 - `createdAt`, `updatedAt` (Timestamp)
@@ -153,7 +153,7 @@ usuário" vira uma leitura direta, sem consulta e sem índice.
 |---|---|---|
 | E-mail único na waitlist | `unique` na coluna | ID do documento |
 | Perfil pertence a um usuário | FK + cascade | UID como ID do documento |
-| `grade` entre 1 e 33 | `check` constraint | Validação na aplicação |
+| `grade` entre 0 e 13 | `check` constraint | Validação na aplicação |
 | Campos obrigatórios | `not null` | `class-validator` no DTO e o converter |
 | Acesso direto bloqueado | RLS sem policy | `firestore.rules` com `deny all` |
 
