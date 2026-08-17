@@ -102,7 +102,7 @@ describe('AuthService', () => {
 
       expect(result).toEqual({ status: 'confirmation_sent' });
       expect(profileRepository.create).toHaveBeenCalledWith(
-        expect.objectContaining({ id: 'uid-123', grade: 1 }),
+        expect.objectContaining({ id: 'uid-123', grade: 0 }),
       );
       expect(firebase.identityToolkit).toHaveBeenCalledWith('sendOobCode', {
         requestType: 'PASSWORD_RESET',
@@ -293,7 +293,9 @@ describe('AuthService', () => {
         name: 'Fulano',
         phone: '11999998888',
         bio: null,
-        grade: 1,
+        // Nasce sem insignia desde a spec 008: o perfil herda nome e telefone da
+        // waitlist, mas conquista nenhuma.
+        grade: 0,
         completedAt: null,
         // O ID da inscricao e o e-mail normalizado: e o caminho do documento em
         // waitlist_entries desde a spec 007.

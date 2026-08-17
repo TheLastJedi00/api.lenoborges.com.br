@@ -43,8 +43,24 @@ interface ProfileDocument extends DocumentData {
 }
 
 /** Faixa que era `check` no Postgres e agora e responsabilidade da aplicacao. */
-export const GRADE_MIN = 1;
-export const GRADE_MAX = 33;
+/**
+ * Faixa de `grade`, redefinida pela spec 008 (Liga Dev).
+ *
+ * O numero conta **etapas concluidas**, nao a etapa em curso:
+ *
+ *   0       entrou, nenhuma insignia
+ *   1 a 8   insignias conquistadas
+ *   9       venceu as Oitavas da Elite Four
+ *   10      venceu as Quartas
+ *   11      venceu as Semifinais
+ *   12      CAMPEAO, venceu a Final
+ *   13      Battle Frontier (pos-game)
+ *
+ * `grade: 12` e campeao, e nao "chegou na final". Quem traduz numero em texto
+ * e o front, em `core/progress`.
+ */
+export const GRADE_MIN = 0;
+export const GRADE_MAX = 13;
 
 export const profileConverter: FirestoreDataConverter<Profile> = {
   toFirestore(profile: Profile): ProfileDocument {

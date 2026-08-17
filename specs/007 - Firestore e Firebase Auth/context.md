@@ -260,7 +260,7 @@ a aplicação. Estão listadas para ninguém descobrir a ausência por acidente.
 |---|---|---|
 | E-mail único na waitlist | `unique` na coluna | ID do documento (decisão 6) |
 | Perfil pertence a um usuário | FK para `auth.users` + cascade | ID do documento é o UID (decisão 5) |
-| `grade` entre 1 e 33 | `check` constraint | Validação na aplicação e nas security rules |
+| `grade` entre 1 e 33 | `check` constraint | Validação na aplicação e nas security rules **(faixa redefinida para 0 a 13 pela spec 008)** |
 | `consent` booleano, `name` não nulo | tipos e `not null` | `class-validator` no DTO e o converter |
 | Acesso direto bloqueado | RLS ligada sem policy | Security rules `deny all` (decisão 8) |
 | Fuso do `created_at` | `timestamptz` | `Timestamp` do Firestore, que é UTC por construção |
@@ -352,7 +352,7 @@ profiles/{uid-do-firebase}
   name: string | null
   phone: string | null
   bio: string | null
-  grade: number          // 1..33, validado na aplicacao
+  grade: number          // 0..13 desde a spec 008, validado na aplicacao
   completedAt: Timestamp | null
   waitlistEntryId: string | null   // o e-mail normalizado, ou null
   createdAt: Timestamp
