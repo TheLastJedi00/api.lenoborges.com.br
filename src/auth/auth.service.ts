@@ -1,5 +1,6 @@
 import {
   Injectable,
+  Logger,
   BadRequestException,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -31,8 +32,30 @@ interface RefreshResponse {
   user_id: string;
 }
 
+/** Codigo do Admin SDK para e-mail que ja tem conta. E o unico erro esperado no cadastro. */
+const EMAIL_ALREADY_EXISTS = 'auth/email-already-exists';
+
+function isExpected(error: unknown, code: string): boolean {
+  return (
+    !!error &&
+    typeof error === 'object' &&
+    'code' in error &&
+    error.code === code
+  );
+}
+
+/** Mensagem legivel para log, sem despejar objeto de erro inteiro. */
+function describe(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return typeof error === 'string' ? error : JSON.stringify(error);
+}
+
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   /**
    * Para onde a tela de senha do Firebase devolve o usuario.
    *
@@ -85,10 +108,20 @@ export class AuthService {
       });
 
       await this.createProfileFor(user.uid, normalizedEmail);
-    } catch {
+    } catch (error) {
       // E-mail ja cadastrado cai aqui e segue adiante de proposito: responder
       // diferente para e-mail conhecido transformaria o cadastro em oraculo de
       // enumeracao. Quem ja tem conta recebe outro link de definir senha.
+      //
+      // Qualquer outro erro tambem e engolido -- a resposta precisa ser
+      // identica -- mas vai para o log. Engolir em silencio absoluto foi o que
+      // escondeu o UNAUTHORIZED_DOMAIN por um deploy inteiro: o cadastro
+      // respondia 202 e ninguem recebia nada. Ver fix.md, Fix 2.
+      if (!isExpected(error, EMAIL_ALREADY_EXISTS)) {
+        this.logger.error(
+          `Falha ao criar usuario no signup: ${describe(error)}`,
+        );
+      }
     }
 
     try {
@@ -97,9 +130,18 @@ export class AuthService {
         email: normalizedEmail,
         continueUrl: this.continueUrl,
       });
-    } catch {
+    } catch (error) {
       // Mesmo motivo: falha de envio nao pode virar sinal sobre a existencia da
-      // conta. O usuario pede outro link se nao receber.
+      // conta. Mas aqui nao ha erro esperado nenhum -- se esta chamada falha, o
+      // membro simplesmente nao recebe o link, e isso e sempre defeito.
+      //
+      // UNAUTHORIZED_DOMAIN e o suspeito numero um: o dominio do continueUrl
+      // precisa estar em Authentication > Settings > Authorized domains, e
+      // localhost ja vem autorizado de fabrica -- o que faz o problema existir
+      // so em producao.
+      this.logger.error(
+        `Falha ao enviar o e-mail de definir senha (continueUrl=${this.continueUrl}): ${describe(error)}`,
+      );
     }
 
     return { status: 'confirmation_sent' };

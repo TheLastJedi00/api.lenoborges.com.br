@@ -1,5 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { BadRequestException, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Logger,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AuthService } from './auth.service';
 import { FirebaseService } from './firebase.service';
@@ -180,6 +184,60 @@ describe('AuthService', () => {
           emailConfirmation: 'novo@test.com',
         }),
       ).resolves.toEqual({ status: 'confirmation_sent' });
+    });
+
+    it('caso 2c: falha no envio vai para o log, mesmo sem mudar a resposta', async () => {
+      // O silencio absoluto escondeu um UNAUTHORIZED_DOMAIN por um deploy
+      // inteiro: o cadastro respondia 202 e o e-mail nunca chegava. A resposta
+      // continua identica, por anti-enumeracao; o operador e que passa a ter
+      // como saber. Ver fix.md, Fix 2.
+      const logSpy = jest
+        .spyOn(Logger.prototype, 'error')
+        .mockImplementation(() => undefined);
+
+      firebase.auth.createUser.mockResolvedValue({ uid: 'uid-123' });
+      waitlistRepository.findByEmail.mockResolvedValue({ found: false });
+      profileRepository.create.mockResolvedValue({ entry: profileVazio });
+      firebase.identityToolkit.mockRejectedValue(
+        new Error('UNAUTHORIZED_DOMAIN : Domain not allowlisted by project'),
+      );
+
+      await service.signup({
+        email: 'novo@test.com',
+        emailConfirmation: 'novo@test.com',
+      });
+
+      expect(logSpy).toHaveBeenCalledWith(
+        expect.stringContaining('UNAUTHORIZED_DOMAIN'),
+      );
+      // O continueUrl entra na mensagem: sem ele, o log diz que falhou mas nao
+      // qual dominio precisa ser autorizado.
+      expect(logSpy).toHaveBeenCalledWith(
+        expect.stringContaining('localhost:4200'),
+      );
+
+      logSpy.mockRestore();
+    });
+
+    it('caso 2d: e-mail ja cadastrado nao polui o log, porque e esperado', async () => {
+      const logSpy = jest
+        .spyOn(Logger.prototype, 'error')
+        .mockImplementation(() => undefined);
+
+      firebase.auth.createUser.mockRejectedValue(
+        Object.assign(new Error('exists'), {
+          code: 'auth/email-already-exists',
+        }),
+      );
+      firebase.identityToolkit.mockResolvedValue({});
+
+      await service.signup({
+        email: 'existente@test.com',
+        emailConfirmation: 'existente@test.com',
+      });
+
+      expect(logSpy).not.toHaveBeenCalled();
+      logSpy.mockRestore();
     });
 
     it('caso 3: e-mails divergentes lancam BadRequestException', async () => {
