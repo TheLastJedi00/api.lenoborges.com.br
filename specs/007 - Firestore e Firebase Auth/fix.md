@@ -200,10 +200,99 @@ sendo requerido por CommonJS na árvore**. A prova real é o próximo deploy sub
 
 ---
 
-## O que este fix deixa registrado
+## O que este fix deixa registrado (Fix 1)
 
 A spec 006 terminou com a lição de que "o valor certo chegou" não prova "o pipeline escreveu o valor".
 Esta acrescenta a irmã dela: **"o código roda aqui" não prova "o código roda lá"**, quando o "aqui"
 tem uma capacidade que o "lá" não tem. O `require(esm)` do Node 24 local escondeu, do teste unitário
 ao teste de navegador, uma incompatibilidade que já estava documentada no repositório — num comentário
 que eu apaguei por achar que descrevia um problema resolvido.
+
+---
+---
+
+# Fix 2: o cadastro responde 202 e o e-mail nunca chega
+
+Aberto em 2026-08-17, depois de a function voltar a subir com o Fix 1.
+
+## Sintoma
+
+O front mostra "Verifique sua caixa de entrada". A API responde `202 { status: "confirmation_sent" }`.
+O usuário é criado no Firebase Auth e o perfil aparece no Firestore. **O e-mail não chega nunca.**
+
+Nenhum erro, em lugar nenhum: nem no front, nem na resposta, nem no log.
+
+## A causa
+
+O domínio do `continueUrl` não está na allow-list do projeto Firebase. Medido chamando a REST direto,
+com o mesmo `FIREBASE_WEB_API_KEY` que a API usa:
+
+| `continueUrl` enviado | Resposta do `accounts:sendOobCode` |
+|---|---|
+| `http://localhost:4200/?entrar=1` | **200** |
+| `https://edu.lenoborges.com.br/?entrar=1` | **400** `UNAUTHORIZED_DOMAIN : Domain not allowlisted by project` |
+| nenhum | **200** |
+
+O Firebase exige que o domínio de `continueUrl` esteja em **Authentication > Settings > Authorized
+domains**. De fábrica a lista traz `localhost`, `<projeto>.firebaseapp.com` e `<projeto>.web.app` — e
+mais nada. O domínio de produção precisa ser adicionado à mão.
+
+Note a linha do meio contra a de baixo: **o `continueUrl` não é opcional para o envio funcionar, ele é
+o que quebra o envio.** Sem ele o e-mail sai; com ele, e com o domínio não autorizado, o envio inteiro
+é recusado. Uma decisão tomada para melhorar o fim do fluxo (decisão 3, o botão de retorno) matou o
+começo dele.
+
+## Por que ninguém viu
+
+Duas coisas se somaram, e a segunda é nossa:
+
+1. **`localhost` já vem autorizado.** Todo o desenvolvimento e o teste de navegador de 2026-08-16
+   rodaram com `FRONTEND_URL=http://localhost:4200`, ou seja, no único valor que a lista de fábrica
+   aceita. O problema só podia existir em produção.
+2. **O `signup` engolia o erro em silêncio absoluto.** O `catch` vazio existe por uma razão boa e
+   documentada — responder diferente para e-mail conhecido transformaria o cadastro em oráculo de
+   enumeração. Mas ele engolia *tudo*, e não só o esperado: a resposta é idêntica para "e-mail já
+   existe" e para "o Firebase recusou enviar".
+
+O ponto 1 é a repetição, de novo, da lição do Fix 1: **o ambiente onde tudo funciona é o ambiente que
+não faz a pergunta.** Duas falhas seguidas, a mesma forma — `require(esm)` que o Node local aceita, e
+`localhost` que o Firebase autoriza de graça.
+
+O ponto 2 é o defeito de verdade, e o mais caro: **um erro de configuração ficou indistinguível de um
+sucesso.** Anti-enumeração é sobre o que o *cliente* vê, não sobre o que o operador consegue saber.
+
+## O conserto
+
+**Duas partes, e as duas são necessárias.**
+
+### 1. Configuração (usuário)
+Adicionar `edu.lenoborges.com.br` em Authentication > Settings > Authorized domains, no projeto
+Firebase que **produção** usa. Sem isso, nada no código resolve: o Google recusa o envio.
+
+### 2. Código: separar "não contar ao cliente" de "não contar a ninguém"
+`AuthService.signup` passa a registrar no log o que continua engolindo. A resposta HTTP não muda em
+nada — 202 para todo mundo, sempre.
+
+- **`createUser`:** `auth/email-already-exists` é o único erro esperado e segue silencioso, para não
+  poluir o log com o caminho normal de quem já tem conta. Qualquer outro vira `logger.error`.
+- **`sendOobCode`:** não existe erro esperado. Se essa chamada falha, o membro não recebe o link, e
+  isso é sempre defeito. Sempre logado, **com o `continueUrl` na mensagem** — sem ele o log diria que
+  falhou, mas não qual domínio precisa ser autorizado.
+
+Coberto por dois testes novos (`caso 2c` e `caso 2d`): que a falha de envio vai para o log com o
+domínio junto, e que e-mail já cadastrado *não* polui o log. 99 testes verdes.
+
+## O que não fazer
+
+**Não tirar o `continueUrl` para "fazer o e-mail voltar".** Funcionaria, e devolveria o problema que a
+decisão 3 resolveu: o usuário define a senha na tela do Google e fica sem caminho de volta. O
+`continueUrl` é o fim do fluxo, não um enfeite.
+
+**Não transformar a falha de envio em erro HTTP.** A resposta uniforme é o que impede o cadastro de
+virar oráculo de enumeração. O canal certo para essa informação é o log, e agora ele existe.
+
+## O que este fix deixa registrado (Fix 2)
+
+Um `catch` vazio é uma decisão de produto disfarçada de detalhe técnico. O comentário dizia *por que*
+não contar ao cliente, e estava certo — mas ninguém tinha perguntado a quem, então, contar. Silêncio
+para o cliente é anti-enumeração; silêncio para todo mundo é um bug esperando ficar caro.
