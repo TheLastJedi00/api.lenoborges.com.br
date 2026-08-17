@@ -285,7 +285,9 @@ export class AuthService {
       name: waitlistEntry ? waitlistEntry.name : null,
       phone: waitlistEntry ? waitlistEntry.phone : null,
       bio: null,
-      grade: 1,
+      // Nasce sem insignia. Antes era 1, quando o primeiro grau significava
+      // "estar aqui"; com insignias, nascer com uma seria dar conquista de graca.
+      grade: 0,
       completedAt: null,
       // O ID da inscricao e o e-mail normalizado, que e o caminho do documento
       // em waitlist_entries. Ver a decisao 6 da spec 007.

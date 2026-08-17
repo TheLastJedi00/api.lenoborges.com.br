@@ -10,7 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - **Document IDs carry meaning.** `waitlist_entries/{normalized-email}` is how email uniqueness is enforced — Firestore has no `UNIQUE` constraint, and the document path is the only place it guarantees uniqueness. `profiles/{firebase-uid}` replaces the old FK to `auth.users`. Never switch these to auto-IDs plus a query.
 - **`create()`, never `set()`** in the repositories: `set()` overwrites silently, and it is the `ALREADY_EXISTS` from `create()` that stands in for the Postgres `23505` unique violation.
-- Value ranges (`grade` 1–33) and required fields are validated in the application; `firestore.rules` denies everything, since only the Admin SDK — which bypasses rules — touches the data.
+- Value ranges (`grade` 0–13; see spec 008 — 1-8 are badges, 9-12 the Elite Four, 13 post-game) and required fields are validated in the application; `firestore.rules` denies everything, since only the Admin SDK — which bypasses rules — touches the data.
 
 Login goes through the Identity Toolkit REST API from the server, not the Admin SDK, because the Admin SDK cannot verify passwords. **Password definition happens outside this API entirely**, on Firebase's hosted screen; there is no `POST /auth/password` and the `oobCode` never reaches this code.
 
