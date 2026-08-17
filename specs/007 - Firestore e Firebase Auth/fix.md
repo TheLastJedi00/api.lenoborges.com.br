@@ -162,6 +162,44 @@ esta falha — devDependency não vai para a function — mas é sobra da Fase 0
 
 ---
 
+## Aplicação (2026-08-16)
+
+**Caminho 1 executado**, sem passar pelo caminho 4. A tabela de versões já dizia onde a quebra
+entrava, e testar `engines.node` custaria um deploy para investigar uma hipótese que o próprio stack
+contradiz — quem recusa é o bootstrap da Vercel, não o Node.
+
+`firebase-admin` 14.2.0 → **13.10.0**. A árvore depois:
+
+```
+firebase-admin@13.10.0
+└─ jwks-rsa@3.2.2
+   └─ jose@4.15.9    ("type": "commonjs", main: ./dist/node/cjs/index.js)
+```
+
+**Não sobrou nenhum ESM na cadeia.** O `node_modules/jose` de topo, que era o `jose@6`, desapareceu
+junto com o pacote `supabase` das devDependencies (a sobra da Fase 06, removida no mesmo commit). O
+que resta é o `jose@4` aninhado sob o `jwks-rsa`, com entrada CommonJS de verdade.
+
+Conferido localmente:
+
+| Verificação | Resultado |
+|---|---|
+| APIs usadas presentes na 13.x | `initializeApp`, `getApps`, `getApp`, `cert`, `getAuth`, `initializeFirestore`, `getFirestore`, `Timestamp` — todas |
+| `tsc --noEmit` | limpo |
+| 97 testes, 16 suítes | verdes |
+| `nest build` e lint | limpos |
+| Boot real + `POST /auth/login` + `GET /me` | 200, com `verifyIdToken` no guard |
+
+**O que essa lista prova, e o que não prova.** Prova que a 13.10.0 não perdeu nenhuma API desta spec e
+que o fluxo continua funcionando. **Não prova que o deploy sobe** — nenhum teste local poderia, porque
+o Node local aceita `require()` de ESM e por isso nunca faz a pergunta que a Vercel faz. Foi
+exatamente essa ilusão que deixou o bug passar na primeira vez.
+
+O que sustenta o conserto não é o teste local: é o fato estrutural de que **não existe mais módulo ESM
+sendo requerido por CommonJS na árvore**. A prova real é o próximo deploy subir.
+
+---
+
 ## O que este fix deixa registrado
 
 A spec 006 terminou com a lição de que "o valor certo chegou" não prova "o pipeline escreveu o valor".
