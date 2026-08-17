@@ -330,6 +330,12 @@ Some junto o `jose` carregado por `import()` dinâmico — a gambiarra de `fix/d
 existia porque o `jose` 6 é ESM puro e o runtime da Vercel não aceitava `require()` de ESM. O
 `firebase-admin` é CommonJS e não precisa disso.
 
+> **Correção, 2026-08-16.** A última frase está errada, e derrubou a function no primeiro deploy. O
+> `firebase-admin` é CommonJS **e mesmo assim arrasta o `jose`**, por `jwks-rsa@4`, que declara
+> `jose: ^6.1.3` e é carregado ansiosamente em `firebase-admin/lib/utils/jwt.js`. Nosso `import()`
+> dinâmico saiu corretamente; o problema de plataforma que ele contornava não saiu — só mudou de dono
+> para uma dependência que não dá para instrumentar. Ver [`fix.md`](fix.md).
+
 ---
 
 ## Modelo de dados depois desta spec
