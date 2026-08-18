@@ -14,6 +14,7 @@ describe('ProfileController', () => {
   const mockUser: CurrentUserData = {
     id: 'user-123',
     email: 'user@email.com',
+    role: null,
   };
 
   beforeEach(async () => {

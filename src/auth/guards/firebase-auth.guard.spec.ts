@@ -36,7 +36,11 @@ describe('FirebaseAuthGuard', () => {
     const { context, request } = contextWith('Bearer token-valido');
 
     await expect(guard.canActivate(context)).resolves.toBe(true);
-    expect(request.user).toEqual({ id: 'uid-123', email: 'membro@test.com' });
+    expect(request.user).toEqual({
+      id: 'uid-123',
+      email: 'membro@test.com',
+      role: null,
+    });
   });
 
   it('recusa quando nao ha header Authorization', async () => {
@@ -109,6 +113,36 @@ describe('FirebaseAuthGuard', () => {
 
     await guard.canActivate(context);
 
-    expect(request.user).toEqual({ id: 'uid-123', email: '' });
+    expect(request.user).toEqual({ id: 'uid-123', email: '', role: null });
+  });
+
+  // A claim viaja dentro do proprio token verificado. Se ela parasse aqui, o
+  // AdminGuard teria que verificar o token de novo so para descobrir o papel.
+  it('propaga a custom claim role para request.user', async () => {
+    verifyIdToken.mockResolvedValue({
+      uid: 'uid-123',
+      email: 'admin@test.com',
+      role: 'admin',
+    });
+    const { context, request } = contextWith('Bearer token-de-admin');
+
+    await guard.canActivate(context);
+
+    expect(request.user?.role).toBe('admin');
+  });
+
+  // Claim desconhecida nao pode virar papel. O guard e a fronteira: qualquer
+  // valor que nao seja exatamente 'admin' significa membro comum.
+  it('ignora um valor de role que nao seja admin', async () => {
+    verifyIdToken.mockResolvedValue({
+      uid: 'uid-123',
+      email: 'membro@test.com',
+      role: 'moderador',
+    });
+    const { context, request } = contextWith('Bearer token-com-role-estranho');
+
+    await guard.canActivate(context);
+
+    expect(request.user?.role).toBeNull();
   });
 });

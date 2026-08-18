@@ -58,9 +58,13 @@ export class FirebaseAuthGuard implements CanActivate {
         CHECK_REVOKED,
       );
 
+      // A custom claim `role` chega dentro do proprio payload verificado, entao
+      // copia-la aqui e o que torna o AdminGuard barato: ele le request.user e
+      // nao volta ao Firebase nem ao Firestore. Ver a decisao 5 da spec 009.
       request.user = {
         id: payload.uid,
         email: typeof payload.email === 'string' ? payload.email : '',
+        role: payload.role === 'admin' ? 'admin' : null,
       };
 
       return true;
