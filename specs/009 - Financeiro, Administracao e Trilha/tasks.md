@@ -1,22 +1,22 @@
-# Fase 01: Admin como claim []
+# Fase 01: Admin como claim [x] — código pronto; a Task 05 é sua, no terminal
 Branch: `feat/009-admin-claim`
 
 Nenhuma rota nova. Ao fim desta fase existe um admin de verdade, com um guard capaz de reconhecê-lo, e
 nada ainda protegido por ele.
 
-- [] Task 01: Propagar `role` no guard de autenticação. Arquivo:
+- [x] Task 01: Propagar `role` no guard de autenticação. Arquivo:
   `src/auth/guards/firebase-auth.guard.ts`, `src/auth/decorators/current-user.decorator.ts`. Objetivo:
   `verifyIdToken` já devolve as custom claims no payload; copiar `payload.role` para `request.user`
   junto de `id` e `email`. `AuthenticatedUser` ganha `role: 'admin' | null`. Sem isso o `AdminGuard`
   precisaria verificar o token uma segunda vez, pagando a mesma conta duas vezes por requisição.
-- [] Task 02 (TDD): Escrever a spec do `AdminGuard`. Arquivo: `src/auth/guards/admin.guard.spec.ts`.
+- [x] Task 02 (TDD): Escrever a spec do `AdminGuard`. Arquivo: `src/auth/guards/admin.guard.spec.ts`.
   Objetivo: cobrir os três casos — `role: 'admin'` passa; `role` nulo devolve 403 (e não 401, porque a
   pessoa está autenticada, só não é admin); `request.user` ausente devolve 403 também, que é o caso de
   alguém pendurar o guard sem o `FirebaseAuthGuard` antes.
-- [] Task 03: Implementar o `AdminGuard`. Arquivo: `src/auth/guards/admin.guard.ts`. Objetivo: ler
+- [x] Task 03: Implementar o `AdminGuard`. Arquivo: `src/auth/guards/admin.guard.ts`. Objetivo: ler
   `request.user.role` e nada mais — nenhuma ida ao Firestore, nenhuma ida ao Auth. É o pagamento da
   decisão 5: a claim viaja no token justamente para o guard ser barato.
-- [] Task 04: Escrever o script de promoção. Arquivos: `scripts/grant-admin.ts`, `package.json`.
+- [x] Task 04: Escrever o script de promoção. Arquivos: `scripts/grant-admin.ts`, `package.json`.
   Objetivo: `npm run admin:grant -- email@dominio.com` acha o usuário por e-mail e chama
   `setCustomUserClaims(uid, { role: 'admin' })`, preservando claims que já existam. **A mensagem de
   sucesso precisa dizer que a claim só vale no próximo token, em até uma hora** — sem isso o próximo
@@ -24,7 +24,7 @@ nada ainda protegido por ele.
 - [] Task 05 (usuário): Rodar `npm run admin:grant -- lenoborges.dev@gmail.com` no projeto de
   desenvolvimento e no de produção. Depois de rodar, sair e entrar de novo na plataforma para o token
   novo trazer a claim — ela não aparece na sessão que já estava aberta.
-- [] Task 06: Expor `role` na sessão e no perfil. Arquivos: `src/auth/dto/session.dto.ts`,
+- [x] Task 06: Expor `role` na sessão e no perfil. Arquivos: `src/auth/dto/session.dto.ts`,
   `src/profile/dto/profile.dto.ts`, `src/auth/auth.service.ts`, `src/profile/profile.service.ts`, mais
   as specs correspondentes. Objetivo: o front decide se desenha o botão "Administração" sem decodificar
   o ID token por conta própria. Achatado, como `grade` e `profileCompleted` já são. Aproveitar e
