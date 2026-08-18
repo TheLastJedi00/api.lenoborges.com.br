@@ -1,6 +1,8 @@
-import { IsInt, IsOptional, Max, Min } from 'class-validator';
+import { IsIn, IsInt, IsOptional, Max, Min } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { GRADE_MAX, GRADE_MIN } from '../../profile/entities/profile.entity';
+import { TIER_IDS } from '../../billing/billing.tiers';
+import type { TierId } from '../../billing/billing.tiers';
 
 /**
  * O que o admin pode mudar num usuário: `grade`, e só.
@@ -24,4 +26,17 @@ export class UpdateUserDto {
   @Min(GRADE_MIN)
   @Max(GRADE_MAX)
   grade?: number;
+
+  @ApiProperty({
+    required: false,
+    example: 'great-dev-tier',
+    enum: TIER_IDS,
+    description:
+      'Tier de acesso. Editável à mão porque o pagamento é manual hoje: sem ' +
+      'checkout, o direito de acesso também é concedido à mão. **Independente ' +
+      'de `grade`** — um não se deriva do outro, em nenhuma direção',
+  })
+  @IsOptional()
+  @IsIn(TIER_IDS)
+  tier?: TierId;
 }

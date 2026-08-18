@@ -47,13 +47,24 @@ export class AdminUsersService {
   }
 
   async updateUser(userId: string, dto: UpdateUserDto): Promise<void> {
-    if (dto.grade === undefined) {
+    // O patch é montado campo a campo justamente para nunca escrever um ao
+    // mexer no outro. `tier` é acesso e `grade` é conquista: são independentes,
+    // e a spec 008 inteira depende de os dois não se contaminarem.
+    const patch: { grade?: number; tier?: UpdateUserDto['tier'] } = {};
+    if (dto.grade !== undefined) {
+      patch.grade = dto.grade;
+    }
+    if (dto.tier !== undefined) {
+      patch.tier = dto.tier;
+    }
+
+    if (Object.keys(patch).length === 0) {
       // PATCH sem campo nenhum não é erro: é um pedido que não pediu nada.
       return;
     }
 
     try {
-      await this.profileRepository.update(userId, { grade: dto.grade });
+      await this.profileRepository.update(userId, patch);
     } catch {
       // O repository levanta erro cru quando o documento não existe. Para o
       // admin isso é "esse usuário não tem perfil ainda", não uma falha de

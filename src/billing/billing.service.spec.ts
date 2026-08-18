@@ -7,6 +7,7 @@ const perfil: Profile = {
   phone: '47999990000',
   bio: 'bio',
   grade: 0,
+  tier: 'dev-tier',
   completedAt: new Date(),
   waitlistEntryId: null,
   createdAt: new Date(),
@@ -53,15 +54,20 @@ describe('BillingService', () => {
    * assinatura sem ler a decisao 4 da spec 009. Enquanto nao existe cobranca,
    * todo mundo e Dev Tier, e a resposta sai de um lugar so.
    */
-  it('resolve todo perfil como dev-tier enquanto nao existe cobranca', () => {
+  it('le o tier do proprio perfil', () => {
     expect(service.resolveCurrentTier(perfil)).toBe('dev-tier');
-    expect(service.resolveCurrentTier({ ...perfil, grade: 13 })).toBe(
-      'dev-tier',
-    );
+    expect(
+      service.resolveCurrentTier({ ...perfil, tier: 'master-dev-tier' }),
+    ).toBe('master-dev-tier');
   });
 
   // O portao e o tier, nunca o grade. Se um dia o resolveCurrentTier passar a
   // olhar o progresso, este teste e o que denuncia.
+  /**
+   * O portao e o tier, nunca o grade. Se um dia o resolveCurrentTier passar a
+   * olhar o progresso, este teste e o que denuncia -- e a decisao 5d da spec 008
+   * e o motivo de ele existir.
+   */
   it('nao deriva o tier a partir do grade', () => {
     const iniciante = service.resolveCurrentTier({ ...perfil, grade: 0 });
     const campeao = service.resolveCurrentTier({ ...perfil, grade: 12 });

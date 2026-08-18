@@ -44,6 +44,7 @@ describe('AuthService', () => {
     phone: null,
     bio: null,
     grade: 1,
+    tier: 'dev-tier' as const,
     completedAt: null,
     waitlistEntryId: null,
     createdAt: new Date('2026-08-16T12:00:00.000Z'),
@@ -355,6 +356,7 @@ describe('AuthService', () => {
         profileCompleted: true,
         grade: 5,
         role: null,
+        tier: 'dev-tier',
       });
       expect(typeof result.session.expiresIn).toBe('number');
     });

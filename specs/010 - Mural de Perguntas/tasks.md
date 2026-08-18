@@ -18,28 +18,28 @@ de que todo o resto depende.
   estado, e ela existir sozinha é o que impede três controllers de reimplementarem a comparação com
   sinais trocados.
 
-# Fase 02: Tier no perfil []
+# Fase 02: Tier no perfil [x]
 Branch: `feat/010-tier-no-perfil`
 
 O portão da Fase 04 precisa saber quem paga. Esta fase é o que torna a pergunta respondível.
 
-- [] Task 01: Acrescentar `tier` à entidade. Arquivo: `src/profile/entities/profile.entity.ts`.
+- [x] Task 01: Acrescentar `tier` à entidade. Arquivo: `src/profile/entities/profile.entity.ts`.
   Objetivo: `tier: TierId`, com `TIER_IDS` e default `'dev-tier'`. **O converter lê documento antigo com
   `?? 'dev-tier'`** — é o mesmo cuidado do `completedAt ?? null`, e sem ele todo perfil existente vira
   `undefined` e derruba a comparação de tier em silêncio. O comentário registra o guardrail: `tier` é
   acesso, `grade` é conquista, e nenhum dos dois se deriva do outro.
-- [] Task 02: Dar corpo ao `resolveCurrentTier`. Arquivo: `src/billing/billing.service.ts`. Objetivo: a
+- [x] Task 02: Dar corpo ao `resolveCurrentTier`. Arquivo: `src/billing/billing.service.ts`. Objetivo: a
   função que a spec 009 criou com `TODO` passa a devolver `profile.tier`. Continua sendo o **único**
   lugar que responde "qual é o tier desta pessoa" — é ela que um gateway substitui por dentro.
-- [] Task 03: Expor `tier` na sessão e no perfil. Arquivos: `src/auth/dto/session.dto.ts`,
+- [x] Task 03: Expor `tier` na sessão e no perfil. Arquivos: `src/auth/dto/session.dto.ts`,
   `src/profile/dto/profile.dto.ts`, mais os services e specs. Objetivo: o front decide se habilita o
   campo de pergunta sem uma segunda ida à rede, como já faz com `role` e `grade`.
-- [] Task 04 (TDD + implementação): Admin edita `tier`. Arquivos:
+- [x] Task 04 (TDD + implementação): Admin edita `tier`. Arquivos:
   `src/admin/dto/update-user-grade.dto.ts` (renomear para `update-user.dto.ts`),
   `src/admin/admin-users.service.ts` + spec. Objetivo: `PATCH /admin/users/:id` passa a aceitar `tier`
   além de `grade`, os dois opcionais e independentes. **O teste que importa é o que prova que mexer em
   `tier` não toca `grade`** — a spec 008 inteira depende de os dois nunca se contaminarem.
-- [] Task 05: Atualizar a e2e da 009. Arquivo: `test/admin.e2e-spec.ts`. Objetivo: promover um usuário a
+- [x] Task 05: Atualizar a e2e da 009. Arquivo: `test/admin.e2e-spec.ts`. Objetivo: promover um usuário a
   `great-dev-tier` pela API e conferir que o `GET /me` dele reflete na hora — `tier` não é claim, e não
   espera token novo (decisão 6).
 
