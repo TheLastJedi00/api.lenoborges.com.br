@@ -31,7 +31,7 @@ nada ainda protegido por ele.
   corrigir a descrição do Swagger de `grade`, que ainda diz "1 a 33" e "Seita Dev" em três lugares.
 
 # Fase 02: Catálogo financeiro []
-Branch: `feat/009-billing`
+# Fase 02: Catálogo financeiro [x]
 
 - [x] Task 01: Escrever a constante dos tiers. Arquivo: `src/billing/billing.tiers.ts`. Objetivo: os
   quatro tiers da decisão 2, com `id`, `name`, `price` (em centavos, inteiro), `priceLabel`,
@@ -57,49 +57,49 @@ Branch: `feat/009-billing`
   desenvolvimento".
 
 # Fase 03: Vídeos da trilha []
-Branch: `feat/009-badge-videos`
+# Fase 03: Vídeos da trilha [x]
 
-- [] Task 01: Escrever as constantes da trilha. Arquivo: `src/track/track.constants.ts`. Objetivo:
+- [x] Task 01: Escrever as constantes da trilha. Arquivo: `src/track/track.constants.ts`. Objetivo:
   `BADGE_IDS` com as treze etapas na ordem da spec 008, e o guarda de tipo `isBadgeId`. A
   lista é a mesma do `trackStages` do front, e a duplicação é declarada no comentário: são dois
   repositórios, e a alternativa (um endpoint de trilha) trocaria uma duplicação de treze strings
   estáveis por uma requisição em toda abertura de tela.
-- [] Task 02: Escrever a entidade e o converter. Arquivo: `src/track/entities/badge-video.entity.ts`.
+- [x] Task 02: Escrever a entidade e o converter. Arquivo: `src/track/entities/badge-video.entity.ts`.
   Objetivo: tipo `BadgeVideo` mais `FirestoreDataConverter`, nos moldes de `profile.entity.ts`.
   `Timestamp` vira `Date` aqui, num lugar só. O comentário registra que o ID do documento é
   `{badgeId}__{youtubeId}` e o que isso garante (decisão 6).
-- [] Task 03 (TDD): Escrever a spec da extração de `youtubeId`. Arquivo:
+- [x] Task 03 (TDD): Escrever a spec da extração de `youtubeId`. Arquivo:
   `src/track/youtube-id.spec.ts`. Objetivo: cobrir as cinco formas — `watch?v=`, `youtu.be/`,
   `/embed/`, com `&t=`, com `?si=` —, o ID cru já normalizado, e a rejeição do que não casa. É a função
   mais fácil de reimplementar errado em outro lugar, então ela nasce com teste e com dono.
-- [] Task 04: Implementar a extração. Arquivo: `src/track/youtube-id.ts`. Objetivo: `extractYoutubeId`
+- [x] Task 04: Implementar a extração. Arquivo: `src/track/youtube-id.ts`. Objetivo: `extractYoutubeId`
   devolve `{ found, id }`, na convenção de retorno da casa.
-- [] Task 05 (TDD): Escrever a spec do `BadgeVideoRepository`. Arquivo:
+- [x] Task 05 (TDD): Escrever a spec do `BadgeVideoRepository`. Arquivo:
   `src/track/badge-video.repository.spec.ts`. Objetivo: `listByBadge` ordena por `order` no servidor;
   `create` usa `create()` e não `set()`, para o `ALREADY_EXISTS` valer como a unicidade que o caminho
   promete; `reorder` escreve num `WriteBatch` único. O contrato `{ found, entry }` continua.
-- [] Task 06: Implementar o `BadgeVideoRepository`. Arquivo: `src/track/badge-video.repository.ts`.
+- [x] Task 06: Implementar o `BadgeVideoRepository`. Arquivo: `src/track/badge-video.repository.ts`.
   Objetivo: coleção `badge_videos`, ID de documento composto, `orderBy('order')`. `reorder` recebe a
   lista de ids já validada e grava as posições 0..n-1 em lote (decisão 7).
-- [] Task 07: Escrever os DTOs. Arquivos: `src/track/dto/create-badge-video.dto.ts`,
+- [x] Task 07: Escrever os DTOs. Arquivos: `src/track/dto/create-badge-video.dto.ts`,
   `src/track/dto/update-badge-video.dto.ts`, `src/track/dto/reorder-videos.dto.ts`,
   `src/track/dto/badge-video.dto.ts`. Objetivo: `title` obrigatório com `@IsNotEmpty` e tamanho máximo
   — é o título da plataforma, e um vazio silencioso deixa a trilha com um item sem nome. `youtubeUrl`
   entra como URL e sai como `youtubeId`. `reorder` valida array de strings não vazio.
-- [] Task 08 (TDD): Escrever a spec do `BadgeVideoService`. Arquivo:
+- [x] Task 08 (TDD): Escrever a spec do `BadgeVideoService`. Arquivo:
   `src/track/badge-video.service.ts` + `.spec.ts`. Objetivo: cobrir `badgeId` inválido virando 400;
   URL do YouTube inválida virando 400; vídeo repetido na mesma insígnia virando 409 a partir do
   `ALREADY_EXISTS`; reorder com id faltando, sobrando ou repetido virando 400; e a renormalização da
   ordem depois de um `delete`, que é o caso que ninguém lembra de testar e o que deixa buraco na
   sequência.
-- [] Task 09: Implementar o `BadgeVideoService`.
-- [] Task 10: Implementar os controllers. Arquivos: `src/track/track.controller.ts` (público-com-sessão),
+- [x] Task 09: Implementar o `BadgeVideoService`.
+- [x] Task 10: Implementar os controllers. Arquivos: `src/track/track.controller.ts` (público-com-sessão),
   `src/track/admin-track.controller.ts` (com `AdminGuard`), `src/track/track.module.ts`, e o import em
   `src/app.module.ts`. Objetivo: `GET /badges/:badgeId/videos` **responde 200 com lista vazia** quando
   não há vídeo, e 404 só quando o `badgeId` não é da trilha (decisão 8). As rotas de admin ficam num
   controller separado para o `AdminGuard` valer no controller inteiro, sem chance de esquecer o
   decorador numa rota nova.
-- [] Task 11: Testar na e2e. Arquivo: `test/track.e2e-spec.ts`. Objetivo: contra o emulador, o caminho
+- [x] Task 11: Testar na e2e. Arquivo: `test/track.e2e-spec.ts`. Objetivo: contra o emulador, o caminho
   inteiro — criar três vídeos, reordenar, ler na ordem nova, apagar o do meio e confirmar que as
   posições fecham 0,1 sem buraco. Mais o 200-vazio e o 403 de quem não é admin.
 

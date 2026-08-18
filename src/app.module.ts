@@ -10,6 +10,7 @@ import { WaitlistModule } from './waitlist/waitlist.module';
 import { ProfileModule } from './profile/profile.module';
 import { AuthModule } from './auth/auth.module';
 import { BillingModule } from './billing/billing.module';
+import { TrackModule } from './track/track.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { BillingModule } from './billing/billing.module';
     ProfileModule,
     AuthModule,
     BillingModule,
+    TrackModule,
   ],
   controllers: [AppController],
   providers: [
