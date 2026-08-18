@@ -26,10 +26,10 @@ describe('CurrentUser decorator', () => {
   it('should extract user object from request', () => {
     const factory = getParamDecoratorFactory();
     const mockUser: CurrentUserData = {
-    id: 'u1',
-    email: 'test@email.com',
-    role: null,
-  };
+      id: 'u1',
+      email: 'test@email.com',
+      role: null,
+    };
     const ctx = {
       switchToHttp: () => ({
         getRequest: () => ({ user: mockUser }),
