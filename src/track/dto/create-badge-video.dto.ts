@@ -1,0 +1,41 @@
+import { IsOptional, IsString, Length } from 'class-validator';
+import { Transform } from 'class-transformer';
+import { ApiProperty } from '@nestjs/swagger';
+
+export class CreateBadgeVideoDto {
+  @ApiProperty({
+    example: 'Herança e composição, na prática',
+    description:
+      'Título da PLATAFORMA, obrigatório. Não é o título do YouTube — aquele é ' +
+      'escrito para o algoritmo; este diz onde a pessoa está na trilha',
+  })
+  @IsString()
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
+  @Length(3, 140)
+  title: string;
+
+  @ApiProperty({
+    required: false,
+    nullable: true,
+    example: 'Por que herança não é reuso de código.',
+    description: 'Uma linha opcional sob o título',
+  })
+  @IsOptional()
+  @IsString()
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
+  @Length(0, 300)
+  description?: string;
+
+  @ApiProperty({
+    example: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+    description:
+      'URL do vídeo em qualquer forma (watch?v=, youtu.be, /embed/, com &t= ou ' +
+      '?si=), ou o ID cru. A API grava só o ID — a extração é problema nosso',
+  })
+  @IsString()
+  youtubeUrl: string;
+}
