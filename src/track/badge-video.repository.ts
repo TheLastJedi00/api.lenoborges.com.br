@@ -3,6 +3,7 @@ import { CollectionReference, Timestamp } from 'firebase-admin/firestore';
 import { FirebaseService } from '../auth/firebase.service';
 import {
   BadgeVideo,
+  BadgeVideoKind,
   badgeVideoConverter,
   badgeVideoDocId,
 } from './entities/badge-video.entity';
@@ -14,7 +15,12 @@ export const BADGE_VIDEO_COLLECTION = 'badge_videos';
 export type CreateBadgeVideoData = Pick<
   BadgeVideo,
   'badgeId' | 'title' | 'description' | 'youtubeId' | 'order'
->;
+> & {
+  /** Sem valor, o video nasce como aula: e o que quase todo video e. */
+  kind?: BadgeVideoKind;
+  questionId?: string | null;
+  devTierFree?: boolean;
+};
 
 @Injectable()
 export class BadgeVideoRepository {
@@ -32,16 +38,23 @@ export class BadgeVideoRepository {
    * **A ordenacao e do servidor**, e nao do service depois de ler: ordenar aqui
    * e o que faz a lista ser a mesma para todo mundo, independente de quem a leu.
    *
-   * Esta consulta pede um indice composto (`badgeId` + `order`) no Firestore de
-   * producao. Ele nao existe sozinho, e o primeiro acesso real falha com um erro
-   * que traz o link para cria-lo -- o emulador nao exige indice, entao a suite
-   * passa verde ate la.
+   * `kind` filtra a aba (spec 010): Aulas e Perguntas Frequentes sao duas listas
+   * com propositos diferentes, e a ordem de cada uma e propria. Sem filtro,
+   * devolve as duas juntas -- que e o que a administracao precisa.
+   *
+   * Esta consulta pede um indice composto (`badgeId` + `order`, e
+   * `badgeId` + `kind` + `order`) no Firestore de producao. Ele nao existe
+   * sozinho, e o primeiro acesso real falha com um erro que traz o link para
+   * cria-lo -- o emulador nao exige indice, entao a suite passa verde ate la.
    */
-  async listByBadge(badgeId: BadgeId): Promise<BadgeVideo[]> {
-    const snapshot = await this.collection
-      .where('badgeId', '==', badgeId)
-      .orderBy('order')
-      .get();
+  async listByBadge(
+    badgeId: BadgeId,
+    kind?: BadgeVideoKind,
+  ): Promise<BadgeVideo[]> {
+    const base = this.collection.where('badgeId', '==', badgeId);
+    const query = kind ? base.where('kind', '==', kind) : base;
+
+    const snapshot = await query.orderBy('order').get();
 
     return snapshot.docs.map((document) => document.data());
   }
@@ -61,7 +74,15 @@ export class BadgeVideoRepository {
   async create(data: CreateBadgeVideoData): Promise<{ entry: BadgeVideo }> {
     const now = new Date();
     const id = badgeVideoDocId(data.badgeId, data.youtubeId);
-    const entry: BadgeVideo = { ...data, id, createdAt: now, updatedAt: now };
+    const entry: BadgeVideo = {
+      kind: 'aula',
+      questionId: null,
+      devTierFree: false,
+      ...data,
+      id,
+      createdAt: now,
+      updatedAt: now,
+    };
 
     // create(), nunca set(): e o ALREADY_EXISTS daqui que faz o caminho composto
     // valer como a unicidade que ele promete. set() sobrescreveria o video

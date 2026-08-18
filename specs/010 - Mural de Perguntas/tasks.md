@@ -115,25 +115,25 @@ Branch: `feat/010-votacao`
   maior `voteCount` com desempate pela mais antiga. **Derivada, nunca gravada** (decisão 9). Cobrir a
   semana sem nenhuma pergunta, que sai como semana em branco e não como erro.
 
-# Fase 06: Vídeos de resposta []
+# Fase 06: Vídeos de resposta [x]
 Branch: `feat/010-videos-resposta`
 
-- [] Task 01: Estender a entidade de vídeo. Arquivo: `src/track/entities/badge-video.entity.ts`.
+- [x] Task 01: Estender a entidade de vídeo. Arquivo: `src/track/entities/badge-video.entity.ts`.
   Objetivo: `kind: 'aula' | 'resposta'` (default `'aula'` na leitura de documento antigo),
   `questionId: string | null` e `devTierFree: boolean` (default `false`). O comentário registra a
   precedência total do `devTierFree` (decisão 8) — quem escrever o gate um dia começa por ele e sai.
-- [] Task 02: Ordem por `(badgeId, kind)`. Arquivos: `src/track/badge-video.repository.ts`,
+- [x] Task 02: Ordem por `(badgeId, kind)`. Arquivos: `src/track/badge-video.repository.ts`,
   `src/track/badge-video.service.ts`. Objetivo: **esta é a emenda à decisão 7 da spec 009** e o bug mais
   provável desta spec. A renormalização 0..n-1 acontece dentro da aba; uma insígnia com três aulas e
   duas respostas tem duas sequências independentes. `listByBadge` passa a aceitar filtro por `kind`.
-- [] Task 03 (TDD): Spec da ordem separada. Arquivo: `src/track/badge-video.service.spec.ts`. Objetivo:
+- [x] Task 03 (TDD): Spec da ordem separada. Arquivo: `src/track/badge-video.service.spec.ts`. Objetivo:
   criar aulas e respostas na mesma insígnia, reordenar uma aba e provar que **a outra não se moveu**.
   Sem este teste, a regressão é invisível até alguém abrir a trilha.
-- [] Task 04: DTOs e rotas. Arquivos: `src/track/dto/*.ts`, `src/track/admin-track.controller.ts`.
+- [x] Task 04: DTOs e rotas. Arquivos: `src/track/dto/*.ts`, `src/track/admin-track.controller.ts`.
   Objetivo: criar e editar vídeo passam a aceitar `kind`, `questionId` e `devTierFree`. `questionId` só
   é aceito com `kind: 'resposta'` — resposta sem pergunta e aula com pergunta são os dois estados
   incoerentes, e o 400 é mais barato que um dado torto.
-- [] Task 05: e2e do mural. Arquivo: `test/mural.e2e-spec.ts`. Objetivo: contra o emulador, o ciclo
+- [x] Task 05: e2e do mural. Arquivo: `test/mural.e2e-spec.ts`. Objetivo: contra o emulador, o ciclo
   inteiro com o relógio fixado — Dev Tier vota e não escreve; membro pago escreve uma e a segunda dá
   409; virada de semana muda as fases sem ninguém rodar nada; a vencedora sai correta com empate; e o
   `DELETE` de moderação **não deixa voto órfão**.
