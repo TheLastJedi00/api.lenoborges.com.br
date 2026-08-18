@@ -105,8 +105,11 @@ comentário em `src/auth/guards/firebase-auth.guard.ts`.
 ## Banco de Dados
 
 Firestore, pelo Admin SDK. **Não há migrations e não há schema a versionar** — nem TypeORM, nem SQL.
-As duas leituras do sistema são por caminho de documento, então também não há índice composto a
-manter.
+
+A maior parte das leituras é por caminho de documento, mas **não todas**. As listagens de vídeo da
+trilha (spec 009) e as do Mural (spec 010) são consultas ordenadas, e cada uma exige um **índice
+composto** em produção. Eles não estão no repositório — foram criados à mão no console do Firebase, e
+a lista completa está em [Índices compostos que produção exige](#índices-compostos-que-produção-exige).
 
 ```bash
 npm run emulators        # Auth + Firestore locais (exige o Firebase CLI)
@@ -294,9 +297,10 @@ pessoa está na trilha e precisa poder ser reescrito sem republicar o vídeo.
 Guarda-se o ID e não a URL porque ela chega em cinco formas (`watch?v=`, `youtu.be/`, `/embed/`, com
 `&t=`, com `?si=`). A extração acontece uma vez, na entrada, em `src/track/youtube-id.ts`.
 
-**Esta é a primeira consulta do sistema que não é por caminho**, e ela pede um índice composto
-(`badgeId` + `order`) no Firestore de produção. O emulador não exige índice, então a suíte passa
-verde e a falha aparece só em produção, com um link no erro para criá-lo.
+**Esta é a primeira consulta do sistema que não é por caminho**, e por isso a primeira que precisa de
+índice composto no Firestore de produção. A spec 010 acrescentou o filtro por `kind`, e com ele um
+segundo índice — os dois estão em [Índices compostos que produção
+exige](#índices-compostos-que-produção-exige), que é a lista única.
 
 ### `role` como custom claim
 
@@ -446,11 +450,41 @@ e a resposta nasceria trancada para 90% de quem votou nela.
 
 ### Índices compostos que produção exige
 
-O emulador não exige índice, então a suíte passa verde e a falha aparece só em produção, com um link
-no erro:
+Esta é a lista única. As seções acima apontam para cá em vez de repeti-la: uma lista de índices
+copiada em três lugares diverge dos três.
 
-| Coleção | Campos |
-|---|---|
-| `mural_questions` | `weekId` + `voteCount desc` + `createdAt asc` |
-| `mural_questions` | `weekId` + `createdAt asc` |
-| `badge_videos` | `badgeId` + `kind` + `order` |
+**Criados à mão no console em 2026-08-18**, e é assim que eles existem hoje — não há
+`firestore.indexes.json` no repositório, então nada os versiona e nada os publica junto com o deploy.
+
+| Coleção | Campos | Consulta que o exige |
+|---|---|---|
+| `mural_questions` | `weekId` asc + `voteCount` desc + `createdAt` asc | `listByWeek(byVotes: true)` e `findWinner` |
+| `mural_questions` | `weekId` asc + `createdAt` asc | `listByWeek(byVotes: false)`, a semana em coleta |
+| `badge_videos` | `badgeId` asc + `order` asc | `listByBadge()` **sem** `kind` — a visão da administração |
+| `badge_videos` | `badgeId` asc + `kind` asc + `order` asc | `listByBadge(kind)` — as abas Aulas e Perguntas Frequentes |
+
+A terceira linha é fácil de perder de vista, e ela já tinha sido perdida uma vez: `kind` é opcional em
+`listByBadge`, então **`badgeId` + `order` é uma consulta de verdade**, não um prefixo da de baixo. O
+Firestore não usa um índice de três campos para servir uma consulta de dois.
+
+A coluna da direita existe para que ninguém apague um índice "que ninguém usa". Índice sem consulta é
+custo de escrita em toda gravação; consulta sem índice é uma tela que quebra em produção. As duas
+perguntas se respondem na mesma tabela.
+
+> **O emulador não exige índice.** A suíte passa verde sem nenhum deles, e por isso a existência de um
+> índice em produção **nunca é verificada por teste**. É a mesma forma de falha dos dois fixes da spec
+> 007 — o `require(esm)` que o Node local aceita e o `localhost` que o Firebase autoriza de fábrica.
+> O ambiente onde tudo funciona é o ambiente que não faz a pergunta.
+
+Para conferir o que existe no projeto linkado, sem depender de memória:
+
+```bash
+firebase firestore:indexes    # imprime os índices do projeto, em JSON
+```
+
+**Um quinto índice existe no projeto e está marcado para remoção:** `mural_questions` por
+`voteCount desc` + `createdAt asc`, **sem o `weekId` na frente**. Nenhuma consulta é assim — os dois
+`orderBy('voteCount')` do repositório vêm depois de um `where('weekId', '==', ...)`, e um índice que
+não começa pelo campo do filtro de igualdade não serve nenhum deles. Ele encarece toda gravação de
+voto, que é a escrita mais frequente do sistema. Se ele reaparecer depois de removido, é rascunho ou
+clique em link de erro, não requisito.
