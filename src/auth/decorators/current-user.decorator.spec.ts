@@ -1,6 +1,7 @@
 import { ExecutionContext } from '@nestjs/common';
 import { ROUTE_ARGS_METADATA } from '@nestjs/common/constants';
-import { CurrentUser, CurrentUserData } from './current-user.decorator';
+import { CurrentUser } from './current-user.decorator';
+import type { CurrentUserData } from './current-user.decorator';
 
 type CustomDecoratorFactory = (
   data: keyof CurrentUserData | undefined,
@@ -25,7 +26,11 @@ function getParamDecoratorFactory(): CustomDecoratorFactory {
 describe('CurrentUser decorator', () => {
   it('should extract user object from request', () => {
     const factory = getParamDecoratorFactory();
-    const mockUser: CurrentUserData = { id: 'u1', email: 'test@email.com' };
+    const mockUser: CurrentUserData = {
+      id: 'u1',
+      email: 'test@email.com',
+      role: null,
+    };
     const ctx = {
       switchToHttp: () => ({
         getRequest: () => ({ user: mockUser }),

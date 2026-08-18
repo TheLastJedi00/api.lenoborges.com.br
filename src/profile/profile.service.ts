@@ -6,6 +6,7 @@ import {
 import { ProfileRepository } from './profile.repository';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { ProfileDto } from './dto/profile.dto';
+import type { UserRole } from '../auth/decorators/current-user.decorator';
 import {
   normalizeName,
   normalizePhone,
@@ -16,7 +17,11 @@ import {
 export class ProfileService {
   constructor(private readonly repository: ProfileRepository) {}
 
-  async getProfile(userId: string, email: string): Promise<ProfileDto> {
+  async getProfile(
+    userId: string,
+    email: string,
+    role: UserRole | null,
+  ): Promise<ProfileDto> {
     const profile = await this.repository.findById(userId);
     if (!profile.found || !profile.entry) {
       throw new NotFoundException('Perfil não encontrado.');
@@ -30,12 +35,14 @@ export class ProfileService {
       bio: profile.entry.bio,
       grade: profile.entry.grade,
       profileCompleted: profile.entry.completedAt !== null,
+      role,
     };
   }
 
   async updateProfile(
     userId: string,
     email: string,
+    role: UserRole | null,
     dto: UpdateProfileDto,
   ): Promise<ProfileDto> {
     const profile = await this.repository.findById(userId);
@@ -76,6 +83,7 @@ export class ProfileService {
       bio: updated.entry.bio,
       grade: updated.entry.grade,
       profileCompleted: updated.entry.completedAt !== null,
+      role,
     };
   }
 }

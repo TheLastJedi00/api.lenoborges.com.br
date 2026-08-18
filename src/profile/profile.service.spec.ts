@@ -44,7 +44,11 @@ describe('ProfileService', () => {
         },
       });
 
-      const profile = await service.getProfile('user-1', 'leno@borges.com.br');
+      const profile = await service.getProfile(
+        'user-1',
+        'leno@borges.com.br',
+        null,
+      );
 
       expect(profile).toEqual({
         id: 'user-1',
@@ -54,6 +58,7 @@ describe('ProfileService', () => {
         bio: 'Engenheiro de Software',
         grade: 1,
         profileCompleted: true,
+        role: null,
       });
     });
 
@@ -61,7 +66,7 @@ describe('ProfileService', () => {
       repository.findById.mockResolvedValue({ found: false, entry: null });
 
       await expect(
-        service.getProfile('user-unknown', 'u@test.com'),
+        service.getProfile('user-unknown', 'u@test.com', null),
       ).rejects.toThrow(NotFoundException);
     });
   });
@@ -91,7 +96,7 @@ describe('ProfileService', () => {
         },
       });
 
-      await service.updateProfile('user-1', 'fulano@email.com', {
+      await service.updateProfile('user-1', 'fulano@email.com', null, {
         name: '  Fulano    de    Tal  ',
         phone: '(11) 99999-8888',
         bio: '  Bio com espaços ajustados.  ',
@@ -132,7 +137,7 @@ describe('ProfileService', () => {
         },
       });
 
-      await service.updateProfile('user-1', 'email@test.com', {
+      await service.updateProfile('user-1', 'email@test.com', null, {
         name: 'Nome',
         phone: '11999998888',
         bio: 'Bio valida para onboarding.',
@@ -172,7 +177,7 @@ describe('ProfileService', () => {
         },
       });
 
-      await service.updateProfile('user-1', 'email@test.com', {
+      await service.updateProfile('user-1', 'email@test.com', null, {
         name: 'Nome Novo',
         phone: '11999998888',
         bio: 'Nova bio atualizada com sucesso.',
@@ -192,7 +197,7 @@ describe('ProfileService', () => {
       });
 
       await expect(
-        service.updateProfile('user-1', 'email@test.com', {
+        service.updateProfile('user-1', 'email@test.com', null, {
           name: 'Nome',
           phone: '11999998888',
           bio: 'Curta',
@@ -201,7 +206,7 @@ describe('ProfileService', () => {
 
       const longBio = 'a'.repeat(501);
       await expect(
-        service.updateProfile('user-1', 'email@test.com', {
+        service.updateProfile('user-1', 'email@test.com', null, {
           name: 'Nome',
           phone: '11999998888',
           bio: longBio,
@@ -213,7 +218,7 @@ describe('ProfileService', () => {
       repository.findById.mockResolvedValue({ found: false, entry: null });
 
       await expect(
-        service.updateProfile('user-inexistente', 'email@test.com', {
+        service.updateProfile('user-inexistente', 'email@test.com', null, {
           name: 'Nome',
           phone: '11999998888',
           bio: 'Bio valida para teste.',
@@ -254,6 +259,7 @@ describe('ProfileService', () => {
       await service.updateProfile(
         'user-1',
         'email@test.com',
+        null,
         bodyWithExtraField,
       );
 

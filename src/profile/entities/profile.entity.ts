@@ -44,7 +44,9 @@ interface ProfileDocument extends DocumentData {
 
 /** Faixa que era `check` no Postgres e agora e responsabilidade da aplicacao. */
 /**
- * Faixa de `grade`, redefinida pela spec 008 (Liga Dev).
+ * Faixa de `grade`, redefinida pela spec 008 (Liga Dev), que vive no repositorio
+ * do **front** -- este backend nao tem pasta 008, porque aquela spec era quase
+ * toda de front e executou as duas mudancas daqui por dentro.
  *
  * O numero conta **etapas concluidas**, nao a etapa em curso:
  *
