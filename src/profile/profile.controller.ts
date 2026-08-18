@@ -32,7 +32,9 @@ export class ProfileController {
     description: 'Token ausente, inválido ou expirado.',
   })
   async getProfile(@CurrentUser() user: CurrentUserData): Promise<ProfileDto> {
-    return this.profileService.getProfile(user.id, user.email);
+    // O papel vem do token que o guard acabou de verificar, e nao de uma nova
+    // ida ao Firebase Auth. E o mesmo valor, uma viagem a menos.
+    return this.profileService.getProfile(user.id, user.email, user.role);
   }
 
   @Throttle({ default: { limit: 10, ttl: 60000 } })
@@ -57,6 +59,11 @@ export class ProfileController {
     @CurrentUser() user: CurrentUserData,
     @Body() dto: UpdateProfileDto,
   ): Promise<ProfileDto> {
-    return this.profileService.updateProfile(user.id, user.email, dto);
+    return this.profileService.updateProfile(
+      user.id,
+      user.email,
+      user.role,
+      dto,
+    );
   }
 }

@@ -41,8 +41,21 @@ export class SessionResponseDto {
   profileCompleted: boolean;
 
   @ApiProperty({
-    example: 1,
-    description: 'Grau atual do membro na Seita Dev (1 a 33)',
+    example: 3,
+    description:
+      'Etapas concluidas na trilha da Liga Dev: 0 a 8 sao insignias, 9 a 12 a ' +
+      'Elite Four, 13 a Battle Frontier (spec 008)',
   })
   grade: number;
+
+  @ApiProperty({
+    example: null,
+    nullable: true,
+    enum: ['admin'],
+    description:
+      'Papel do usuario, vindo da custom claim do Firebase Auth. Nulo para o ' +
+      'membro comum. O front usa para decidir se desenha a Administracao -- ' +
+      'quem impede o acesso e o AdminGuard, nao a ausencia do botao',
+  })
+  role: 'admin' | null;
 }

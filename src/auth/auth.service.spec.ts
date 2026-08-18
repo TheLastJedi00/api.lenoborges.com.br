@@ -54,7 +54,9 @@ describe('AuthService', () => {
     firebase = {
       auth: {
         createUser: jest.fn(),
-        getUser: jest.fn(),
+        // Sem claim nenhuma e o estado de quase todo usuario. Os testes que
+        // falam de admin sobrescrevem este retorno.
+        getUser: jest.fn().mockResolvedValue({ customClaims: undefined }),
         revokeRefreshTokens: jest.fn(),
       },
       identityToolkit: jest.fn(),
@@ -352,8 +354,35 @@ describe('AuthService', () => {
         user: { id: 'uid-123', email: 'membro@test.com' },
         profileCompleted: true,
         grade: 5,
+        role: null,
       });
       expect(typeof result.session.expiresIn).toBe('number');
+    });
+
+    // O front usa este campo para decidir se desenha a Administracao. Ele sai do
+    // Admin SDK porque o signInWithPassword nao devolve custom claims.
+    it('caso 10b: a sessao carrega o papel de admin quando a claim existe', async () => {
+      firebase.identityToolkit.mockResolvedValue({
+        idToken: 'id-token',
+        refreshToken: 'refresh-token',
+        expiresIn: '3600',
+        localId: 'uid-admin',
+        email: 'lenoborges.dev@gmail.com',
+      });
+      firebase.auth.getUser.mockResolvedValue({
+        customClaims: { role: 'admin' },
+      });
+      profileRepository.findById.mockResolvedValue({
+        found: true,
+        entry: { ...profileVazio, completedAt: new Date() },
+      });
+
+      const result = await service.login({
+        email: 'lenoborges.dev@gmail.com',
+        password: 'senha-valida',
+      });
+
+      expect(result.session.role).toBe('admin');
     });
 
     it('caso 11: credencial errada e usuario inexistente dao a mesma resposta', async () => {

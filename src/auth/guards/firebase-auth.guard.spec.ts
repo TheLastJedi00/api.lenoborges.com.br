@@ -1,6 +1,7 @@
 import { ExecutionContext, UnauthorizedException } from '@nestjs/common';
 import { FirebaseAuthGuard } from './firebase-auth.guard';
 import { FirebaseService } from '../firebase.service';
+import type { CurrentUserData } from '../decorators/current-user.decorator';
 
 function contextWith(authorization?: string): {
   context: ExecutionContext;
@@ -128,7 +129,7 @@ describe('FirebaseAuthGuard', () => {
 
     await guard.canActivate(context);
 
-    expect(request.user?.role).toBe('admin');
+    expect((request.user as CurrentUserData | undefined)?.role).toBe('admin');
   });
 
   // Claim desconhecida nao pode virar papel. O guard e a fronteira: qualquer
@@ -143,6 +144,6 @@ describe('FirebaseAuthGuard', () => {
 
     await guard.canActivate(context);
 
-    expect(request.user?.role).toBeNull();
+    expect((request.user as CurrentUserData | undefined)?.role).toBeNull();
   });
 });

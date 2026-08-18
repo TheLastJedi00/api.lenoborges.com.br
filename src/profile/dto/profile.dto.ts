@@ -35,8 +35,10 @@ export class ProfileDto {
   bio: string | null;
 
   @ApiProperty({
-    example: 1,
-    description: 'Grau atual do membro (1 a 33)',
+    example: 3,
+    description:
+      'Etapas concluídas na trilha da Liga Dev: 0 a 8 são insígnias, 9 a 12 a ' +
+      'Elite Four, 13 a Battle Frontier (spec 008)',
   })
   grade: number;
 
@@ -45,4 +47,15 @@ export class ProfileDto {
     description: 'Indica se o onboarding foi concluído',
   })
   profileCompleted: boolean;
+
+  @ApiProperty({
+    example: null,
+    nullable: true,
+    enum: ['admin'],
+    description:
+      'Papel do usuário, vindo da custom claim do Firebase Auth. Nulo para o ' +
+      'membro comum. O front usa para decidir se desenha a Administração — ' +
+      'quem impede o acesso é o AdminGuard, não a ausência do botão',
+  })
+  role: 'admin' | null;
 }

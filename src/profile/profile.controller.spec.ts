@@ -54,9 +54,11 @@ describe('ProfileController', () => {
     const result = await controller.getProfile(mockUser);
 
     expect(result).toEqual(mockProfile);
+    // O papel sai do token que o guard verificou, e o controller so repassa.
     expect(service.getProfile).toHaveBeenCalledWith(
       'user-123',
       'user@email.com',
+      null,
     );
   });
 
@@ -83,6 +85,7 @@ describe('ProfileController', () => {
     expect(service.updateProfile).toHaveBeenCalledWith(
       'user-123',
       'user@email.com',
+      null,
       updateDto,
     );
   });

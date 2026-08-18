@@ -14,6 +14,7 @@ import { SignupDto } from './dto/signup.dto';
 import { LoginDto } from './dto/login.dto';
 import { SessionResponseDto } from './dto/session.dto';
 import { normalizeEmail } from '../common/normalize';
+import { roleOf } from './role';
 
 /** Resposta do accounts:signInWithPassword (camelCase, Identity Toolkit). */
 interface SignInResponse {
@@ -171,7 +172,14 @@ export class AuthService {
       throw new UnauthorizedException('E-mail ou senha inválidos.');
     }
 
-    const profile = await this.ensureProfile(data.localId, normalizedEmail);
+    // O signInWithPassword nao devolve as custom claims, entao o papel sai do
+    // Admin SDK. As duas idas correm juntas de proposito: em serie, o login
+    // pagaria a latencia das duas somadas por um campo que so decide se o front
+    // desenha um botao.
+    const [profile, user] = await Promise.all([
+      this.ensureProfile(data.localId, normalizedEmail),
+      this.firebase.auth.getUser(data.localId),
+    ]);
 
     return {
       session: {
@@ -181,6 +189,7 @@ export class AuthService {
         user: { id: data.localId, email: data.email ?? normalizedEmail },
         profileCompleted: profile.completedAt !== null,
         grade: profile.grade,
+        role: roleOf(user),
       },
       refreshToken: data.refreshToken,
     };
@@ -215,6 +224,7 @@ export class AuthService {
         user: { id: data.user_id, email },
         profileCompleted: profile.completedAt !== null,
         grade: profile.grade,
+        role: roleOf(user),
       },
       refreshToken: data.refresh_token,
     };
