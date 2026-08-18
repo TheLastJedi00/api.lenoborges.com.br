@@ -12,6 +12,7 @@ import { AuthModule } from './auth/auth.module';
 import { BillingModule } from './billing/billing.module';
 import { TrackModule } from './track/track.module';
 import { AdminModule } from './admin/admin.module';
+import { MuralModule } from './mural/mural.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { AdminModule } from './admin/admin.module';
     BillingModule,
     TrackModule,
     AdminModule,
+    MuralModule,
   ],
   controllers: [AppController],
   providers: [

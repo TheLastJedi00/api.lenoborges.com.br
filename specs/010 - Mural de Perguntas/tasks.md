@@ -43,74 +43,74 @@ O portão da Fase 04 precisa saber quem paga. Esta fase é o que torna a pergunt
   `great-dev-tier` pela API e conferir que o `GET /me` dele reflete na hora — `tier` não é claim, e não
   espera token novo (decisão 6).
 
-# Fase 03: O mural, leitura []
+# Fase 03: O mural, leitura [x]
 Branch: `feat/010-mural-leitura`
 
-- [] Task 01: Entidade e converter. Arquivo: `src/mural/entities/mural-question.entity.ts`. Objetivo:
+- [x] Task 01: Entidade e converter. Arquivo: `src/mural/entities/mural-question.entity.ts`. Objetivo:
   `MuralQuestion` com `weekId`, `badgeId`, `authorUid`, `authorName`, `title`, `body`, `voteCount`,
   `answerVideoId`, `createdAt`, `updatedAt`. O comentário registra que o ID do documento é
   `{weekId}__{uid}` e o que isso garante (decisão 4), e que `authorName` é denormalizado de propósito,
   com o preço declarado — o nome exibido é o de quando perguntou.
-- [] Task 02 (TDD): Spec do `MuralRepository`. Arquivo: `src/mural/mural.repository.spec.ts`. Objetivo:
+- [x] Task 02 (TDD): Spec do `MuralRepository`. Arquivo: `src/mural/mural.repository.spec.ts`. Objetivo:
   `listByWeek` ordenando por `voteCount desc` na votação e por `createdAt` na coleta; `findMine` como
   leitura por caminho; `create` com `create()` e não `set()`. Contrato `{ found, entry }` de sempre.
-- [] Task 03: Implementar o `MuralRepository`. Arquivo: `src/mural/mural.repository.ts`. Objetivo:
+- [x] Task 03: Implementar o `MuralRepository`. Arquivo: `src/mural/mural.repository.ts`. Objetivo:
   coleção `mural_questions`. Registrar no comentário o índice composto que o Firestore vai exigir
   (`weekId` + `voteCount`) — ele não existe sozinho, e a primeira consulta em produção falha com um link
   no erro que ninguém está esperando.
-- [] Task 04: DTOs de leitura. Arquivos: `src/mural/dto/mural-question.dto.ts`,
+- [x] Task 04: DTOs de leitura. Arquivos: `src/mural/dto/mural-question.dto.ts`,
   `src/mural/dto/mural-state.dto.ts`. Objetivo: a pergunta sai com `phase`, `voteCount`, `hasVoted` e
   `isMine`. `MuralStateDto` carrega `currentWeekId`, `votingWeekId`, `canAsk` e `myQuestionId` — é o que
   o front precisa para desenhar a tela inteira sem adivinhar nada.
-- [] Task 05 (TDD + implementação): `MuralService`, parte de leitura. Arquivos:
+- [x] Task 05 (TDD + implementação): `MuralService`, parte de leitura. Arquivos:
   `src/mural/mural.service.ts` + `.spec.ts`. Objetivo: `getState` e `listQuestions`. **`hasVoted` sai de
   um `getAll` dos caminhos de voto do próprio usuário** — nunca de uma consulta por autor, e nunca de N
   leituras em laço (decisão 3).
-- [] Task 06: Controller e módulo. Arquivos: `src/mural/mural.controller.ts`,
+- [x] Task 06: Controller e módulo. Arquivos: `src/mural/mural.controller.ts`,
   `src/mural/mural.module.ts`, import em `src/app.module.ts`. Objetivo: `GET /mural` e
   `GET /mural/perguntas`, sob `FirebaseAuthGuard`. Leitura é de todo mundo, inclusive Dev Tier.
 
-# Fase 04: O mural, escrita []
+# Fase 04: O mural, escrita [x]
 Branch: `feat/010-mural-escrita`
 
-- [] Task 01: DTOs de escrita. Arquivos: `src/mural/dto/create-question.dto.ts`,
+- [x] Task 01: DTOs de escrita. Arquivos: `src/mural/dto/create-question.dto.ts`,
   `src/mural/dto/update-question.dto.ts`. Objetivo: `title` de 10 a 140, `body` até 1000, **texto puro**
   — nada de markdown ou HTML (decisão 10). `badgeId` validado contra `BADGE_IDS`.
-- [] Task 02 (TDD): Spec da escrita. Arquivo: `src/mural/mural.service.spec.ts`. Objetivo: os cinco
+- [x] Task 02 (TDD): Spec da escrita. Arquivo: `src/mural/mural.service.spec.ts`. Objetivo: os cinco
   casos que o portão precisa acertar — Dev Tier recebe **403**; segunda pergunta na mesma semana recebe
   **409** traduzido do `ALREADY_EXISTS`; `badgeId` inválido recebe 400; editar pergunta de outra pessoa
   recebe 403; editar depois que a semana virou recebe **409**, porque a pergunta já está em votação e
   mexer no texto invalidaria os votos que ela recebeu.
-- [] Task 03: Implementar a escrita. Arquivo: `src/mural/mural.service.ts`. Objetivo: `POST` e `PUT`. O
+- [x] Task 03: Implementar a escrita. Arquivo: `src/mural/mural.service.ts`. Objetivo: `POST` e `PUT`. O
   `weekId` vem **sempre do servidor**, nunca do corpo da requisição — cliente que escolhe a própria
   semana escolhe também votar na semana errada.
-- [] Task 04: O guard de tier. Arquivos: `src/auth/guards/paid-tier.guard.ts` + `.spec.ts`. Objetivo:
+- [x] Task 04: O guard de tier. Arquivos: `src/auth/guards/paid-tier.guard.ts` + `.spec.ts`. Objetivo:
   roda depois do `FirebaseAuthGuard`, lê o perfil e recusa `dev-tier` com 403 e uma mensagem que
   **diz o que fazer** — "o Dev Tier vota no mural; para perguntar, veja o Financeiro". 403 sem caminho
   de saída é a forma mais cara de perder um upgrade.
-- [] Task 05: Moderação. Arquivo: `src/mural/admin-mural.controller.ts`. Objetivo:
+- [x] Task 05: Moderação. Arquivo: `src/mural/admin-mural.controller.ts`. Objetivo:
   `DELETE /admin/mural/perguntas/:id`, com `AdminGuard`. **Apaga a subcoleção de votos junto** — no
   Firestore a subcoleção sobrevive ao pai apagado, e esse é o vazamento clássico. O teste da Fase 06
   cobre exatamente isso.
 
-# Fase 05: Votação []
+# Fase 05: Votação [x]
 Branch: `feat/010-votacao`
 
-- [] Task 01: Entidade do voto. Arquivo: `src/mural/entities/mural-vote.entity.ts`. Objetivo: documento
+- [x] Task 01: Entidade do voto. Arquivo: `src/mural/entities/mural-vote.entity.ts`. Objetivo: documento
   mínimo — `votedAt` e nada mais. **O dado é o caminho**: `mural_questions/{id}/votes/{uid}` já diz quem
   votou em quê (decisão 3).
-- [] Task 02 (TDD): Spec do voto. Arquivo: `src/mural/vote.service.spec.ts`. Objetivo: votar duas vezes
+- [x] Task 02 (TDD): Spec do voto. Arquivo: `src/mural/vote.service.spec.ts`. Objetivo: votar duas vezes
   não incrementa duas vezes; votar em pergunta na fase de coleta recebe 409; votar em pergunta encerrada
   recebe 409; desvotar decrementa; desvotar sem ter votado é **idempotente**, não erro. E o caso que
   ninguém lembra: `voteCount` nunca fica negativo.
-- [] Task 03: Implementar o voto. Arquivo: `src/mural/vote.service.ts`. Objetivo: `WriteBatch` com as
+- [x] Task 03: Implementar o voto. Arquivo: `src/mural/vote.service.ts`. Objetivo: `WriteBatch` com as
   duas operações — `create()` do voto e `FieldValue.increment(±1)` no contador. Se o voto já existe, o
   batch inteiro falha e o contador não se mexe. **Nunca ler-somar-escrever**: duas pessoas votando no
   mesmo segundo perderiam um voto.
-- [] Task 04: Rotas de voto. Arquivo: `src/mural/mural.controller.ts`. Objetivo: `POST` e `DELETE` em
+- [x] Task 04: Rotas de voto. Arquivo: `src/mural/mural.controller.ts`. Objetivo: `POST` e `DELETE` em
   `/mural/perguntas/:id/voto`, só com `FirebaseAuthGuard` — **sem** o guard de tier. Votar é de todo
   mundo, e é a decisão 5.
-- [] Task 05 (TDD + implementação): A vencedora. Arquivos: `src/mural/mural.service.ts`,
+- [x] Task 05 (TDD + implementação): A vencedora. Arquivos: `src/mural/mural.service.ts`,
   `src/mural/dto/winner.dto.ts`. Objetivo: `GET /mural/vencedoras` devolve, por semana encerrada, a de
   maior `voteCount` com desempate pela mais antiga. **Derivada, nunca gravada** (decisão 9). Cobrir a
   semana sem nenhuma pergunta, que sai como semana em branco e não como erro.
