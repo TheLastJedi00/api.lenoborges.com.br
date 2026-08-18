@@ -1,19 +1,19 @@
-# Fase 01: O relógio da semana []
+# Fase 01: O relógio da semana [x]
 Branch: `feat/010-semana`
 
 Nada de mural ainda. Ao fim desta fase existe uma função que sabe em que semana estamos, e ela é a peça
 de que todo o resto depende.
 
-- [] Task 01 (TDD): Escrever a spec do `weekId`. Arquivo: `src/mural/week-id.spec.ts`. Objetivo: cobrir
+- [x] Task 01 (TDD): Escrever a spec do `weekId`. Arquivo: `src/mural/week-id.spec.ts`. Objetivo: cobrir
   a virada de domingo 00:00 em `America/Sao_Paulo` (sábado 23:59 é uma semana, domingo 00:00 é outra), a
   virada de ano — que é onde numeração de semana quebra —, e a estabilidade sob um `Date` em UTC. O
   teste fixa o relógio; nenhum caso pode depender de quando a suíte roda.
-- [] Task 02: Implementar o `weekId`. Arquivos: `src/mural/week-id.ts`,
+- [x] Task 02: Implementar o `weekId`. Arquivos: `src/mural/week-id.ts`,
   `src/mural/mural.constants.ts`. Objetivo: `weekIdOf(date)` devolve `2026-W34`, calculado com
   `Intl.DateTimeFormat` no fuso constante — sem dependência nova. Mais `previousWeekId(id)`, que é como
   a semana em votação é encontrada. O comentário registra a decisão 1: **a virada é uma conta, não um
   cron**, e por quê.
-- [] Task 03: Escrever as fases derivadas. Arquivo: `src/mural/mural-phase.ts` + `.spec.ts`. Objetivo:
+- [x] Task 03: Escrever as fases derivadas. Arquivo: `src/mural/mural-phase.ts` + `.spec.ts`. Objetivo:
   `phaseOf(weekId, now)` devolve `'coleta' | 'votacao' | 'encerrada'`. É a única tradução de semana em
   estado, e ela existir sozinha é o que impede três controllers de reimplementarem a comparação com
   sinais trocados.
