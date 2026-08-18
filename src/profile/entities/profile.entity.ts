@@ -1,3 +1,4 @@
+import type { TierId } from '../../billing/billing.tiers';
 import {
   DocumentData,
   FirestoreDataConverter,
@@ -24,6 +25,20 @@ export interface Profile {
   phone: string | null;
   bio: string | null;
   grade: number;
+  /**
+   * Tier de acesso do membro (spec 010).
+   *
+   * **`tier` e acesso; `grade` e conquista. Os dois nao se derivam um do outro,
+   * em nenhuma direcao** — e essa e a restricao mais facil de violar sem
+   * perceber. Quem cancelou com seis insignias continua com seis: o que ele
+   * perde e o avanco, nao o passado.
+   *
+   * E campo do documento, e nao custom claim como `role`, porque tier muda com
+   * frequencia e precisa valer na hora. Uma claim levaria ate uma hora para
+   * entrar em vigor, e o membro que acabou de pagar ficaria de fora vendo o
+   * relogio.
+   */
+  tier: TierId;
   completedAt: Date | null;
   waitlistEntryId: string | null;
   createdAt: Date;
@@ -36,6 +51,7 @@ interface ProfileDocument extends DocumentData {
   phone: string | null;
   bio: string | null;
   grade: number;
+  tier: TierId;
   completedAt: Timestamp | null;
   waitlistEntryId: string | null;
   createdAt: Timestamp;
@@ -71,6 +87,7 @@ export const profileConverter: FirestoreDataConverter<Profile> = {
       phone: profile.phone,
       bio: profile.bio,
       grade: profile.grade,
+      tier: profile.tier,
       completedAt: profile.completedAt
         ? Timestamp.fromDate(profile.completedAt)
         : null,
@@ -89,6 +106,11 @@ export const profileConverter: FirestoreDataConverter<Profile> = {
       phone: data.phone ?? null,
       bio: data.bio ?? null,
       grade: data.grade,
+      // Documento antigo nao tem `tier` -- e sao todos, no dia em que a spec 010
+      // sobe. Sem este fallback ele chega `undefined`, e toda comparacao de tier
+      // vira falsa em silencio para a base inteira. E o mesmo cuidado do
+      // `completedAt ?? null` logo abaixo, e pela mesma razao.
+      tier: data.tier ?? 'dev-tier',
       // completedAt nulo e o estado normal de quem ainda nao fez o onboarding, e
       // e por ele que profileCompleted e decidido. Um undefined vindo de
       // documento antigo viraria "completou", entao o ?? null e carga util.

@@ -190,6 +190,7 @@ export class AuthService {
         profileCompleted: profile.completedAt !== null,
         grade: profile.grade,
         role: roleOf(user),
+        tier: profile.tier,
       },
       refreshToken: data.refreshToken,
     };
@@ -225,6 +226,7 @@ export class AuthService {
         profileCompleted: profile.completedAt !== null,
         grade: profile.grade,
         role: roleOf(user),
+        tier: profile.tier,
       },
       refreshToken: data.refresh_token,
     };

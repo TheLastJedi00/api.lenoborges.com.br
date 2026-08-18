@@ -160,6 +160,36 @@ describe('Administração de usuários (e2e)', () => {
     expect((me.body as { grade: number }).grade).toBe(7);
   });
 
+  /**
+   * tier nao e claim: ele vale na hora, sem esperar token novo. Este teste e o
+   * que denuncia alguem transforma-lo em custom claim "por simetria com role" --
+   * o membro que acabou de pagar ficaria ate uma hora sem acesso.
+   */
+  it('admin altera o tier, e o efeito vale na sessao atual', async () => {
+    await request(app.getHttpServer())
+      .patch(`/admin/users/`)
+      .set('Authorization', `Bearer `)
+      .send({ tier: 'great-dev-tier' })
+      .expect(204);
+
+    const me = await request(app.getHttpServer())
+      .get('/me')
+      .set('Authorization', `Bearer `)
+      .expect(200);
+
+    expect((me.body as { tier: string }).tier).toBe('great-dev-tier');
+    // E o grade nao se mexeu junto.
+    expect((me.body as { grade: number }).grade).toBe(7);
+  });
+
+  it('recusa tier que nao existe', async () => {
+    await request(app.getHttpServer())
+      .patch(`/admin/users/`)
+      .set('Authorization', `Bearer `)
+      .send({ tier: 'plus-dev-tier' })
+      .expect(400);
+  });
+
   it('recusa grade fora da faixa 0..13', async () => {
     await request(app.getHttpServer())
       .patch(`/admin/users/${memberId}`)
