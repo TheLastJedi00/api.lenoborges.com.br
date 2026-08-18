@@ -9,6 +9,7 @@ import { FirebaseModule } from './auth/firebase.module';
 import { WaitlistModule } from './waitlist/waitlist.module';
 import { ProfileModule } from './profile/profile.module';
 import { AuthModule } from './auth/auth.module';
+import { BillingModule } from './billing/billing.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { AuthModule } from './auth/auth.module';
     WaitlistModule,
     ProfileModule,
     AuthModule,
+    BillingModule,
   ],
   controllers: [AppController],
   providers: [
