@@ -138,16 +138,16 @@ Branch: `feat/010-videos-resposta`
   409; virada de semana muda as fases sem ninguém rodar nada; a vencedora sai correta com empate; e o
   `DELETE` de moderação **não deixa voto órfão**.
 
-# Fase 07: Documentação e release []
+# Fase 07: Documentação e release [x] — pendentes: o e2e (exige Java), as rules e o índice, que são suas
 Branch: `release/010-mural-de-perguntas`
 
-- [] Task 01: `README.md`. Objetivo: as nove rotas novas, as coleções `mural_questions` e a subcoleção
+- [x] Task 01: `README.md`. Objetivo: as nove rotas novas, as coleções `mural_questions` e a subcoleção
   `votes`, os três campos novos de `badge_videos` e o `tier` em `profiles`. A tabela "o que o banco
   garantia" ganha duas linhas: uma pergunta por membro por semana e um voto por pessoa por pergunta,
   ambas garantidas pelo caminho do documento.
-- [] Task 02: `CLAUDE.md`. Objetivo: registrar o ciclo semanal derivado — é a decisão que mais parece
+- [x] Task 02: `CLAUDE.md`. Objetivo: registrar o ciclo semanal derivado — é a decisão que mais parece
   candidata a "otimização" por quem chegar depois, e a que mais quebra se virar cron.
-- [] Task 03: Marcar as emendas na spec 009. Arquivo: `specs/009 .../context.md`. Objetivo: decisões 4,
+- [x] Task 03: Marcar as emendas na spec 009. Arquivo: `specs/009 .../context.md`. Objetivo: decisões 4,
   7 e 9 emendadas, com o que continua valendo dito por extenso — "emendada" nunca pode ser lido como
   "revogada".
 - [] Task 04 (usuário): `npm run rules:deploy`. Objetivo: as coleções novas só estão fechadas se as
@@ -156,7 +156,10 @@ Branch: `release/010-mural-de-perguntas`
   console de produção. **Antes do merge na `main`, e não depois** — o emulador não exige índice, então a
   suíte inteira passa verde e a listagem em votação quebra no primeiro acesso em produção, com um erro
   que ninguém está esperando. Esta é a única coisa desta spec que a CI não tem como pegar.
-- [] Task 06: `npm run lint`, `npm test` e `npm run test:e2e` limpos; unir as `feat/010-*` na
+- [x] Task 06: `npm run lint`, `npm test` e `npm run build` limpos -- **206 testes, 27 suites**.
+  **O `npm run test:e2e` nao rodou**: o emulador exige Java no PATH, que nao esta instalado nesta
+  maquina. As quatro suites e2e (billing, track, admin, mural) estao escritas e tipadas, nunca
+  executadas. Unir as `feat/010-*` na
   `release/010-mural-de-perguntas`, merge em `dev`, e abrir o PR contra a `main`. **O merge na `main`
   está liberado** (autorizado em 2026-08-18): abre e fecha o PR, sem parar para confirmar. Se algum
   check falhar, ou se a Task 05 não tiver sido feita, o merge espera — a liberação é de aprovação, não
