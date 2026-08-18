@@ -7,6 +7,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -14,6 +15,7 @@ import {
   ApiOperation,
   ApiResponse,
   ApiBearerAuth,
+  ApiQuery,
 } from '@nestjs/swagger';
 import { BadgeVideoService } from './badge-video.service';
 import { CreateBadgeVideoDto } from './dto/create-badge-video.dto';
@@ -72,19 +74,32 @@ export class AdminTrackController {
   @Patch(':badgeId/videos/order')
   @HttpCode(204)
   @ApiOperation({
-    summary: 'Reordenar a insígnia inteira',
+    summary: 'Reordenar uma aba da insígnia',
     description:
       'Escrita em lote atômica: ou entram todas as posições ou nenhuma. A lista ' +
-      'precisa bater exatamente com os vídeos que existem — reordenar não cria ' +
-      'nem apaga.',
+      'precisa bater exatamente com os vídeos **daquela aba** — reordenar não ' +
+      'cria, não apaga e não mexe na outra aba.',
+  })
+  @ApiQuery({
+    name: 'kind',
+    required: false,
+    enum: ['aula', 'resposta'],
+    description: 'A aba a reordenar. Sem o parâmetro, Aulas',
   })
   @ApiResponse({ status: 204, description: 'Ordem gravada.' })
-  @ApiResponse({ status: 400, description: 'A ordem não bate com a insígnia.' })
+  @ApiResponse({ status: 400, description: 'A ordem não bate com a aba.' })
   async reorder(
     @Param('badgeId') badgeId: string,
     @Body() dto: ReorderVideosDto,
+    @Query('kind') kind?: string,
   ): Promise<void> {
-    await this.videos.reorder(badgeId, dto);
+    // Sem `kind`, assume Aulas: é onde a esmagadora maioria das reordenações
+    // acontece, e é o comportamento que a spec 009 já tinha.
+    await this.videos.reorder(
+      badgeId,
+      dto,
+      kind === 'resposta' ? 'resposta' : 'aula',
+    );
   }
 
   @Patch(':badgeId/videos/:videoId')

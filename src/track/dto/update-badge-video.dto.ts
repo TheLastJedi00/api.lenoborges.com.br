@@ -1,4 +1,4 @@
-import { IsOptional, IsString, Length } from 'class-validator';
+import { IsBoolean, IsOptional, IsString, Length } from 'class-validator';
 import { Transform } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 
@@ -26,4 +26,16 @@ export class UpdateBadgeVideoDto {
   )
   @Length(0, 300)
   description?: string;
+
+  @ApiProperty({
+    required: false,
+    example: true,
+    description:
+      'Marca o vídeo como "Livre para todos". É a válvula da decisão 8 da spec ' +
+      '010: sem ela, a melhor resposta da semana nasce trancada para 90% de ' +
+      'quem votou nela',
+  })
+  @IsOptional()
+  @IsBoolean()
+  devTierFree?: boolean;
 }

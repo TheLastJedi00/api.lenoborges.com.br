@@ -20,8 +20,32 @@ export class BadgeVideoDto {
   youtubeId: string;
 
   @ApiProperty({
+    example: 'aula',
+    enum: ['aula', 'resposta'],
+    description:
+      'A aba da insígnia. Aula se assiste em ordem; resposta se consulta por assunto',
+  })
+  kind: 'aula' | 'resposta';
+
+  @ApiProperty({
+    nullable: true,
+    example: null,
+    description:
+      'A pergunta do Mural que originou a resposta. Nulo em toda aula',
+  })
+  questionId: string | null;
+
+  @ApiProperty({
+    example: false,
+    description:
+      'Livre para todos, mesmo numa insígnia adiantada. **A precedência é ' +
+      'total**: quando existir gate de conteúdo, ele começa por esta flag e sai',
+  })
+  devTierFree: boolean;
+
+  @ApiProperty({
     example: 0,
-    description: 'Posição dentro da insígnia, de 0 a n-1',
+    description: 'Posição dentro da insígnia E da aba, de 0 a n-1',
   })
   order: number;
 }
