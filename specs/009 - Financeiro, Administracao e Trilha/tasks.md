@@ -33,25 +33,25 @@ nada ainda protegido por ele.
 # Fase 02: Catálogo financeiro []
 Branch: `feat/009-billing`
 
-- [] Task 01: Escrever a constante dos tiers. Arquivo: `src/billing/billing.tiers.ts`. Objetivo: os
+- [x] Task 01: Escrever a constante dos tiers. Arquivo: `src/billing/billing.tiers.ts`. Objetivo: os
   quatro tiers da decisão 2, com `id`, `name`, `price` (em centavos, inteiro), `priceLabel`,
   `period`, `summary` e `perks`. **Centavos, não string nem float**: preço em `number` decimal é a
   armadilha clássica, e a string formatada existe ao lado só para a tela. O comentário do arquivo
   carrega o guardrail da decisão 3 — isto vira coleção no dia da cobrança, e não antes.
-- [] Task 02: Escrever os DTOs de resposta. Arquivos: `src/billing/dto/tier.dto.ts`,
+- [x] Task 02: Escrever os DTOs de resposta. Arquivos: `src/billing/dto/tier.dto.ts`,
   `src/billing/dto/tier-catalog.dto.ts`. Objetivo: `TierCatalogDto` é `{ tiers, currentTierId }`. O
   Swagger documenta que este endpoint exige sessão **porque o preço não pode sair no bundle público** —
   é a única justificativa de existir endpoint para dado estático, e ela merece ficar escrita onde
   alguém vai ler.
-- [] Task 03 (TDD): Escrever a spec do `BillingService`. Arquivo: `src/billing/billing.service.spec.ts`.
+- [x] Task 03 (TDD): Escrever a spec do `BillingService`. Arquivo: `src/billing/billing.service.spec.ts`.
   Objetivo: cobrir que o catálogo sai na ordem dos degraus, que os quatro ids existem, e que
   `resolveCurrentTier` devolve `dev-tier` para qualquer perfil hoje. Este último teste é o que quebra —
   de propósito — no dia em que alguém implementar assinatura sem ler a decisão 4.
-- [] Task 04: Implementar `BillingService` e `BillingController`. Arquivos:
+- [x] Task 04: Implementar `BillingService` e `BillingController`. Arquivos:
   `src/billing/billing.service.ts`, `src/billing/billing.controller.ts`, `src/billing/billing.module.ts`,
   e o import em `src/app.module.ts`. Objetivo: `GET /billing/tiers` sob `FirebaseAuthGuard`.
   `resolveCurrentTier(profile)` isolada, com o `TODO` da decisão 4 em cima.
-- [] Task 05: Testar o gate na e2e. Arquivo: `test/billing.e2e-spec.ts`. Objetivo: sem `Authorization`,
+- [x] Task 05: Testar o gate na e2e. Arquivo: `test/billing.e2e-spec.ts`. Objetivo: sem `Authorization`,
   401; com token válido, 200 com quatro tiers e o preço do Master em 26000 centavos. **O caso do 401 é
   o teste mais importante da fase** — é ele que falha se alguém abrir a rota "para facilitar o
   desenvolvimento".
