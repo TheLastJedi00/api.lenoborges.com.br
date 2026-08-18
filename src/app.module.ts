@@ -11,6 +11,7 @@ import { ProfileModule } from './profile/profile.module';
 import { AuthModule } from './auth/auth.module';
 import { BillingModule } from './billing/billing.module';
 import { TrackModule } from './track/track.module';
+import { AdminModule } from './admin/admin.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { TrackModule } from './track/track.module';
     AuthModule,
     BillingModule,
     TrackModule,
+    AdminModule,
   ],
   controllers: [AppController],
   providers: [
