@@ -10,7 +10,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - **Document IDs carry meaning.** `waitlist_entries/{normalized-email}` is how email uniqueness is enforced — Firestore has no `UNIQUE` constraint, and the document path is the only place it guarantees uniqueness. `profiles/{firebase-uid}` replaces the old FK to `auth.users`. Never switch these to auto-IDs plus a query.
 - **`create()`, never `set()`** in the repositories: `set()` overwrites silently, and it is the `ALREADY_EXISTS` from `create()` that stands in for the Postgres `23505` unique violation.
-- Value ranges (`grade` 0–13; see spec 008 — 1-8 are badges, 9-12 the Elite Four, 13 post-game) and required fields are validated in the application; `firestore.rules` denies everything, since only the Admin SDK — which bypasses rules — touches the data.
+- Value ranges (`grade` 0–13; see spec 008 (Liga Dev), which lives in the **front** repo — 1-8 are badges, 9-12 the Elite Four, 13 post-game) and required fields are validated in the application; `firestore.rules` denies everything, since only the Admin SDK — which bypasses rules — touches the data.
+- **`badge_videos/{badgeId}__{youtubeId}`** (spec 009) is the same idea applied twice: the composite path is what keeps a video from entering the same badge twice, while still allowing it in a different badge. And `order` is **renormalized to 0..n-1 inside an atomic `WriteBatch`** on every reorder and delete — a per-video update leaves two videos on `order: 3` when the second write fails, and that list is wrong in silence.
+- **The badge listing is the first query that is not by path**, so it needs a composite index (`badgeId` + `order`) in production. The emulator does not require indexes, so the suite stays green and the failure only shows up live.
+- **`role` is a Firebase Auth custom claim, never a Firestore field** — it rides inside the ID token the guard already verifies. It takes effect only on the *next* token, up to an hour later (`CHECK_REVOKED = false`). Granting is `npm run admin:grant -- <email>`; there is no endpoint that creates an admin.
 
 Login goes through the Identity Toolkit REST API from the server, not the Admin SDK, because the Admin SDK cannot verify passwords. **Password definition happens outside this API entirely**, on Firebase's hosted screen; there is no `POST /auth/password` and the `oobCode` never reaches this code.
 
@@ -30,7 +33,10 @@ npm run test:e2e         # e2e: boots the Firebase emulator, runs jest --config 
 # Firebase (no migrations exist — Firestore has no schema)
 npm run emulators        # Auth + Firestore emulators (needs the Firebase CLI)
 npm run rules:deploy     # publishes firestore.rules to the linked project
+npm run admin:grant -- <email>   # grants the admin claim (add --revoke to undo)
 ```
+
+**The emulator needs Java on the PATH.** Without it, `npm run test:e2e` fails at startup with "Could not spawn `java -version`" and no test runs — the unit suite (`npm test`) is unaffected.
 
 The e2e suite runs against the emulator, never a real project. `firebase emulators:exec` sets `FIRESTORE_EMULATOR_HOST` and `FIREBASE_AUTH_EMULATOR_HOST` itself, but `FIREBASE_SERVICE_ACCOUNT_JSON` must still be present in `.env` — boot validation requires it even when the credential is never actually used against the emulator.
 

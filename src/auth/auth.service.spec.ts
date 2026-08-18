@@ -295,7 +295,7 @@ describe('AuthService', () => {
         name: 'Fulano',
         phone: '11999998888',
         bio: null,
-        // Nasce sem insignia desde a spec 008: o perfil herda nome e telefone da
+        // Nasce sem insignia desde a spec 008 (Liga Dev, no front): o perfil herda nome e telefone da
         // waitlist, mas conquista nenhuma.
         grade: 0,
         completedAt: null,

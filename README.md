@@ -139,7 +139,7 @@ Consequência no contrato: o `id` do recibo de `POST /waitlist` é o e-mail, nã
 **ID do documento: o UID do Firebase.**
 
 - `name`, `phone`, `bio` (string ou null até o onboarding)
-- `grade` (number, 0 a 13, default 0 — ver spec 008: 1 a 8 são insígnias, 9 a 12 a Elite Four, 13 o pós-game)
+- `grade` (number, 0 a 13, default 0 — ver spec 008 (Liga Dev, no repositório do front): 1 a 8 são insígnias, 9 a 12 a Elite Four, 13 o pós-game)
 - `completedAt` (Timestamp ou null)
 - `waitlistEntryId` (string ou null — é o e-mail normalizado, o caminho em `waitlist_entries`)
 - `createdAt`, `updatedAt` (Timestamp)
@@ -192,12 +192,12 @@ Acesse `/docs` para visualizar o Swagger com os esquemas e exemplos.
 
 ### `POST /auth/login`
 - Entrada: `{ email, password }`
-- Resposta: `200` `{ accessToken, expiresIn, user: { id, email }, profileCompleted, grade }` + Cookie `eduleno_rt`
+- Resposta: `200` `{ accessToken, expiresIn, user: { id, email }, profileCompleted, grade, role }` + Cookie `eduleno_rt`
 - Rate limit: 5 req / 60s
 
 ### `POST /auth/refresh`
 - Entrada: Leitura automática do cookie `eduleno_rt`
-- Resposta: `200` `{ accessToken, expiresIn, user: { id, email }, profileCompleted, grade }` + Cookie `eduleno_rt` rotacionado
+- Resposta: `200` `{ accessToken, expiresIn, user: { id, email }, profileCompleted, grade, role }` + Cookie `eduleno_rt` rotacionado
 - Rate limit: 30 req / 60s
 
 ### `POST /auth/logout`
@@ -209,11 +209,120 @@ Acesse `/docs` para visualizar o Swagger com os esquemas e exemplos.
 
 ### `GET /me`
 - Header: `Authorization: Bearer <accessToken>`
-- Resposta: `200` `{ id, email, name, phone, bio, grade, profileCompleted }`
+- Resposta: `200` `{ id, email, name, phone, bio, grade, profileCompleted, role }`
 
 ### `PATCH /me/profile`
 - Header: `Authorization: Bearer <accessToken>`
 - Entrada: `{ name, phone, bio }`
-- Resposta: `200` `{ id, email, name, phone, bio, grade, profileCompleted }`
+- Resposta: `200` `{ id, email, name, phone, bio, grade, profileCompleted, role }`
 - Comportamento: Preenche `completed_at` na primeira execução e não sobrescreve nas seguintes.
 - Rate limit: 10 req / 60s
+
+---
+
+## Financeiro, Administração e Trilha (spec 009)
+
+### `GET /billing/tiers`
+- Header: `Authorization: Bearer <accessToken>`
+- Resposta: `200` `{ tiers: [{ id, name, price, priceLabel, period, summary, perks }], currentTierId }`
+
+**Exige sessão, e essa é a única razão de o endpoint existir para um dado estático:** o preço não
+pode sair no bundle público. Se o número está no JavaScript que qualquer visitante baixa, ele não
+saiu da landing — só saiu da tela. O nome do tier e o que ele entrega continuam sendo conteúdo local
+do front, porque são copy; o **preço** existe num lugar só, aqui.
+
+`price` vem em **centavos** (`26000`), e `priceLabel` é o rótulo pronto, para o front usar como
+fallback e nunca como fonte.
+
+Os quatro tiers são cumulativos, e cada tier pago abre `perks` com "Tudo do &lt;anterior&gt;":
+
+| Tier | Preço/mês | Acrescenta |
+|---|---|---|
+| Dev Tier | Gratuito | Insígnias 1 e 2, comunidade, voto no Mural |
+| Great Dev Tier | R$ 19,99 | A plataforma da Insígnia 3 em diante e a Elite Four |
+| Ultra Dev Tier | R$ 199,99 | A Grinding Arena |
+| Master Dev Tier | R$ 260,00 | Duas aulas de inglês por mês, para entrevista técnica |
+
+`currentTierId` sai de `resolveCurrentTier(profile)` e hoje é `dev-tier` para todo mundo — não existe
+cobrança. A função existe para haver **um lugar só** onde essa pergunta é respondida quando a
+assinatura existir.
+
+### `GET /badges/:badgeId/videos`
+- Header: `Authorization: Bearer <accessToken>`
+- Resposta: `200` `{ badgeId, videos: [{ id, badgeId, title, description, youtubeId, order }] }`
+
+**Insígnia sem vídeo responde `200` com lista vazia, nunca `404`.** A trilha não é presa — o aluno
+escolhe qual insígnia quer conquistar e pode pular —, então insígnia vazia é o estado normal do
+produto, não uma exceção. `404` fica reservado para insígnia que não existe na trilha, que é bug ou
+URL adulterada.
+
+Não há guard de assinatura aqui, e isso é escolha declarada: não existe estado de assinatura no
+modelo, e a única chave disponível hoje seria o `grade` — que é **conquista**, não acesso.
+
+### Rotas de administração
+
+Todas passam por `FirebaseAuthGuard` e depois `AdminGuard`, nessa ordem. Membro comum recebe `403`.
+
+| Método | Rota | O que faz |
+|---|---|---|
+| `GET` | `/admin/users?limit&pageToken` | Lista os cadastrados, paginado pelo Auth |
+| `PATCH` | `/admin/users/:id` | Altera `grade`, e só |
+| `GET` | `/admin/badges/:badgeId/videos` | Vídeos da insígnia |
+| `POST` | `/admin/badges/:badgeId/videos` | Publica; recebe URL, grava o ID; entra no fim da ordem |
+| `PATCH` | `/admin/badges/:badgeId/videos/order` | Reordena em lote atômico |
+| `PATCH` | `/admin/badges/:badgeId/videos/:videoId` | Edita título e descrição |
+| `DELETE` | `/admin/badges/:badgeId/videos/:videoId` | Remove e renormaliza a ordem |
+
+### Coleção `badge_videos` (spec 009)
+
+**ID do documento: `{badgeId}__{youtubeId}`.**
+
+- `badgeId` (string) — uma das treze etapas de `src/track/track.constants.ts`
+- `title` (string) — **o título da plataforma**, obrigatório. Não é o do YouTube
+- `description` (string ou null)
+- `youtubeId` (string) — só o ID, nunca a URL
+- `order` (number) — posição dentro da insígnia, inteiro de 0 a n-1
+- `createdAt`, `updatedAt` (Timestamp)
+
+O caminho composto é o que garante que **o mesmo vídeo não entra duas vezes na mesma insígnia** — o
+`create()` falha com `ALREADY_EXISTS` —, e ao mesmo tempo permite o mesmo vídeo em duas insígnias
+diferentes, que é um caso real: um vídeo de Git serve à insígnia de Git e à de DevOps.
+
+O título é nosso porque o do YouTube é de lá: aquele é escrito para o algoritmo, este diz onde a
+pessoa está na trilha e precisa poder ser reescrito sem republicar o vídeo.
+
+Guarda-se o ID e não a URL porque ela chega em cinco formas (`watch?v=`, `youtu.be/`, `/embed/`, com
+`&t=`, com `?si=`). A extração acontece uma vez, na entrada, em `src/track/youtube-id.ts`.
+
+**Esta é a primeira consulta do sistema que não é por caminho**, e ela pede um índice composto
+(`badgeId` + `order`) no Firestore de produção. O emulador não exige índice, então a suíte passa
+verde e a falha aparece só em produção, com um link no erro para criá-lo.
+
+### `role` como custom claim
+
+Administrador é uma **custom claim do Firebase Auth** (`role: 'admin'`), nunca um campo no Firestore.
+A claim viaja dentro do ID token, então o `verifyIdToken` que o guard já faz devolve o papel de
+graça; um campo em `profiles` custaria uma leitura de banco em toda requisição de admin e criaria
+dois lugares capazes de discordar sobre quem manda.
+
+```bash
+npm run admin:grant -- lenoborges.dev@gmail.com            # promove
+npm run admin:grant -- lenoborges.dev@gmail.com --revoke   # rebaixa
+```
+
+**A claim só vale no próximo token.** Com `CHECK_REVOKED = false`, o ID token que a pessoa já tem
+continua valendo por até uma hora — promover não é instantâneo, e é preciso sair e entrar de novo.
+
+Não existe endpoint que cria admin: o primeiro não teria quem o criasse, e seria a superfície mais
+cara do projeto para o menor uso.
+
+`role` sai achatado em `POST /auth/login`, `POST /auth/refresh` e `GET /me`, para o front decidir se
+desenha a Administração sem decodificar o ID token por conta própria. **Esconder o botão não é a
+segurança** — quem impede é o `AdminGuard`.
+
+### O que o banco garantia, com as linhas novas
+
+| Garantia | É |
+|---|---|
+| Um vídeo por insígnia, sem repetir | ID do documento `{badgeId}__{youtubeId}` |
+| Ordem sem buracos e sem empates | Renormalização 0..n-1 em `WriteBatch` atômico |
