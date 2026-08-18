@@ -9,7 +9,10 @@ export const PROFILE_COLLECTION = 'profiles';
 export type CreateProfileData = Pick<
   Profile,
   'id' | 'name' | 'phone' | 'bio' | 'grade' | 'completedAt' | 'waitlistEntryId'
->;
+> & {
+  /** Opcional na criacao: sem valor, o repository grava 'dev-tier'. */
+  tier?: Profile['tier'];
+};
 
 @Injectable()
 export class ProfileRepository {
@@ -36,7 +39,14 @@ export class ProfileRepository {
   async create(data: CreateProfileData): Promise<{ entry: Profile }> {
     // Sem ORM nao ha @CreateDateColumn: quem preenche os carimbos e este metodo.
     const now = new Date();
-    const entry: Profile = { ...data, createdAt: now, updatedAt: now };
+    // Todo perfil nasce no Dev Tier. O default vive aqui, e nao no chamador,
+    // para nao existir caminho de criacao que esqueca de defini-lo.
+    const entry: Profile = {
+      tier: 'dev-tier',
+      ...data,
+      createdAt: now,
+      updatedAt: now,
+    };
 
     await this.collection.doc(data.id).create(entry);
 

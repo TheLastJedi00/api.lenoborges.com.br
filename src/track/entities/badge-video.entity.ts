@@ -25,13 +25,44 @@ import { BadgeId } from '../track.constants';
  * forma bruta for gravada, cada tela que monta um player reimplementa a
  * extracao, e elas divergem.
  */
+export type BadgeVideoKind = 'aula' | 'resposta';
+
 export interface BadgeVideo {
   id: string;
   badgeId: BadgeId;
   title: string;
   description: string | null;
   youtubeId: string;
-  /** Posicao dentro da insignia. Inteiro de 0 a n-1, renormalizado a cada mudanca. */
+  /**
+   * A natureza do video (spec 010).
+   *
+   * Aula se assiste em ordem; resposta se consulta por assunto. Sao duas listas
+   * com propositos diferentes, e misturadas a trilha fica com respostas avulsas
+   * no meio da sequencia -- e a sequencia deixa de ser sequencia.
+   */
+  kind: BadgeVideoKind;
+  /** A pergunta que originou a resposta. Nulo em toda aula. */
+  questionId: string | null;
+  /**
+   * Libera o video para todo mundo, mesmo numa insignia adiantada.
+   *
+   * **A precedencia e total, e a ordem importa:** quando existir gate de
+   * conteudo, ele comeca por esta flag e sai. Ela nao e um empate a ser
+   * resolvido depois de conferir tier e insignia.
+   *
+   * Existe porque o Mural cria uma armadilha: a melhor pergunta da semana pode
+   * ser sobre Angular, a resposta vira um video excelente, e ele nasce trancado
+   * para 90% de quem votou nela. A marcacao e a valvula.
+   */
+  devTierFree: boolean;
+  /**
+   * Posicao dentro da insignia **e da aba**. Inteiro de 0 a n-1.
+   *
+   * A renormalizacao acontece dentro de `(badgeId, kind)`, e nao da insignia
+   * inteira: uma insignia com tres aulas e duas respostas tem duas sequencias
+   * independentes. Renormalizar sem separar por `kind` embaralharia as duas
+   * abas de uma vez -- e e o bug mais provavel desta spec.
+   */
   order: number;
   createdAt: Date;
   updatedAt: Date;
@@ -43,6 +74,9 @@ interface BadgeVideoDocument extends DocumentData {
   title: string;
   description: string | null;
   youtubeId: string;
+  kind: BadgeVideoKind;
+  questionId: string | null;
+  devTierFree: boolean;
   order: number;
   createdAt: Timestamp;
   updatedAt: Timestamp;
@@ -60,6 +94,9 @@ export const badgeVideoConverter: FirestoreDataConverter<BadgeVideo> = {
       title: video.title,
       description: video.description,
       youtubeId: video.youtubeId,
+      kind: video.kind,
+      questionId: video.questionId,
+      devTierFree: video.devTierFree,
       order: video.order,
       createdAt: Timestamp.fromDate(video.createdAt),
       updatedAt: Timestamp.fromDate(video.updatedAt),
@@ -75,6 +112,13 @@ export const badgeVideoConverter: FirestoreDataConverter<BadgeVideo> = {
       title: data.title,
       description: data.description ?? null,
       youtubeId: data.youtubeId,
+      // Documento anterior a spec 010 nao tem estes tres campos -- e sao todos
+      // os videos ja publicados. Sem os defaults, `kind` chega undefined e o
+      // filtro por aba devolve lista vazia: a trilha some sem ninguem ter
+      // apagado nada.
+      kind: data.kind ?? 'aula',
+      questionId: data.questionId ?? null,
+      devTierFree: data.devTierFree ?? false,
       order: data.order,
       createdAt: data.createdAt.toDate(),
       updatedAt: data.updatedAt.toDate(),

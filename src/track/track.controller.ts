@@ -1,9 +1,10 @@
-import { Controller, Get, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
   ApiResponse,
   ApiBearerAuth,
+  ApiQuery,
 } from '@nestjs/swagger';
 import { BadgeVideoService } from './badge-video.service';
 import { BadgeVideoListDto } from './dto/badge-video.dto';
@@ -31,11 +32,25 @@ export class TrackController {
       'Insígnia sem vídeo responde 200 com lista vazia — é o estado normal do ' +
       'produto, não um erro. 404 só quando a insígnia não existe na trilha.',
   })
+  @ApiQuery({
+    name: 'kind',
+    required: false,
+    enum: ['aula', 'resposta'],
+    description:
+      'A aba. Sem o parâmetro, as duas juntas — Aulas se assistem em ordem, ' +
+      'Perguntas Frequentes se consultam por assunto',
+  })
   @ApiResponse({ status: 200, type: BadgeVideoListDto })
   @ApiResponse({ status: 404, description: 'Insígnia inexistente.' })
   async listVideos(
     @Param('badgeId') badgeId: string,
+    @Query('kind') kind?: string,
   ): Promise<BadgeVideoListDto> {
-    return this.videos.listByBadge(badgeId);
+    // Valor desconhecido cai em `undefined` e devolve as duas abas, em vez de
+    // devolver lista vazia: um erro de digitação na URL não deveria fazer a
+    // trilha parecer vazia.
+    const aba = kind === 'aula' || kind === 'resposta' ? kind : undefined;
+
+    return this.videos.listByBadge(badgeId, aba);
   }
 }

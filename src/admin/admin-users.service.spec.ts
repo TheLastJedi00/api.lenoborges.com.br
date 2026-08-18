@@ -26,6 +26,7 @@ function profile(id: string, grade: number): Profile {
     phone: '47999990000',
     bio: 'bio',
     grade,
+    tier: 'dev-tier',
     completedAt: new Date(),
     waitlistEntryId: null,
     createdAt: new Date(),
@@ -143,6 +144,30 @@ describe('AdminUsersService', () => {
   });
 
   describe('updateGrade', () => {
+    /**
+     * **O teste que importa desta fase.**
+     *
+     * Mexer em `tier` nao pode tocar `grade`, nem o contrario. Um patch montado
+     * com os dois campos sempre presentes escreveria `grade: undefined` ao
+     * conceder acesso -- e o Firestore aceitaria, zerando o progresso de quem
+     * acabou de pagar.
+     */
+    it('altera tier sem tocar grade, e vice-versa', async () => {
+      profileRepository.update.mockResolvedValue({
+        entry: profile('uid-1', 5),
+      });
+
+      await service.updateUser('uid-1', { tier: 'great-dev-tier' });
+      expect(profileRepository.update).toHaveBeenCalledWith('uid-1', {
+        tier: 'great-dev-tier',
+      });
+
+      await service.updateUser('uid-1', { grade: 7 });
+      expect(profileRepository.update).toHaveBeenLastCalledWith('uid-1', {
+        grade: 7,
+      });
+    });
+
     it('altera o grade do perfil', async () => {
       profileRepository.update.mockResolvedValue({
         entry: profile('uid-1', 7),

@@ -36,6 +36,7 @@ export class ProfileService {
       grade: profile.entry.grade,
       profileCompleted: profile.entry.completedAt !== null,
       role,
+      tier: profile.entry.tier,
     };
   }
 
@@ -84,6 +85,7 @@ export class ProfileService {
       grade: updated.entry.grade,
       profileCompleted: updated.entry.completedAt !== null,
       role,
+      tier: updated.entry.tier,
     };
   }
 }

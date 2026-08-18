@@ -348,3 +348,31 @@ decisão 9 desta spec obedece.
 4. **O Master aparece na landing junto dos outros três, ou só dentro?** Escrito aqui como: aparece na
    landing, sem preço, como os outros. É o tier mais fácil de explicar sem número, porque o benefício é
    concreto.
+
+---
+
+## Emendas da spec 010 (2026-08-18)
+
+Três decisões desta spec foram emendadas pelo Mural, e vale dizer o que mudou e o que **não** mudou —
+"emendada" nunca pode ser lido como "revogada".
+
+### Decisão 4 — cumprida
+`resolveCurrentTier` deixou de ser uma função vazia com um `TODO`. Ela lê `profile.tier`, um campo
+novo que o admin edita à mão. Continua sendo **o único lugar** que responde "qual é o tier desta
+pessoa", que era exatamente o motivo de ela existir antes de ter corpo.
+
+### Decisão 7 — emendada
+A ordem dos vídeos passou de `0..n-1 por insígnia` para `0..n-1 por (badgeId, kind)`. A insígnia
+ganhou duas abas — Aulas e Perguntas Frequentes —, e cada uma tem a sua sequência. **Renormalizar sem
+separar por `kind` embaralha as duas de uma vez**, e a aba que ninguém tocou aparece fora de ordem
+sem explicação.
+
+### Decisão 9 — emendada, com o limite intacto
+Nasceu o primeiro portão de tier do produto: **Dev Tier vota no Mural, mas não escreve pergunta**.
+
+O que essa decisão proibia e **continua proibido** é gatear conteúdo por `grade`.
+`GET /badges/:badgeId/videos` segue sem guard de assinatura. O portão da 010 é o **tier**, que é
+acesso; `grade` é conquista, e derivar um do outro continua sendo o erro mais tentador de programar.
+
+O `devTierFree` nasceu junto, e é o contrapeso: um vídeo marcado fica livre para todos mesmo numa
+insígnia adiantada, com **precedência total** sobre qualquer verificação futura.

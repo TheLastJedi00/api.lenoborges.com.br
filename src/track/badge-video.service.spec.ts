@@ -5,15 +5,22 @@ import {
 } from '@nestjs/common';
 import { BadgeVideoService } from './badge-video.service';
 import { BadgeVideoRepository } from './badge-video.repository';
-import { BadgeVideo } from './entities/badge-video.entity';
+import { BadgeVideo, BadgeVideoKind } from './entities/badge-video.entity';
 
-function video(id: string, order: number): BadgeVideo {
+function video(
+  id: string,
+  order: number,
+  kind: BadgeVideoKind = 'aula',
+): BadgeVideo {
   return {
     id,
     badgeId: 'logica',
     title: `Video ${id}`,
     description: null,
     youtubeId: id.split('__')[1] ?? 'dQw4w9WgXcQ',
+    kind,
+    questionId: null,
+    devTierFree: false,
     order,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -195,6 +202,52 @@ describe('BadgeVideoService', () => {
         }),
       ).rejects.toThrow(BadRequestException);
     });
+
+    /**
+     * **O bug mais provavel da spec 010, e a razao deste teste existir.**
+     *
+     * A ordem e por `(badgeId, kind)`: uma insignia com tres aulas e duas
+     * respostas tem duas sequencias independentes. Reordenar sem filtrar por
+     * `kind` embaralharia as duas abas de uma vez, e a que ninguem tocou
+     * apareceria fora de ordem sem explicacao.
+     */
+    it('reordena dentro da aba, sem enxergar a outra', async () => {
+      const aulas = [
+        video('logica__aaaaaaaaaaa', 0),
+        video('logica__bbbbbbbbbbb', 1),
+      ];
+      const respostas = [video('logica__rrrrrrrrrrr', 0, 'resposta')];
+
+      repository.listByBadge.mockImplementation((_badge, kind) =>
+        Promise.resolve(kind === 'resposta' ? respostas : aulas),
+      );
+
+      await service.reorder(
+        'logica',
+        { videoIds: ['logica__rrrrrrrrrrr'] },
+        'resposta',
+      );
+
+      expect(repository.listByBadge).toHaveBeenCalledWith('logica', 'resposta');
+      expect(repository.reorder).toHaveBeenCalledWith(['logica__rrrrrrrrrrr']);
+    });
+
+    it('recusa misturar ids de abas diferentes', async () => {
+      const aulas = [video('logica__aaaaaaaaaaa', 0)];
+      const respostas = [video('logica__rrrrrrrrrrr', 0, 'resposta')];
+
+      repository.listByBadge.mockImplementation((_badge, kind) =>
+        Promise.resolve(kind === 'resposta' ? respostas : aulas),
+      );
+
+      await expect(
+        service.reorder(
+          'logica',
+          { videoIds: ['logica__rrrrrrrrrrr', 'logica__aaaaaaaaaaa'] },
+          'resposta',
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
   });
 
   describe('remocao', () => {
@@ -226,6 +279,89 @@ describe('BadgeVideoService', () => {
       await expect(
         service.remove('logica', 'logica__inexistente'),
       ).rejects.toThrow(NotFoundException);
+    });
+
+    // Apagar uma resposta renormaliza a aba de respostas, e nao a de aulas.
+    it('renormaliza so a aba do video removido', async () => {
+      repository.findById.mockResolvedValue({
+        found: true,
+        entry: video('logica__rrrrrrrrrrr', 0, 'resposta'),
+      });
+      repository.listByBadge.mockResolvedValue([]);
+
+      await service.remove('logica', 'logica__rrrrrrrrrrr');
+
+      expect(repository.listByBadge).toHaveBeenCalledWith('logica', 'resposta');
+    });
+  });
+
+  describe('videos de resposta', () => {
+    it('vincula a pergunta que originou a resposta', async () => {
+      repository.create.mockResolvedValue({
+        entry: video('logica__dQw4w9WgXcQ', 0, 'resposta'),
+      });
+
+      await service.create('logica', {
+        title: 'Respondendo a pergunta da semana',
+        youtubeUrl: 'https://youtu.be/dQw4w9WgXcQ',
+        kind: 'resposta',
+        questionId: '2026-08-09__uid-1',
+      });
+
+      expect(repository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          kind: 'resposta',
+          questionId: '2026-08-09__uid-1',
+        }),
+      );
+    });
+
+    /**
+     * Aula com pergunta e resposta sem pergunta sao os dois estados incoerentes,
+     * e o 400 e mais barato que um dado torto que ninguem sabe interpretar
+     * depois.
+     */
+    it('recusa vincular pergunta a uma aula', async () => {
+      await expect(
+        service.create('logica', {
+          title: 'Uma aula comum',
+          youtubeUrl: 'https://youtu.be/dQw4w9WgXcQ',
+          kind: 'aula',
+          questionId: '2026-08-09__uid-1',
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('marca o video como livre para todos', async () => {
+      repository.create.mockResolvedValue({
+        entry: video('logica__dQw4w9WgXcQ', 0),
+      });
+
+      await service.create('logica', {
+        title: 'Uma aula de vitrine',
+        youtubeUrl: 'https://youtu.be/dQw4w9WgXcQ',
+        devTierFree: true,
+      });
+
+      expect(repository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ devTierFree: true }),
+      );
+    });
+
+    // Nasce como aula porque e o que quase todo video e.
+    it('entra como aula quando o kind nao e informado', async () => {
+      repository.create.mockResolvedValue({
+        entry: video('logica__dQw4w9WgXcQ', 0),
+      });
+
+      await service.create('logica', {
+        title: 'Uma aula comum',
+        youtubeUrl: 'https://youtu.be/dQw4w9WgXcQ',
+      });
+
+      expect(repository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ kind: 'aula', devTierFree: false }),
+      );
     });
   });
 });

@@ -1,3 +1,4 @@
+import type { TierId } from '../../billing/billing.tiers';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class UserInfoDto {
@@ -58,4 +59,13 @@ export class SessionResponseDto {
       'quem impede o acesso e o AdminGuard, nao a ausencia do botao',
   })
   role: 'admin' | null;
+
+  @ApiProperty({
+    example: 'dev-tier',
+    enum: ['dev-tier', 'great-dev-tier', 'ultra-dev-tier', 'master-dev-tier'],
+    description:
+      'Tier de acesso do membro. E ACESSO, e nao conquista: nao se deriva de ' +
+      'grade nem o contrario. Diferente de role, vale na hora -- nao espera token novo',
+  })
+  tier: TierId;
 }

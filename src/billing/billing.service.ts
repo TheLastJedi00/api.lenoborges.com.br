@@ -13,28 +13,31 @@ export class BillingService {
   }
 
   /**
-   * Qual e o tier desta pessoa.
+   * Qual e o tier desta pessoa. **A unica funcao que responde isso.**
    *
-   * **Hoje devolve `dev-tier` para todo mundo**, porque nao existe cobranca,
-   * assinatura nem webhook -- ver a decisao 4 da spec 009.
+   * A spec 009 criou este metodo com corpo vazio e um TODO; a spec 010 lhe deu
+   * corpo, porque o Mural precisou do primeiro portao de acesso do produto e um
+   * portao precisa saber quem paga.
    *
-   * TODO(assinatura): quando existir estado de pagamento, e aqui que ele entra.
-   * A funcao existe justamente para haver **um lugar so** onde essa pergunta e
-   * respondida; sem ela, a resposta nasce espalhada em `if`s de controller e
-   * cada um deles envelhece separado.
+   * Hoje a resposta e `profile.tier`, um campo que o admin edita a mao. Isso
+   * parece atalho e nao e: **e o desenho fiel do produto de hoje**. Nao existe
+   * checkout -- o upgrade acontece por conversa e o pagamento por fora --, e se
+   * o pagamento e manual, o direito de acesso tambem e. Fingir o contrario
+   * exigiria inventar um estado de assinatura que ninguem alimenta.
    *
-   * Duas coisas que a implementacao futura nao pode fazer, e que sao o motivo de
-   * este comentario existir:
+   * TODO(assinatura): quando existir gateway, e por dentro daqui que ele entra,
+   * sem nenhum chamador precisar saber.
    *
-   * - **Derivar o tier de `grade`.** `grade` e conquista, tier e acesso. Sao
-   *   independentes, e o teste `nao deriva o tier a partir do grade` existe para
+   * Duas coisas que a implementacao futura nao pode fazer:
+   *
+   * - **Derivar o tier de `grade`**, nem `grade` do tier. `grade` e conquista,
+   *   tier e acesso, e o teste `nao deriva o tier a partir do grade` existe para
    *   denunciar quem os misturar.
-   * - **Zerar `grade` no cancelamento.** Insignia e conquista, nao aluguel. Quem
-   *   cancelou com seis insignias continua com seis; o que ele perde e o avanco.
-   *   Ver as decisoes 5c e 5d da spec 008.
+   * - **Zerar `grade` no cancelamento.** Insignia e conquista, nao aluguel: quem
+   *   cancelou com seis insignias continua com seis, e o que ele perde e o
+   *   avanco. Ver as decisoes 5c e 5d da spec 008.
    */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   resolveCurrentTier(profile: Profile): TierId {
-    return 'dev-tier';
+    return profile.tier;
   }
 }

@@ -1,4 +1,4 @@
-import { IsOptional, IsString, Length } from 'class-validator';
+import { IsBoolean, IsIn, IsOptional, IsString, Length } from 'class-validator';
 import { Transform } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 
@@ -38,4 +38,38 @@ export class CreateBadgeVideoDto {
   })
   @IsString()
   youtubeUrl: string;
+
+  @ApiProperty({
+    required: false,
+    example: 'aula',
+    enum: ['aula', 'resposta'],
+    description: 'A aba da insígnia. Sem valor, entra como aula',
+  })
+  @IsOptional()
+  @IsIn(['aula', 'resposta'])
+  kind?: 'aula' | 'resposta';
+
+  @ApiProperty({
+    required: false,
+    example: '2026-08-09__9b1deb4d',
+    description:
+      'A pergunta do Mural que este vídeo responde. **Só é aceito com ' +
+      '`kind: resposta`** — aula com pergunta e resposta sem pergunta são os ' +
+      'dois estados incoerentes',
+  })
+  @IsOptional()
+  @IsString()
+  questionId?: string;
+
+  @ApiProperty({
+    required: false,
+    example: false,
+    description:
+      'Libera o vídeo para todo mundo, mesmo numa insígnia adiantada. Nasce ' +
+      'aqui, no cadastro, porque marcar durante é grátis e voltar depois em cem ' +
+      'vídeos não é',
+  })
+  @IsOptional()
+  @IsBoolean()
+  devTierFree?: boolean;
 }
