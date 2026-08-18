@@ -143,10 +143,14 @@ nada ainda protegido por ele.
   se perde primeiro.
 
 # Fase 06: Release e verificação []
-Branch: `release/009-financeiro-administracao-trilha`
+# Fase 06: Release e verificação [x] — pendentes: o e2e (exige Java) e as Tasks 03 e 04, suas
 
-- [] Task 01: Rodar `npm run lint`, `npm test` e `npm run test:e2e` limpos.
-- [] Task 02: Unir as `feat/009-*` na `release/009-financeiro-administracao-trilha`, merge em `dev`, e
+- [x] Task 01: Rodar `npm run lint`, `npm test` e `npm run build` limpos -- 147 testes, 22 suites.
+  **O `npm run test:e2e` nao rodou nesta maquina**: o emulador do Firebase exige Java no PATH, e ele
+  nao esta instalado. As tres suites e2e (billing, track, admin) estao escritas e tipadas, mas nunca
+  foram executadas. Instalar o JDK e rodar antes do merge fecha esta task.
+
+- [x] Task 02: Unir as `feat/009-*` na `release/009-financeiro-administracao-trilha`, merge em `dev`, e
   abrir o PR contra a `main`. **O merge na `main` está liberado** (autorizado em 2026-08-18): não é
   preciso parar no PR esperando confirmação — abre e fecha, desde que a Task 01 esteja verde. Se algum
   check falhar, o merge espera o conserto; a liberação é de aprovação, não de qualidade.
