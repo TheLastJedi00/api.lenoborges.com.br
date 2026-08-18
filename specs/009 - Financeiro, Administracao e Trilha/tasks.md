@@ -127,17 +127,17 @@ nada ainda protegido por ele.
   admin recebe a lista; um usuário criado no Auth e sem perfil aparece com os campos de perfil nulos.
 
 # Fase 05: Documentação []
-Branch: `feat/009-docs`
+# Fase 05: Documentação [x]
 
-- [] Task 01: Documentar os endpoints novos. Arquivo: `README.md`. Objetivo: a regra do `clauderc.md` —
+- [x] Task 01: Documentar os endpoints novos. Arquivo: `README.md`. Objetivo: a regra do `clauderc.md` —
   endpoint e estrutura de dado se documentam no README. Entram as nove rotas, a coleção `badge_videos`
   com a tabela de campos, e a claim `role` na seção de sessão e segurança.
-- [] Task 02: Conferir as citações de "spec 008". Arquivos: `src/profile/entities/profile.entity.ts`,
+- [x] Task 02: Conferir as citações de "spec 008". Arquivos: `src/profile/entities/profile.entity.ts`,
   `src/auth/auth.service.spec.ts`, `README.md`. Objetivo: as três dizem "spec 008" querendo dizer Liga
   Dev, e **isso está certo** — a numeração é alinhada entre os repositórios, e 008 é Liga Dev nos dois.
   A tarefa é acrescentar "(Liga Dev)" onde a citação está solta, porque o backend não tem pasta 008 e
   quem procurar a origem do `GRADE_MAX` precisa saber que ela está no outro repositório.
-- [] Task 03: Atualizar o `CLAUDE.md`. Objetivo: registrar a coleção nova e as duas garantias que ela
+- [x] Task 03: Atualizar o `CLAUDE.md`. Objetivo: registrar a coleção nova e as duas garantias que ela
   move para o código — a unicidade por caminho composto e a renormalização de `order`. É a seção que
   existe justamente porque o Firestore não tem DDL, e uma coleção nova sem entrada ali é a garantia que
   se perde primeiro.
