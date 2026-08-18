@@ -104,26 +104,26 @@ nada ainda protegido por ele.
   posições fecham 0,1 sem buraco. Mais o 200-vazio e o 403 de quem não é admin.
 
 # Fase 04: Administração de usuários []
-Branch: `feat/009-admin-users`
+# Fase 04: Administração de usuários [x]
 
-- [] Task 01: Escrever os DTOs. Arquivos: `src/admin/dto/admin-user.dto.ts`,
+- [x] Task 01: Escrever os DTOs. Arquivos: `src/admin/dto/admin-user.dto.ts`,
   `src/admin/dto/admin-user-page.dto.ts`, `src/admin/dto/update-user-grade.dto.ts`. Objetivo: a linha
   da listagem junta identidade (Auth) e perfil (Firestore); a página carrega `nextPageToken` nulo no
   fim. `grade` validado entre `GRADE_MIN` e `GRADE_MAX`, reusando as constantes de
   `profile.entity.ts` — nunca reescrever 0 e 13 à mão, que é como uma das duas faixas envelhece
   sozinha.
-- [] Task 02 (TDD): Escrever a spec do `AdminUsersService`. Arquivo:
+- [x] Task 02 (TDD): Escrever a spec do `AdminUsersService`. Arquivo:
   `src/admin/admin-users.service.spec.ts`. Objetivo: cobrir a junção das duas fontes, e principalmente
   o caso do **usuário sem documento de perfil** — que não pode sumir da lista nem derrubar a resposta.
   É a razão de a paginação ser a do Auth (decisão 10), e o teste é o que impede alguém de "simplificar"
   para uma consulta no Firestore depois.
-- [] Task 03: Implementar o `AdminUsersService`. Arquivo: `src/admin/admin-users.service.ts`. Objetivo:
+- [x] Task 03: Implementar o `AdminUsersService`. Arquivo: `src/admin/admin-users.service.ts`. Objetivo:
   `listUsers(limit, pageToken)` do Auth, depois um `getAll` dos perfis daquela página por caminho —
   nenhuma consulta, nenhum índice. `updateGrade` altera só `grade` e `updatedAt`.
-- [] Task 04: Implementar o `AdminUsersController`. Arquivos: `src/admin/admin-users.controller.ts`,
+- [x] Task 04: Implementar o `AdminUsersController`. Arquivos: `src/admin/admin-users.controller.ts`,
   `src/admin/admin.module.ts`, e o import em `src/app.module.ts`. Objetivo: `GET /admin/users` e
   `PATCH /admin/users/:id`, os dois sob `FirebaseAuthGuard` e `AdminGuard`, nessa ordem.
-- [] Task 05: Testar na e2e. Arquivo: `test/admin.e2e-spec.ts`. Objetivo: usuário comum recebe 403;
+- [x] Task 05: Testar na e2e. Arquivo: `test/admin.e2e-spec.ts`. Objetivo: usuário comum recebe 403;
   admin recebe a lista; um usuário criado no Auth e sem perfil aparece com os campos de perfil nulos.
 
 # Fase 05: Documentação []
