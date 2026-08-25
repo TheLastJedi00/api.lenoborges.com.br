@@ -108,6 +108,7 @@ describe('validate (env)', () => {
           ...baseEnv,
           NODE_ENV: 'production',
           RESEND_WEBHOOK_SECRET: 'whsec_x',
+          API_PUBLIC_URL: 'https://api.lenoborges.com.br',
         }),
       ).toThrow(/RESEND_API_KEY/);
     });
@@ -118,17 +119,32 @@ describe('validate (env)', () => {
           ...baseEnv,
           NODE_ENV: 'production',
           RESEND_API_KEY: 're_x',
+          API_PUBLIC_URL: 'https://api.lenoborges.com.br',
         }),
       ).toThrow(/RESEND_WEBHOOK_SECRET/);
     });
 
-    it('em producao com as duas chaves, sobe', () => {
+    it('em producao, boot sem API_PUBLIC_URL falha', () => {
+      // Sem ela o link de descadastro de todo e-mail aponta para localhost, e
+      // quem quiser sair da lista nao consegue -- o que vira denuncia de spam.
       expect(() =>
         validate({
           ...baseEnv,
           NODE_ENV: 'production',
           RESEND_API_KEY: 're_x',
           RESEND_WEBHOOK_SECRET: 'whsec_x',
+        }),
+      ).toThrow(/API_PUBLIC_URL/);
+    });
+
+    it('em producao com as tres, sobe', () => {
+      expect(() =>
+        validate({
+          ...baseEnv,
+          NODE_ENV: 'production',
+          RESEND_API_KEY: 're_x',
+          RESEND_WEBHOOK_SECRET: 'whsec_x',
+          API_PUBLIC_URL: 'https://api.lenoborges.com.br',
         }),
       ).not.toThrow();
     });

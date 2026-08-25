@@ -1,0 +1,325 @@
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { AudienceMember, AudienceService } from './audience.service';
+import { EmailCampaignRepository } from './email-campaign.repository';
+import { MailerService, OutgoingEmail } from './mailer.service';
+import { renderEmail } from './email-template';
+import { signUnsubscribeToken } from './unsubscribe-token';
+import { ALREADY_EXISTS } from '../waitlist/waitlist.repository';
+import type { CreateCampaignData } from './email-campaign.repository';
+import {
+  CampaignStatus,
+  EmailCampaign,
+} from './entities/email-campaign.entity';
+
+/**
+ * Quantas mensagens vão numa requisição ao provedor.
+ *
+ * É o teto da API de lote, e é o mesmo número que fatia a audiência: o cursor é
+ * gravado a cada 100 pessoas.
+ */
+export const BATCH_SIZE = 100;
+
+export interface CampaignResult {
+  id: string;
+  status: CampaignStatus;
+  audienceCount: number;
+  sentCount: number;
+  failedCount: number;
+}
+
+/**
+ * O único caminho de envio do produto (spec 014, decisão 3).
+ *
+ * **Disparo manual e disparo automático são o mesmo caminho.** Os dois produzem
+ * um `email_campaigns/{id}` e passam por aqui; o que muda é quem escreve o
+ * documento e o que vai dentro dele. O envio, o lote, o descadastro, o cabeçalho
+ * e o registro são um código só.
+ *
+ * Dois caminhos de envio seria o desenho óbvio — "e-mail transacional é uma
+ * coisa, campanha é outra" — e seria a origem garantida da primeira falha grave:
+ * o caminho automático esqueceria o descadastro, porque quem escreve gatilho não
+ * está pensando em lista. Aqui não dá para esquecer: **não existe função que
+ * envie sem passar por onde o descadastro é aplicado.**
+ */
+@Injectable()
+export class EmailCampaignService {
+  private readonly logger = new Logger(EmailCampaignService.name);
+  private readonly unsubscribeSecret: string;
+  private readonly apiUrl: string;
+
+  constructor(
+    private readonly repository: EmailCampaignRepository,
+    private readonly audience: AudienceService,
+    private readonly mailer: MailerService,
+    private readonly configService: ConfigService,
+  ) {
+    this.unsubscribeSecret = this.configService.getOrThrow<string>(
+      'EMAIL_UNSUBSCRIBE_SECRET',
+    );
+
+    // O link do rodapé precisa ser absoluto: e-mail não tem roteador. A base é a
+    // própria API, porque quem responde ao descadastro é este servidor.
+    this.apiUrl = (
+      this.configService.get<string>('API_PUBLIC_URL') ??
+      `http://localhost:${this.configService.get<string>('PORT') ?? '3000'}`
+    ).replace(/\/+$/, '');
+  }
+
+  /**
+   * Cria a campanha e dispara, **dentro da requisição**.
+   *
+   * O trinco de um disparo por vez vem antes de tudo (decisão 15): se já existe
+   * campanha `enviando`, responde `409` e a segunda não começa.
+   *
+   * Audiência zero é `400`, e não uma campanha vazia: **campanha para zero
+   * pessoa é sempre engano** — filtro trocado, faixa invertida, tier que não
+   * existe mais.
+   */
+  async createAndSend(
+    data: Omit<CreateCampaignData, 'audienceCount'> & {
+      excludeUid?: string | null;
+    },
+  ): Promise<CampaignResult> {
+    const emAndamento = await this.repository.findSending();
+    if (emAndamento.found) {
+      throw new ConflictException(
+        'Já existe um disparo em andamento. Espere ele terminar antes de começar outro.',
+      );
+    }
+
+    const membros = await this.audience.build({
+      ...data.filters,
+      excludeUid: data.excludeUid ?? null,
+    });
+
+    if (membros.length === 0) {
+      throw new BadRequestException(
+        'Esses filtros não pegam ninguém (0 pessoas). Campanha para zero pessoa é sempre engano.',
+      );
+    }
+
+    let entry: EmailCampaign;
+    try {
+      ({ entry } = await this.repository.create({
+        ...data,
+        audienceCount: membros.length,
+      }));
+    } catch (error) {
+      // **Campanha de vídeo que já existe não lança e não envia de novo.** O id
+      // é `video__{badgeId}__{youtubeId}`, e é o `ALREADY_EXISTS` do `create()`
+      // que impede um retry de rede de anunciar o mesmo vídeo duas vezes para a
+      // base inteira. Engolido em silêncio, como na spec 012.
+      if (data.id && isAlreadyExists(error)) {
+        this.logger.log(
+          `Campanha ${data.id} ja existia: nada foi enviado de novo.`,
+        );
+        return {
+          id: data.id,
+          status: 'concluida',
+          audienceCount: 0,
+          sentCount: 0,
+          failedCount: 0,
+        };
+      }
+
+      throw error;
+    }
+
+    return this.dispatch(entry, membros);
+  }
+
+  /**
+   * Retoma uma campanha `interrompida`, **a partir do cursor**.
+   *
+   * Não do começo: o cursor é exatamente o que existe para isso. Campanha
+   * `concluida` responde `409` — retomar algo que terminou seria reenviar.
+   */
+  async resume(id: string): Promise<CampaignResult> {
+    const { found, entry } = await this.repository.findById(id);
+    if (!found || !entry) {
+      throw new NotFoundException('Campanha não encontrada.');
+    }
+
+    if (entry.status !== 'interrompida') {
+      throw new ConflictException(
+        'Só campanha interrompida pode ser retomada.',
+      );
+    }
+
+    const emAndamento = await this.repository.findSending();
+    if (emAndamento.found) {
+      throw new ConflictException(
+        'Já existe um disparo em andamento. Espere ele terminar antes de retomar este.',
+      );
+    }
+
+    const membros = await this.audience.build(entry.filters);
+
+    return this.dispatch(entry, membros);
+  }
+
+  /** As mais recentes, para o histórico da tela. */
+  async listRecent(): Promise<EmailCampaign[]> {
+    return this.repository.listRecent();
+  }
+
+  /**
+   * Monta o e-mail e manda **para um endereço só**, sem criar campanha.
+   *
+   * Existe pela mesma razão da prévia de audiência: disparo de e-mail é a
+   * operação mais irreversível do produto. E-mail que saiu, saiu — não há
+   * edição, não há apagar, e o erro fica na caixa de entrada de todo mundo com o
+   * nome do produto em cima.
+   */
+  async sendTest(
+    to: string,
+    uid: string,
+    content: {
+      subject: string;
+      body: string;
+      ctaLabel?: string | null;
+      ctaUrl?: string | null;
+    },
+  ): Promise<void> {
+    const resultado = await this.mailer.send(this.compose(uid, to, content));
+
+    if (resultado.failed > 0) {
+      throw new BadRequestException(
+        `Não consegui enviar o teste: ${resultado.error ?? 'falha desconhecida'}`,
+      );
+    }
+  }
+
+  /**
+   * O envio em lotes, com o cursor gravado a cada um (decisão 4).
+   *
+   * **Um lote pode duplicar, e está aceito.** Se o envio do lote sete for aceito
+   * pelo provedor e a gravação do cursor falhar logo depois, retomar reenvia
+   * aquelas cem pessoas. Duplicar um e-mail para cem pessoas é um incômodo;
+   * perder o envio para as outras mil é o recurso não funcionando. A alternativa
+   * — um registro por destinatário — é fan-out de escrita.
+   */
+  private async dispatch(
+    campaign: EmailCampaign,
+    audiencia: readonly AudienceMember[],
+  ): Promise<CampaignResult> {
+    // Retomar começa **depois** do cursor, e nunca do início.
+    const pendentes = campaign.cursorUid
+      ? audiencia.filter((membro) => membro.uid > campaign.cursorUid!)
+      : audiencia;
+
+    let sentCount = campaign.sentCount;
+    let failedCount = campaign.failedCount;
+    let cursorUid = campaign.cursorUid;
+    let erro: string | null = null;
+
+    for (let inicio = 0; inicio < pendentes.length; inicio += BATCH_SIZE) {
+      const lote = pendentes.slice(inicio, inicio + BATCH_SIZE);
+
+      const resultado = await this.mailer.sendBatch(
+        lote.map((membro) => this.compose(membro.uid, membro.email, campaign)),
+      );
+
+      if (resultado.failed > 0) {
+        // O lote inteiro falhou. A campanha para aqui e fica `interrompida` com
+        // o cursor no fim do último lote confirmado — "Retomar" continua dali.
+        failedCount += resultado.failed;
+        erro = resultado.error;
+        break;
+      }
+
+      sentCount += resultado.sent;
+      cursorUid = lote[lote.length - 1].uid;
+
+      await this.repository.updateProgress(
+        campaign.id,
+        cursorUid,
+        sentCount,
+        failedCount,
+      );
+    }
+
+    const status: CampaignStatus = erro ? 'interrompida' : 'concluida';
+    await this.repository.finish(campaign.id, status, erro);
+
+    if (erro) {
+      this.logger.error(
+        `Campanha ${campaign.id} interrompida em ${sentCount}/${campaign.audienceCount}: ${erro}`,
+      );
+    }
+
+    return {
+      id: campaign.id,
+      status,
+      audienceCount: campaign.audienceCount,
+      sentCount,
+      failedCount,
+    };
+  }
+
+  /**
+   * Monta a mensagem de uma pessoa.
+   *
+   * **O token do cabeçalho e o do rodapé são o mesmo, do mesmo `uid`**, e é por
+   * isso que os dois saem daqui e de uma variável só: trocá-los descadastraria a
+   * pessoa errada, e nada na tela denunciaria.
+   *
+   * Os cabeçalhos `List-Unsubscribe` e `List-Unsubscribe-Post` são **requisito
+   * de remetente em massa do Gmail e do Yahoo desde 2024**, não refinamento: sem
+   * eles a entrega degrada por política, independentemente do conteúdo.
+   */
+  private compose(
+    uid: string,
+    to: string,
+    content: {
+      subject: string;
+      body: string;
+      ctaLabel?: string | null;
+      ctaUrl?: string | null;
+    },
+  ): OutgoingEmail {
+    const token = signUnsubscribeToken(uid, this.unsubscribeSecret);
+    const unsubscribeUrl = `${this.apiUrl}/emails/descadastro?token=${token}`;
+
+    const { html, text } = renderEmail({
+      subject: content.subject,
+      body: content.body,
+      ctaLabel: content.ctaLabel ?? null,
+      ctaUrl: content.ctaUrl ?? null,
+      unsubscribeUrl,
+    });
+
+    return {
+      to,
+      subject: content.subject,
+      html,
+      text,
+      headers: {
+        'List-Unsubscribe': `<${unsubscribeUrl}>`,
+        'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+      },
+    };
+  }
+}
+
+/**
+ * `true` quando o Firestore recusou por o documento já existir.
+ *
+ * A constante vem de `waitlist.repository.ts`, onde ela nasceu ocupando o lugar
+ * do `23505` do Postgres. É a mesma corrida, na mesma casa.
+ */
+function isAlreadyExists(error: unknown): boolean {
+  return (
+    !!error &&
+    typeof error === 'object' &&
+    'code' in error &&
+    error.code === ALREADY_EXISTS
+  );
+}

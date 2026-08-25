@@ -100,6 +100,15 @@ class EnvironmentVariables {
   @IsNotEmpty()
   EMAIL_UNSUBSCRIBE_SECRET: string;
 
+  // Onde esta API responde, em absoluto. **E-mail nao tem roteador**: o link
+  // do rodape e o cabecalho List-Unsubscribe precisam de uma URL inteira, e
+  // quem responde ao descadastro e este servidor, nao o front. Sem ela, o
+  // fallback e localhost -- que funciona em desenvolvimento e produz um link
+  // morto em producao.
+  @IsString()
+  @IsOptional()
+  API_PUBLIC_URL?: string;
+
   // Segredo da assinatura do webhook de bounce e reclamacao (decisao 10).
   // Obrigatorio em producao, pela mesma checagem da RESEND_API_KEY.
   @IsString()
@@ -148,6 +157,14 @@ export function validate(config: Record<string, unknown>) {
       throw new Error(
         'RESEND_WEBHOOK_SECRET e obrigatoria em producao. Sem ela o webhook de ' +
           'bounce recusa tudo, e endereco morto nunca se desliga sozinho.',
+      );
+    }
+
+    if (!validatedConfig.API_PUBLIC_URL) {
+      throw new Error(
+        'API_PUBLIC_URL e obrigatoria em producao. Sem ela o link de ' +
+          'descadastro de todo e-mail aponta para localhost, e quem quiser sair ' +
+          'da lista nao consegue -- o que vira denuncia de spam.',
       );
     }
   }
