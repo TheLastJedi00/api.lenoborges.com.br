@@ -105,7 +105,30 @@ Branch: `feat/012-docs`
 
 ---
 
-## Resultado da execução
+## Resultado da execução (2026-08-25)
 
-_A preencher ao fim, no formato das specs 009, 010 e 011: o que ficou de fora e por quê, e o que a
-execução decidiu que vale registrar._
+Quatro fases inteiras e a quinta em quatro de seis tasks. **242 testes verdes** em 31 suítes (eram 235
+em 31) e `npm run lint` limpo. No front, **296 testes** no Karma.
+
+### O que ficou de fora, e por quê
+
+- **Verificação no emulador** (Fase 05, Task 05). O emulador do Firebase **exige Java no PATH**, e não há
+  Java nesta máquina — `npm run test:e2e` não sobe. É a mesma limitação que o `CLAUDE.md` já registra, e
+  ela não afeta a suíte unitária.
+- **Verificação em produção** (Fase 05, Task 06). Depende do deploy e de duas contas reais. É a única
+  prova de que a consulta funciona **fora do emulador**, que não exige índice nenhum e por isso nunca
+  reprova — a mesma forma de falha que a spec 009 já documentou.
+
+### Duas coisas que a execução decidiu, e valem registrar
+
+**O aviso saiu de dentro do `try` que traduz o `ALREADY_EXISTS`.** Escrito ingenuamente, o
+`notifyVideo` cai dentro do bloco que existe para transformar duplicata em 409 — e uma falha de
+notificação viraria um erro de publicação com a mensagem errada. Ele foi movido para depois do
+`try/catch`, com um `catch` próprio em cada gatilho. São **dois cintos**: o `NotificationsService` já
+captura por dentro, e o do gatilho existe para a garantia ser estrutural em vez de depender de o outro
+service continuar se comportando.
+
+**O `markAllRead` marca o que aquela pessoa veria, e não tudo o que existe.** A implementação óbvia
+marcaria a janela inteira, incluindo o evento dela mesma e o que é anterior à entrada dela — registros
+de leitura que não significam nada e que enchem a subcoleção do perfil sem motivo. Ele reusa o
+`listUnread`, que já aplica os três cortes.
