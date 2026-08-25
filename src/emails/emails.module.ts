@@ -6,6 +6,7 @@ import { AudienceService } from './audience.service';
 import { EmailCampaignRepository } from './email-campaign.repository';
 import { EmailCampaignService } from './email-campaign.service';
 import { ProfileModule } from '../profile/profile.module';
+import { MemberDirectoryModule } from '../admin/member-directory.module';
 
 /**
  * O canal externo do produto (spec 014).
@@ -15,7 +16,7 @@ import { ProfileModule } from '../profile/profile.module';
  * conhece o provedor**: o pacote `resend` é importado só em `mailer.service.ts`.
  */
 @Module({
-  imports: [ProfileModule],
+  imports: [ProfileModule, MemberDirectoryModule],
   controllers: [EmailsController, AdminEmailsController],
   providers: [
     MailerService,

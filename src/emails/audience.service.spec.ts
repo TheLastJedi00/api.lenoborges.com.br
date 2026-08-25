@@ -1,4 +1,5 @@
 import { AudienceService } from './audience.service';
+import { MemberDirectoryService } from '../admin/member-directory.service';
 import { FirebaseService } from '../auth/firebase.service';
 import { ProfileRepository } from '../profile/profile.repository';
 import { Profile } from '../profile/entities/profile.entity';
@@ -53,7 +54,9 @@ function build(
     });
   }
 
-  const service = new AudienceService(
+  // A varredura tem um dono só desde a spec 015: o AudienceService não junta
+  // mais Auth com perfis, ele só recorta o que o diretório devolve.
+  const directory = new MemberDirectoryService(
     { auth: { listUsers } } as unknown as FirebaseService,
     {
       findManyByIds: (uids: string[]) =>
@@ -66,6 +69,8 @@ function build(
         ),
     } as unknown as ProfileRepository,
   );
+
+  const service = new AudienceService(directory);
 
   return { service, listUsers };
 }
