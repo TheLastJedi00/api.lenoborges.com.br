@@ -35,6 +35,8 @@ import { NotificationsModule } from './notifications/notifications.module';
     TrackModule,
     AdminModule,
     MuralModule,
+
+    NotificationsModule,
   ],
   controllers: [AppController],
   providers: [

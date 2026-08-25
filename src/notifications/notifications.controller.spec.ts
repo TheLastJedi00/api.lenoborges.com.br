@@ -1,11 +1,16 @@
 import { NotificationsController } from './notifications.controller';
 import { NotificationsService } from './notifications.service';
+import type { CurrentUserData } from '../auth/decorators/current-user.decorator';
 
 describe('NotificationsController', () => {
   let controller: NotificationsController;
   let service: jest.Mocked<Partial<NotificationsService>>;
 
-  const user = { id: 'uid-1', email: 'membro@exemplo.com' } as any;
+  const user: CurrentUserData = {
+    id: 'uid-1',
+    email: 'membro@exemplo.com',
+    role: null,
+  };
 
   beforeEach(() => {
     service = {
