@@ -66,6 +66,34 @@ interface MuralQuestionDocument extends DocumentData {
   updatedAt: Timestamp;
 }
 
+/**
+ * Autor de uma pergunta cuja conta foi excluida (spec 013, decisao 6).
+ *
+ * A pergunta do Mural nao e so de quem perguntou: tem votos de outras pessoas,
+ * pode ter vencido a semana e pode ter virado video na trilha. Apaga-la levaria
+ * junto o voto de terceiros e deixaria um video respondendo a uma pergunta que
+ * nao existe mais. Entao o texto fica e o autor some: `authorUid` vira esta
+ * constante e `authorName` vira 'Membro removido'.
+ *
+ * **O `uid` original continua no caminho do documento** -- `{weekId}__{uid}` --
+ * e nao ha como tira-lo de la sem recriar a pergunta e migrar a subcolecao de
+ * votos inteira. Depois da exclusao ele e uma cadeia opaca que **nao resolve
+ * para ninguem**: nao ha usuario no Auth, nao ha perfil, nao ha entrada na lista
+ * de espera. Identificador orfao nao identifica, e e isso que faz a operacao ser
+ * eliminacao e nao pseudonimizacao, para efeito de LGPD.
+ *
+ * > **A condicao para isso continuar verdadeiro e uma so: nenhuma colecao nova
+ * > pode guardar `uid` ao lado de dado pessoal.** Log persistente com uid e
+ * > e-mail juntos, tabela de analytics, backup de perfil "por garantia" --
+ * > qualquer um desses reata o vinculo e transforma anonimizacao em
+ * > pseudonimizacao. E a restricao que a proxima spec de observabilidade precisa
+ * > ler antes de escrever a primeira linha.
+ */
+export const ANONYMOUS_AUTHOR_UID = '__removido__';
+
+/** Nome exibido no lugar do de quem se excluiu. */
+export const ANONYMOUS_AUTHOR_NAME = 'Membro removido';
+
 /** Monta o ID do documento. A regra tem um dono so. */
 export function questionDocId(weekId: string, uid: string): string {
   return `${weekId}__${uid}`;

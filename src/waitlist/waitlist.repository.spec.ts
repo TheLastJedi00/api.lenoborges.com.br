@@ -4,6 +4,7 @@ import { FirebaseService } from '../auth/firebase.service';
 interface DocMock {
   get: jest.Mock;
   create: jest.Mock;
+  delete: jest.Mock;
   id: string;
 }
 
@@ -18,6 +19,7 @@ function buildFirestore() {
   const doc: DocMock = {
     get: jest.fn(),
     create: jest.fn(),
+    delete: jest.fn().mockResolvedValue(undefined),
     id: 'test@test.com',
   };
   const collection: CollectionMock = {
@@ -133,6 +135,20 @@ describe('WaitlistRepository', () => {
           consent: true,
         }),
       ).rejects.toBe(alreadyExists);
+    });
+  });
+
+  describe('remove', () => {
+    /**
+     * A inscricao guarda nome, telefone e e-mail: e dado pessoal puro, e e o
+     * registro mais facil de esquecer numa exclusao de conta, porque nenhuma
+     * tela do painel o mostra.
+     */
+    it('apaga por caminho, com o e-mail normalizado como id', async () => {
+      await repository.remove('test@test.com');
+
+      expect(mocks.collection.doc).toHaveBeenCalledWith('test@test.com');
+      expect(mocks.doc.delete).toHaveBeenCalledTimes(1);
     });
   });
 });

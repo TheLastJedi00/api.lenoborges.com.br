@@ -143,6 +143,7 @@ Consequência no contrato: o `id` do recibo de `POST /waitlist` é o e-mail, nã
 
 - `name`, `phone`, `bio` (string ou null até o onboarding)
 - `grade` (number, 0 a 13, default 0 — ver spec 008 (Liga Dev, no repositório do front): 1 a 8 são insígnias, 9 a 12 a Elite Four, 13 o pós-game)
+- `linkedin`, `instagram` (string ou null — **URL completa**, nunca handle; spec 013)
 - `completedAt` (Timestamp ou null)
 - `waitlistEntryId` (string ou null — é o e-mail normalizado, o caminho em `waitlist_entries`)
 - `createdAt`, `updatedAt` (Timestamp)
@@ -216,9 +217,12 @@ Acesse `/docs` para visualizar o Swagger com os esquemas e exemplos.
 
 ### `PATCH /me/profile`
 - Header: `Authorization: Bearer <accessToken>`
-- Entrada: `{ name, phone, bio }`
-- Resposta: `200` `{ id, email, name, phone, bio, grade, profileCompleted, role }`
+- Entrada: `{ name, phone, bio, linkedin?, instagram? }`
+- Resposta: `200` `{ id, email, name, phone, bio, grade, linkedin, instagram, profileCompleted, role, tier }`
 - Comportamento: Preenche `completed_at` na primeira execução e não sobrescreve nas seguintes.
+  As redes são **opcionais e independentes**: campo ausente deixa o valor guardado intacto, string
+  vazia remove. O valor guardado é sempre a URL completa — o front normaliza `@fulano` antes de
+  mandar, e a API recusa o que não for do domínio certo.
 - Rate limit: 10 req / 60s
 
 ---
@@ -538,3 +542,104 @@ firebase firestore:indexes    # imprime os índices do projeto, em JSON
 não começa pelo campo do filtro de igualdade não serve nenhum deles. Ele encarece toda gravação de
 voto, que é a escrita mais frequente do sistema. Se ele reaparecer depois de removido, é rascunho ou
 clique em link de erro, não requisito.
+
+---
+
+## Meu Perfil: credencial e exclusão de conta (spec 013)
+
+Até aqui esta API mexia em conteúdo — vídeo, pergunta, voto. Estas quatro operações mexem em
+**credencial** e em **direito de eliminação**, e as duas coisas têm regras próprias.
+
+| Operação | Endpoint | Reautentica? | Encerra a sessão? |
+|---|---|---|---|
+| Editar nome, bio, telefone e redes | `PATCH /me/profile` | não | não |
+| Trocar de e-mail | `POST /me/email` | **sim** | quando a troca for confirmada |
+| Trocar de senha | `POST /me/password` | **sim** | **sim, na hora** |
+| Excluir a conta | `DELETE /me` | **sim** | **sim, e para sempre** |
+
+A régua é a mesma nas três de baixo: **quem prova ser o dono é a senha, não o token.** Um ID token
+roubado vale uma hora, e uma hora é tempo suficiente para trocar o e-mail de acesso e tomar a conta
+para sempre. Quem confere a senha é um lugar só — `AuthService.reauthenticate`, que bate no mesmo
+`accounts:signInWithPassword` do login. Dois verificadores de senha divergem na primeira exceção.
+
+### `POST /me/email`
+
+- Entrada: `{ newEmail, password }` · Resposta: `202` `{ status: 'confirmation_sent' }`
+- Rate limit: 3 req / 60s
+
+**Este endpoint não troca o e-mail.** Ele reautentica e pede ao Identity Toolkit um `sendOobCode` com
+`VERIFY_AND_CHANGE_EMAIL`; quem troca é o Google, quando o link for clicado. É a mesma decisão da
+definição de senha (spec 007): o `oobCode` não passa por esta API e não existe tela nossa que o
+consuma. Até o clique, o login continua sendo pelo e-mail antigo.
+
+**A confirmação vai para o endereço novo, não para o antigo**, e essa ordem é o ponto inteiro: um fluxo
+que confirma na caixa velha prova que a pessoa ainda tem a caixa que está abandonando.
+
+E-mail inválido, e-mail igual ao atual e e-mail que já pertence a outra conta respondem `400` com a
+**mesma mensagem**. É desconfortável e é deliberado: distinguir reabriria, atrás de um login, o oráculo
+de enumeração que a spec 005 fechou no cadastro — e um login é barato de conseguir.
+
+### `POST /me/password`
+
+- Entrada: `{ currentPassword, newPassword }` · Resposta: `204`, cookie limpo
+- Rate limit: 3 req / 60s
+
+Reautentica, troca com `accounts:update`, **revoga os refresh tokens de todos os aparelhos** e apaga o
+cookie deste navegador. Encerrar a sessão não é efeito colateral: trocar a senha por desconfiar de
+invasão e seguir com o invasor logado é não ter trocado a senha.
+
+Não há rotação do par de tokens, e o motivo é mecânico: o cookie de refresh mora em `path=/auth`, então
+uma resposta de `/me` não consegue lê-lo para rotacioná-lo.
+
+**A revogação não é corte imediato.** O ID token já emitido continua valendo por até uma hora, porque o
+guard roda com `CHECK_REVOKED = false` (spec 007). A janela é conhecida e é o preço já aceito lá.
+
+O piso da senha nova é a **política do console** (Authentication > Settings > Password policy), não o
+`@MinLength(8)` do DTO — esse é cortesia, para dar erro melhor antes da viagem.
+
+### `DELETE /me` — o que some e o que vira anônimo
+
+- Entrada: `{ password }` · Resposta: `204`, cookie limpo
+- Rate limit: 3 req / 60s
+
+**É imediato, irreversível e não tem desfazer.** Não há lixeira de 30 dias: manter o dado que a pessoa
+acabou de pedir para eliminar é o contrário do pedido.
+
+| Some de verdade | Vira anônimo |
+|---|---|
+| Usuário do Firebase Auth | `mural_questions` de autoria dela |
+| `profiles/{uid}` | |
+| `profiles/{uid}/notification_reads/*` | |
+| Votos dados por ela, em `{questionId}/votes/{uid}` | |
+| `waitlist_entries/{email}`, se houver | |
+
+A pergunta do Mural não é só de quem perguntou: tem votos de outras pessoas, pode ter vencido a semana e
+pode ter virado vídeo na trilha. Apagá-la levaria junto o voto de terceiros e deixaria um vídeo
+respondendo a uma pergunta que não existe mais. Então o texto fica e o autor some — `authorUid` vira
+`__removido__` e `authorName` vira `Membro removido`. Título, corpo, `badgeId`, `voteCount` e
+`answerVideoId` ficam intactos.
+
+Consequência para quem consome: **`authorUid` deixa de ser garantia de que existe um perfil por trás
+dele.** Quem cruzar os dois precisa tolerar a ausência.
+
+**A ordem é fixa e o Auth é o último a morrer.** Não existe transação atravessando Firestore e Firebase
+Auth, então o que dá para escolher é qual metade fica de pé quando a outra falha. Com o Auth por último,
+uma falha no meio deixa a conta viva e a pessoa capaz de tentar de novo. Com o Auth primeiro, deixa dado
+pessoal órfão no Firestore — sem conta, sem sessão e sem ninguém com direito de pedir a remoção.
+
+> **A anonimização só continua valendo sob uma condição: nenhuma coleção nova pode guardar `uid` ao lado
+> de dado pessoal.** O `uid` sobrevive no caminho do documento da pergunta (`{weekId}__{uid}`) e depois
+> da exclusão é uma cadeia opaca que não resolve para ninguém — não há usuário no Auth, não há perfil,
+> não há entrada na lista de espera. Um log persistente com uid e e-mail juntos, uma tabela de analytics
+> ou um backup de perfil "por garantia" reatam o vínculo e transformam eliminação em pseudonimização. É
+> a restrição que a próxima spec de observabilidade precisa ler antes da primeira linha.
+
+**Admin recebe `403`.** A claim `role` é aplicada à mão pelo console, e um admin que se exclui leva
+junto a única forma de administrar o produto. Não é proteção de segurança, é trava contra tijolo — e
+está no backend porque o front esconder o botão seria proteção nenhuma. Excluir a conta de terceiros
+continua não existindo: é spec própria, com trilha de auditoria.
+
+**Nenhum índice composto novo.** As três operações críticas leem por caminho; a anonimização é um
+`where('authorUid', '==', uid)` de campo único, que o índice automático já atende; e achar os votos é
+varredura de `mural_questions` com `getAll` por caminho, não consulta — índice de collection group seria
+custo mensal por um evento que acontece uma vez na vida de cada membro.

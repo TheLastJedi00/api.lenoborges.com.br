@@ -42,6 +42,21 @@ export class WaitlistRepository {
     return { found: true, entry: snapshot.data()! };
   }
 
+  /**
+   * Apaga a inscricao na lista de espera (spec 013).
+   *
+   * Ela guarda nome, telefone e e-mail: e dado pessoal puro, e e o registro mais
+   * facil de esquecer numa exclusao de conta, porque nenhuma tela do painel o
+   * mostra. O ID e o e-mail normalizado, que e o caminho do documento.
+   *
+   * `delete()` em documento inexistente nao e erro no Firestore, e aqui isso e
+   * o comportamento certo: quem entrou direto, sem passar pela lista, nao tem o
+   * que apagar.
+   */
+  async remove(id: string): Promise<void> {
+    await this.collection.doc(id).delete();
+  }
+
   async create(
     data: Pick<WaitlistEntry, 'name' | 'phone' | 'email' | 'consent'>,
   ): Promise<{ entry: WaitlistEntry }> {

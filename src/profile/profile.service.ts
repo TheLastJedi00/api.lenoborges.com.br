@@ -1,21 +1,76 @@
 import {
+  ForbiddenException,
+  Inject,
   Injectable,
+  Logger,
   NotFoundException,
   BadRequestException,
+  forwardRef,
 } from '@nestjs/common';
 import { ProfileRepository } from './profile.repository';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import { ChangeEmailDto } from './dto/change-email.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
+import { DeleteAccountDto } from './dto/delete-account.dto';
 import { ProfileDto } from './dto/profile.dto';
 import type { UserRole } from '../auth/decorators/current-user.decorator';
+import { AuthService } from '../auth/auth.service';
+import { MuralRepository } from '../mural/mural.repository';
+import { WaitlistRepository } from '../waitlist/waitlist.repository';
+import { FirebaseService } from '../auth/firebase.service';
 import {
   normalizeName,
   normalizePhone,
   normalizeBio,
+  normalizeEmail,
 } from '../common/normalize';
+
+/**
+ * Recusa unica das operacoes de e-mail.
+ *
+ * **E a mesma mensagem para e-mail invalido, e-mail igual ao atual e e-mail que
+ * ja pertence a outra conta** (spec 013, decisao 3). O Identity Toolkit devolve
+ * `EMAIL_EXISTS` no ultimo caso e essa informacao nao sai daqui: um endpoint que
+ * responde "esse e-mail ja existe" e um oraculo de enumeracao atras de um login,
+ * e login e barato de conseguir. A spec 005 fechou esse oraculo no cadastro
+ * pagando o preco de responder 202 para e-mail conhecido; reabri-lo aqui em nome
+ * da UX desfaz aquela decisao sem citar ela.
+ */
+const EMAIL_REJECTED = 'Não foi possível usar este e-mail.';
+
+/**
+ * Traduz a recusa de senha do Identity Toolkit.
+ *
+ * O piso real e a politica do console (Authentication > Settings > Password
+ * policy), nao o `@MinLength` do DTO: o Google recusa a senha fraca mesmo
+ * quando o decorator deixou passar, e e esta mensagem que a pessoa le.
+ */
+function translatePasswordError(error: unknown): string {
+  const code = error instanceof Error ? error.message : String(error);
+
+  if (code.startsWith('WEAK_PASSWORD') || code.startsWith('PASSWORD_DOES')) {
+    return 'A nova senha não atende à política de segurança do projeto.';
+  }
+  if (code.startsWith('TOKEN_EXPIRED') || code.startsWith('INVALID_ID_TOKEN')) {
+    return 'Sessão expirada. Entre de novo e tente outra vez.';
+  }
+
+  return 'Não foi possível trocar a senha.';
+}
 
 @Injectable()
 export class ProfileService {
-  constructor(private readonly repository: ProfileRepository) {}
+  private readonly logger = new Logger(ProfileService.name);
+
+  constructor(
+    private readonly repository: ProfileRepository,
+    private readonly firebase: FirebaseService,
+    @Inject(forwardRef(() => AuthService))
+    private readonly authService: AuthService,
+    @Inject(forwardRef(() => MuralRepository))
+    private readonly muralRepository: MuralRepository,
+    private readonly waitlistRepository: WaitlistRepository,
+  ) {}
 
   async getProfile(
     userId: string,
@@ -34,10 +89,186 @@ export class ProfileService {
       phone: profile.entry.phone,
       bio: profile.entry.bio,
       grade: profile.entry.grade,
+      linkedin: profile.entry.linkedin,
+      instagram: profile.entry.instagram,
       profileCompleted: profile.entry.completedAt !== null,
       role,
       tier: profile.entry.tier,
     };
+  }
+
+  /**
+   * Pede a troca do e-mail de acesso.
+   *
+   * **Este endpoint nao troca o e-mail.** Ele reautentica e pede ao Identity
+   * Toolkit um `sendOobCode` com `VERIFY_AND_CHANGE_EMAIL`; quem troca e o
+   * Google, quando o link for clicado. O `oobCode` nao passa por esta API e nao
+   * existe tela nossa que o consuma -- e a decisao 3 da spec 007 aplicada de
+   * novo (spec 013, decisao 2).
+   *
+   * **A confirmacao vai para o endereco novo, nao para o antigo**, e essa ordem
+   * e o ponto inteiro: confirmar na caixa velha provaria que a pessoa ainda tem
+   * a caixa que esta abandonando. A alternativa -- `auth.updateUser({ email })`
+   * pelo Admin SDK -- trocaria o acesso na hora, sem ninguem provar nada, e um
+   * erro de digitacao viraria uma conta inalcancavel.
+   */
+  async changeEmail(
+    userId: string,
+    currentEmail: string,
+    dto: ChangeEmailDto,
+  ): Promise<{ status: 'confirmation_sent' }> {
+    const newEmail = normalizeEmail(dto.newEmail);
+
+    // Antes de qualquer ida ao Firebase: disparar confirmacao para o endereco em
+    // que a pessoa ja esta e gastar um e-mail para nao mudar nada.
+    if (newEmail === normalizeEmail(currentEmail)) {
+      throw new BadRequestException(EMAIL_REJECTED);
+    }
+
+    // Reautenticar vem primeiro, sempre: senha errada nao pode disparar e-mail
+    // nenhum, ou o endpoint vira um jeito de mandar mensagem para terceiros.
+    const idToken = await this.authService.reauthenticate(
+      currentEmail,
+      dto.password,
+    );
+
+    try {
+      await this.firebase.identityToolkit('sendOobCode', {
+        requestType: 'VERIFY_AND_CHANGE_EMAIL',
+        idToken,
+        newEmail,
+        continueUrl: this.authService.continueUrl,
+      });
+    } catch (error) {
+      // EMAIL_EXISTS, INVALID_NEW_EMAIL e o resto viram a mesma recusa. O motivo
+      // real fica no log, onde nao e oraculo de nada.
+      this.logger.warn(
+        `Falha ao pedir a troca de e-mail do usuario ${userId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      throw new BadRequestException(EMAIL_REJECTED);
+    }
+
+    return { status: 'confirmation_sent' };
+  }
+
+  /**
+   * Troca a senha e **encerra a sessao**, nessa ordem.
+   *
+   * Encerrar nao e efeito colateral: trocar a senha porque se desconfia de
+   * invasao e continuar com o invasor logado e nao ter trocado a senha (spec
+   * 013, decisao 4).
+   *
+   * **Nao ha rotacao do par de tokens, e o motivo e mecanico**: o cookie de
+   * refresh vive em `path=/auth` (spec 005), entao uma resposta de `/me` nao
+   * consegue le-lo para rotaciona-lo. Da para apaga-lo daqui -- `Set-Cookie`
+   * escreve qualquer path --, mas nao para emitir um par novo. Entre mudar o
+   * path do cookie do produto inteiro por causa desta tela e encerrar a sessao,
+   * encerrar ja era a saida certa por seguranca.
+   *
+   * **A revogacao nao e corte imediato.** O ID token que a pessoa tem na mao
+   * continua valido por ate uma hora, porque o guard roda com
+   * `CHECK_REVOKED = false` (decisao 2 da spec 007). A janela e conhecida e e o
+   * preco ja aceito la; quem ler "revogou" e assumir corte imediato erra a conta
+   * de risco. Se um dia houver requisito de corte na hora, e aquele booleano que
+   * vira.
+   *
+   * Quem limpa o cookie e o controller, que e quem tem a `Response`.
+   */
+  async changePassword(
+    userId: string,
+    email: string,
+    dto: ChangePasswordDto,
+  ): Promise<void> {
+    // Reautenticar antes de tudo: revogar antes de conferir deslogaria em todo
+    // aparelho quem so errou de digitacao.
+    const idToken = await this.authService.reauthenticate(
+      email,
+      dto.currentPassword,
+    );
+
+    try {
+      await this.firebase.identityToolkit('update', {
+        idToken,
+        password: dto.newPassword,
+        returnSecureToken: false,
+      });
+    } catch (error) {
+      // Aqui a mensagem do Google vale traduzida, e nao engolida: a politica de
+      // senha do console e que decide o piso, e quem trocou a senha precisa
+      // saber por que ela foi recusada. Nao ha oraculo nenhum a proteger --
+      // quem chegou nesta linha ja provou a senha atual.
+      throw new BadRequestException(translatePasswordError(error));
+    }
+
+    // Mata toda sessao viva, em qualquer aparelho.
+    await this.firebase.auth.revokeRefreshTokens(userId);
+  }
+
+  /**
+   * Exclui a conta. **Imediata, irreversivel, e sem lixeira.**
+   *
+   * A exclusao tem duas metades (spec 013, decisao 6). Some de verdade: o
+   * usuario do Firebase Auth, `profiles/{uid}`, a subcolecao
+   * `notification_reads`, os votos dados e a entrada na lista de espera. Vira
+   * anonimo: as perguntas do Mural de autoria dela -- porque elas tem votos de
+   * outras pessoas e podem ter virado video na trilha.
+   *
+   * **A ordem e fixa e o Auth e o ultimo a morrer** (decisao 9). Nao existe
+   * transacao atravessando Firestore e Firebase Auth, entao o que da para
+   * escolher e qual metade fica de pe quando a outra falha. Com o Auth por
+   * ultimo, uma falha no meio deixa a conta viva e a pessoa capaz de tentar de
+   * novo. Com o Auth primeiro, deixa dado pessoal orfao no Firestore -- sem
+   * conta, sem sessao e sem ninguem com direito de pedir a remocao --, que e o
+   * pior resultado possivel da operacao cujo proposito inteiro e remover dado
+   * pessoal.
+   *
+   * No dia em que houver gateway de pagamento, **cancelar a cobranca entra
+   * aqui, antes do `deleteUser`**.
+   */
+  async deleteAccount(
+    userId: string,
+    email: string,
+    role: UserRole | null,
+    dto: DeleteAccountDto,
+  ): Promise<void> {
+    // **Antes da reautenticacao**, para o admin nao gastar a senha descobrindo
+    // que nao podia. Nao e protecao de seguranca, e trava contra tijolo: a claim
+    // `role` e aplicada a mao pelo console (spec 009), e um admin que se exclui
+    // leva junto a unica forma de administrar o produto -- devolver isso exige
+    // console do Firebase, service account e alguem que saiba o caminho. Esta no
+    // backend porque o front esconder o botao seria protecao nenhuma.
+    if (role === 'admin') {
+      throw new ForbiddenException(
+        'Contas de administração não podem ser excluídas por aqui.',
+      );
+    }
+
+    const profile = await this.repository.findById(userId);
+    if (!profile.found || !profile.entry) {
+      throw new NotFoundException('Perfil não encontrado.');
+    }
+
+    await this.authService.reauthenticate(email, dto.password);
+
+    // 2. As perguntas viram anonimas: o texto e os votos de terceiros ficam.
+    await this.muralRepository.anonymizeAuthor(userId);
+
+    // 3. Os votos dados saem, e os contadores acompanham no mesmo lote.
+    await this.muralRepository.removeVotesBy(userId);
+
+    // 4. A subcolecao de leituras, e so entao o perfil.
+    await this.repository.remove(userId);
+
+    // 5. A inscricao na lista de espera, que e nome, telefone e e-mail crus.
+    if (profile.entry.waitlistEntryId) {
+      await this.waitlistRepository.remove(profile.entry.waitlistEntryId);
+    }
+
+    // 6. O Auth por ultimo. Nada depois desta linha pode falhar de um jeito que
+    // importe: o que vem depois e cookie e status.
+    await this.firebase.auth.deleteUser(userId);
   }
 
   async updateProfile(
@@ -63,12 +294,25 @@ export class ProfileService {
       name: string;
       phone: string;
       bio: string;
+      linkedin?: string | null;
+      instagram?: string | null;
       completedAt?: Date;
     } = {
       name: normalizedName,
       phone: normalizedPhone,
       bio: normalizedBio,
     };
+
+    // **Campo ausente no corpo nao apaga o valor guardado.** O DTO ja traduziu
+    // string vazia em `null`, entao o que chega aqui como `undefined` e
+    // "nao mencionei" -- e "nao mencionei" nunca entra no patch. E a diferenca
+    // que todo update parcial erra quando ninguem escreve o teste.
+    if (dto.linkedin !== undefined) {
+      patchData.linkedin = dto.linkedin;
+    }
+    if (dto.instagram !== undefined) {
+      patchData.instagram = dto.instagram;
+    }
 
     if (!profile.entry.completedAt) {
       patchData.completedAt = new Date();
@@ -83,6 +327,8 @@ export class ProfileService {
       phone: updated.entry.phone,
       bio: updated.entry.bio,
       grade: updated.entry.grade,
+      linkedin: updated.entry.linkedin,
+      instagram: updated.entry.instagram,
       profileCompleted: updated.entry.completedAt !== null,
       role,
       tier: updated.entry.tier,

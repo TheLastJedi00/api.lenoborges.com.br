@@ -1,7 +1,16 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ProfileService } from './profile.service';
 import { ProfileRepository } from './profile.repository';
+import { AuthService } from '../auth/auth.service';
+import { MuralRepository } from '../mural/mural.repository';
+import { WaitlistRepository } from '../waitlist/waitlist.repository';
+import { FirebaseService } from '../auth/firebase.service';
 import { Profile } from './entities/profile.entity';
 
 describe('ProfileService', () => {
@@ -9,12 +18,52 @@ describe('ProfileService', () => {
   let repository: {
     findById: jest.Mock;
     update: jest.Mock;
+    remove: jest.Mock;
   };
+  let firebase: {
+    identityToolkit: jest.Mock;
+    auth: { revokeRefreshTokens: jest.Mock; deleteUser: jest.Mock };
+  };
+  let muralRepository: {
+    anonymizeAuthor: jest.Mock;
+    removeVotesBy: jest.Mock;
+  };
+  let waitlistRepository: { remove: jest.Mock };
+  /** Ordem real das chamadas, para o teste-trava da decisao 9. */
+  let ordem: string[];
+  let authService: { reauthenticate: jest.Mock; continueUrl: string };
 
   beforeEach(async () => {
     repository = {
       findById: jest.fn(),
       update: jest.fn(),
+      remove: jest.fn(),
+    };
+
+    ordem = [];
+    const registra = (nome: string) =>
+      jest.fn().mockImplementation(() => {
+        ordem.push(nome);
+        return Promise.resolve(undefined);
+      });
+
+    firebase = {
+      identityToolkit: jest.fn(),
+      auth: {
+        revokeRefreshTokens: jest.fn().mockResolvedValue(undefined),
+        deleteUser: registra('deleteUser'),
+      },
+    };
+
+    muralRepository = {
+      anonymizeAuthor: registra('anonymizeAuthor'),
+      removeVotesBy: registra('removeVotesBy'),
+    };
+    waitlistRepository = { remove: registra('waitlist.remove') };
+    repository.remove = registra('profile.remove');
+    authService = {
+      reauthenticate: jest.fn().mockResolvedValue('id-token-fresco'),
+      continueUrl: 'http://localhost:4200/?entrar=1',
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -24,10 +73,225 @@ describe('ProfileService', () => {
           provide: ProfileRepository,
           useValue: repository,
         },
+        { provide: FirebaseService, useValue: firebase },
+        { provide: AuthService, useValue: authService },
+        { provide: MuralRepository, useValue: muralRepository },
+        { provide: WaitlistRepository, useValue: waitlistRepository },
       ],
     }).compile();
 
     service = module.get<ProfileService>(ProfileService);
+  });
+
+  describe('deleteAccount', () => {
+    const dto = { password: 'senha-certa' };
+    const comWaitlist = {
+      found: true,
+      entry: {
+        id: 'uid-1',
+        name: 'Fulano',
+        phone: '47999990000',
+        bio: 'bio',
+        grade: 3,
+        linkedin: null,
+        instagram: null,
+        completedAt: new Date('2026-01-01T00:00:00.000Z'),
+        waitlistEntryId: 'fulano@email.com',
+      },
+    };
+
+    it('teste-trava: o deleteUser do Auth e a ULTIMA chamada', async () => {
+      // Com o Auth primeiro, uma falha no meio deixa dado pessoal orfao no
+      // Firestore, sem conta, sem sessao e sem ninguem com direito de pedir a
+      // remocao -- o pior resultado possivel da operacao cujo proposito inteiro
+      // e remover dado pessoal.
+      repository.findById.mockResolvedValue(comWaitlist);
+
+      await service.deleteAccount('uid-1', 'fulano@email.com', null, dto);
+
+      expect(ordem).toEqual([
+        'anonymizeAuthor',
+        'removeVotesBy',
+        'profile.remove',
+        'waitlist.remove',
+        'deleteUser',
+      ]);
+    });
+
+    it('teste-trava: falha no Firestore IMPEDE a exclusao do usuario do Auth', async () => {
+      repository.findById.mockResolvedValue(comWaitlist);
+      muralRepository.removeVotesBy.mockRejectedValue(new Error('offline'));
+
+      await expect(
+        service.deleteAccount('uid-1', 'fulano@email.com', null, dto),
+      ).rejects.toThrow('offline');
+
+      expect(firebase.auth.deleteUser).not.toHaveBeenCalled();
+    });
+
+    it('nao ha waitlist para apagar quando o perfil nao tem inscricao', async () => {
+      repository.findById.mockResolvedValue({
+        found: true,
+        entry: { ...comWaitlist.entry, waitlistEntryId: null },
+      });
+
+      await service.deleteAccount('uid-1', 'fulano@email.com', null, dto);
+
+      expect(waitlistRepository.remove).not.toHaveBeenCalled();
+      expect(firebase.auth.deleteUser).toHaveBeenCalledWith('uid-1');
+    });
+
+    it('senha errada da 401 e nada e apagado', async () => {
+      repository.findById.mockResolvedValue(comWaitlist);
+      authService.reauthenticate.mockRejectedValue(
+        new UnauthorizedException('Senha incorreta.'),
+      );
+
+      await expect(
+        service.deleteAccount('uid-1', 'fulano@email.com', null, dto),
+      ).rejects.toThrow(UnauthorizedException);
+
+      expect(ordem).toEqual([]);
+    });
+
+    it('teste-trava: admin da 403 ANTES da reautenticacao', async () => {
+      // Para o admin nao gastar a senha descobrindo que nao podia.
+      await expect(
+        service.deleteAccount('uid-admin', 'admin@email.com', 'admin', dto),
+      ).rejects.toThrow(ForbiddenException);
+
+      expect(authService.reauthenticate).not.toHaveBeenCalled();
+      expect(repository.findById).not.toHaveBeenCalled();
+      expect(ordem).toEqual([]);
+    });
+
+    it('perfil inexistente da 404', async () => {
+      repository.findById.mockResolvedValue({ found: false, entry: null });
+
+      await expect(
+        service.deleteAccount('uid-1', 'fulano@email.com', null, dto),
+      ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('changePassword', () => {
+    const dto = {
+      currentPassword: 'senha-atual',
+      newPassword: 'senha-nova-forte',
+    };
+
+    it('reautentica, troca com o token fresco e revoga a sessao', async () => {
+      firebase.identityToolkit.mockResolvedValue({});
+
+      await service.changePassword('uid-1', 'fulano@email.com', dto);
+
+      expect(authService.reauthenticate).toHaveBeenCalledWith(
+        'fulano@email.com',
+        'senha-atual',
+      );
+      const [endpoint, body] = firebase.identityToolkit.mock.calls[0] as [
+        string,
+        Record<string, unknown>,
+      ];
+      expect(endpoint).toBe('update');
+      expect(body.idToken).toBe('id-token-fresco');
+      expect(body.password).toBe('senha-nova-forte');
+      expect(firebase.auth.revokeRefreshTokens).toHaveBeenCalledWith('uid-1');
+    });
+
+    it('teste-trava: senha atual errada da 401 e NADA e revogado', async () => {
+      // Revogar antes de conferir desloga em todo aparelho quem so errou de
+      // digitacao.
+      authService.reauthenticate.mockRejectedValue(
+        new UnauthorizedException('Senha incorreta.'),
+      );
+
+      await expect(
+        service.changePassword('uid-1', 'fulano@email.com', dto),
+      ).rejects.toThrow(UnauthorizedException);
+
+      expect(firebase.identityToolkit).not.toHaveBeenCalled();
+      expect(firebase.auth.revokeRefreshTokens).not.toHaveBeenCalled();
+    });
+
+    it('senha nova recusada pela politica vira 400, e nada e revogado', async () => {
+      firebase.identityToolkit.mockRejectedValue(
+        new Error('WEAK_PASSWORD : Password should be at least 6 characters'),
+      );
+
+      await expect(
+        service.changePassword('uid-1', 'fulano@email.com', dto),
+      ).rejects.toThrow(BadRequestException);
+
+      expect(firebase.auth.revokeRefreshTokens).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('changeEmail', () => {
+    const dto = { newEmail: 'novo@email.com', password: 'senha-certa' };
+
+    it('reautentica e pede a confirmacao PARA O ENDERECO NOVO', async () => {
+      firebase.identityToolkit.mockResolvedValue({});
+
+      await expect(
+        service.changeEmail('uid-1', 'atual@email.com', dto),
+      ).resolves.toEqual({ status: 'confirmation_sent' });
+
+      expect(authService.reauthenticate).toHaveBeenCalledWith(
+        'atual@email.com',
+        'senha-certa',
+      );
+      const [endpoint, body] = firebase.identityToolkit.mock.calls[0] as [
+        string,
+        Record<string, unknown>,
+      ];
+      expect(endpoint).toBe('sendOobCode');
+      expect(body.requestType).toBe('VERIFY_AND_CHANGE_EMAIL');
+      expect(body.newEmail).toBe('novo@email.com');
+      expect(body.idToken).toBe('id-token-fresco');
+    });
+
+    it('teste-trava: senha errada da 401 e NAO dispara e-mail nenhum', async () => {
+      // A ordem e reautenticar primeiro, sempre. Invertida, o endpoint vira um
+      // jeito de mandar e-mail para terceiros sem saber senha nenhuma.
+      authService.reauthenticate.mockRejectedValue(
+        new UnauthorizedException('Senha incorreta.'),
+      );
+
+      await expect(
+        service.changeEmail('uid-1', 'atual@email.com', dto),
+      ).rejects.toThrow(UnauthorizedException);
+
+      expect(firebase.identityToolkit).not.toHaveBeenCalled();
+    });
+
+    it('e-mail novo igual ao atual da 400 antes de qualquer ida ao Firebase', async () => {
+      await expect(
+        service.changeEmail('uid-1', '  Novo@Email.com ', dto),
+      ).rejects.toThrow(BadRequestException);
+
+      expect(authService.reauthenticate).not.toHaveBeenCalled();
+      expect(firebase.identityToolkit).not.toHaveBeenCalled();
+    });
+
+    it('teste-trava: EMAIL_EXISTS responde byte a byte igual a e-mail invalido', async () => {
+      // E a decisao mais facil de "melhorar" depois em nome da UX, e melhora-la
+      // reabre o oraculo de enumeracao que a spec 005 fechou.
+      firebase.identityToolkit.mockRejectedValue(new Error('EMAIL_EXISTS'));
+      const jaExiste = await service
+        .changeEmail('uid-1', 'atual@email.com', dto)
+        .catch((error: Error) => error.message);
+
+      firebase.identityToolkit.mockRejectedValue(
+        new Error('INVALID_NEW_EMAIL'),
+      );
+      const invalido = await service
+        .changeEmail('uid-1', 'atual@email.com', dto)
+        .catch((error: Error) => error.message);
+
+      expect(jaExiste).toBe('Não foi possível usar este e-mail.');
+      expect(invalido).toBe(jaExiste);
+    });
   });
 
   describe('getProfile', () => {
@@ -224,6 +488,149 @@ describe('ProfileService', () => {
           bio: 'Bio valida para teste.',
         }),
       ).rejects.toThrow(NotFoundException);
+    });
+
+    it('caso 6a: as redes entram no patch e saem no ProfileDto', async () => {
+      repository.findById.mockResolvedValue({
+        found: true,
+        entry: {
+          id: 'user-1',
+          name: 'Nome',
+          phone: '11999998888',
+          bio: 'Bio antiga de cadastro inicial.',
+          grade: 1,
+          linkedin: null,
+          instagram: null,
+          completedAt: new Date('2026-01-01T00:00:00.000Z'),
+        },
+      });
+
+      repository.update.mockResolvedValue({
+        entry: {
+          id: 'user-1',
+          name: 'Nome',
+          phone: '11999998888',
+          bio: 'Bio antiga de cadastro inicial.',
+          grade: 1,
+          linkedin: 'https://www.linkedin.com/in/fulano',
+          instagram: null,
+          completedAt: new Date('2026-01-01T00:00:00.000Z'),
+        },
+      });
+
+      const dto = await service.updateProfile(
+        'user-1',
+        'email@test.com',
+        null,
+        {
+          name: 'Nome',
+          phone: '11999998888',
+          bio: 'Bio antiga de cadastro inicial.',
+          linkedin: 'https://www.linkedin.com/in/fulano',
+          instagram: null,
+        },
+      );
+
+      expect(repository.update).toHaveBeenCalledWith('user-1', {
+        name: 'Nome',
+        phone: '11999998888',
+        bio: 'Bio antiga de cadastro inicial.',
+        linkedin: 'https://www.linkedin.com/in/fulano',
+        instagram: null,
+      });
+      expect(dto.linkedin).toBe('https://www.linkedin.com/in/fulano');
+      expect(dto.instagram).toBeNull();
+    });
+
+    it('caso 6b: teste-trava — campo ausente no corpo NAO apaga a rede guardada', async () => {
+      // "Nao mencionei" e "quero apagar" sao coisas diferentes, e a segunda
+      // chega como `null` depois do DTO. Um patch que manda `undefined` para o
+      // Firestore apaga em silencio o LinkedIn de quem so editou a bio.
+      repository.findById.mockResolvedValue({
+        found: true,
+        entry: {
+          id: 'user-1',
+          name: 'Nome',
+          phone: '11999998888',
+          bio: 'Bio antiga de cadastro inicial.',
+          grade: 1,
+          linkedin: 'https://www.linkedin.com/in/fulano',
+          instagram: 'https://www.instagram.com/fulano',
+          completedAt: new Date('2026-01-01T00:00:00.000Z'),
+        },
+      });
+
+      repository.update.mockResolvedValue({
+        entry: {
+          id: 'user-1',
+          name: 'Nome',
+          phone: '11999998888',
+          bio: 'Bio nova, sem tocar nas redes.',
+          grade: 1,
+          linkedin: 'https://www.linkedin.com/in/fulano',
+          instagram: 'https://www.instagram.com/fulano',
+          completedAt: new Date('2026-01-01T00:00:00.000Z'),
+        },
+      });
+
+      await service.updateProfile('user-1', 'email@test.com', null, {
+        name: 'Nome',
+        phone: '11999998888',
+        bio: 'Bio nova, sem tocar nas redes.',
+      });
+
+      const [, patchData] = repository.update.mock.calls[0] as [
+        string,
+        Record<string, unknown>,
+      ];
+      expect('linkedin' in patchData).toBe(false);
+      expect('instagram' in patchData).toBe(false);
+    });
+
+    it('caso 6c: teste-trava — editar o perfil de quem ja concluiu nao recarimba completedAt', async () => {
+      // Esta spec e a primeira a chamar o endpoint duas vezes na vida de um
+      // usuario, entao e a primeira em que quebrar isso apareceria.
+      const original = new Date('2026-01-01T00:00:00.000Z');
+
+      repository.findById.mockResolvedValue({
+        found: true,
+        entry: {
+          id: 'user-1',
+          name: 'Nome',
+          phone: '11999998888',
+          bio: 'Bio antiga de cadastro inicial.',
+          grade: 1,
+          linkedin: null,
+          instagram: null,
+          completedAt: original,
+        },
+      });
+
+      repository.update.mockResolvedValue({
+        entry: {
+          id: 'user-1',
+          name: 'Nome',
+          phone: '11999998888',
+          bio: 'Bio nova depois do onboarding.',
+          grade: 1,
+          linkedin: null,
+          instagram: null,
+          completedAt: original,
+        },
+      });
+
+      await service.updateProfile('user-1', 'email@test.com', null, {
+        name: 'Nome',
+        phone: '11999998888',
+        bio: 'Bio nova depois do onboarding.',
+        linkedin: 'https://www.linkedin.com/in/fulano',
+      });
+
+      const [, patchData] = repository.update.mock.calls[0] as [
+        string,
+        Record<string, unknown>,
+      ];
+      expect('completedAt' in patchData).toBe(false);
     });
 
     it('caso 6: grade nunca e alterado por este endpoint', async () => {

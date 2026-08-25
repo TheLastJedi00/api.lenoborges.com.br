@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { CollectionReference, Timestamp } from 'firebase-admin/firestore';
 import { FirebaseService } from '../auth/firebase.service';
 import { Profile, profileConverter } from './entities/profile.entity';
+import { NOTIFICATION_READ_SUBCOLLECTION } from '../notifications/notification-read.repository';
 
 export const PROFILE_COLLECTION = 'profiles';
 
@@ -43,6 +44,11 @@ export class ProfileRepository {
     // para nao existir caminho de criacao que esqueca de defini-lo.
     const entry: Profile = {
       tier: 'dev-tier',
+      // Perfil nasce sem rede social. O default vive aqui, e nao no chamador,
+      // pelo mesmo motivo do `tier`: para nao existir caminho de criacao que
+      // esqueca de definir o campo e grave `undefined` no documento.
+      linkedin: null,
+      instagram: null,
       ...data,
       createdAt: now,
       updatedAt: now,
@@ -51,6 +57,34 @@ export class ProfileRepository {
     await this.collection.doc(data.id).create(entry);
 
     return { entry };
+  }
+
+  /**
+   * Apaga o perfil **e a subcolecao de leituras de notificacao** (spec 013).
+   *
+   * **Subcolecao nao some com o pai no Firestore.** Um `delete()` sozinho em
+   * `profiles/{uid}` deixaria `notification_reads` orfa: invisivel no console,
+   * cobrada na fatura e impossivel de achar depois, porque nao ha mais documento
+   * pai por onde chegar nela. A instrucao ja estava escrita em
+   * `notification-read.repository.ts` desde a spec 012; este e o metodo que a
+   * cumpre.
+   *
+   * Ordem: a subcolecao primeiro, o pai depois. Invertida, uma falha no meio
+   * deixaria exatamente a orfandade que este metodo existe para evitar.
+   */
+  async remove(id: string): Promise<void> {
+    const ref = this.collection.doc(id);
+    const reads = await ref
+      .collection(NOTIFICATION_READ_SUBCOLLECTION)
+      .listDocuments();
+
+    const batch = this.firebase.firestore.batch();
+    for (const read of reads) {
+      batch.delete(read);
+    }
+    batch.delete(ref);
+
+    await batch.commit();
   }
 
   async update(

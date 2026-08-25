@@ -8,6 +8,8 @@ const perfil: Profile = {
   bio: 'bio',
   grade: 0,
   tier: 'dev-tier',
+  linkedin: null,
+  instagram: null,
   completedAt: new Date(),
   waitlistEntryId: null,
   createdAt: new Date(),
