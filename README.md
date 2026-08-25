@@ -448,6 +448,48 @@ por `kind` embaralha as duas de uma vez, e é o erro mais provável de quem mexe
 e sai. Existe porque o Mural cria uma armadilha — a melhor pergunta da semana pode ser sobre Angular,
 e a resposta nasceria trancada para 90% de quem votou nela.
 
+## Notificações Internas (spec 012)
+
+Dois eventos avisam a comunidade: **vídeo novo numa insígnia** e **pergunta nova no Mural**. A lista
+curta é proposital — um canal que começa com sete gatilhos vira ruído antes de virar hábito, e o
+primeiro reflexo de quem recebe ruído é ignorar o sino para sempre.
+
+**Uma notificação por evento, nunca uma por pessoa.** Fan-out custaria N escritas por evento e
+cresceria com a comunidade; aqui a notificação é um documento global e o que é por pessoa é apenas o
+que ela já leu.
+
+| Método | Rota | Guard | O que faz |
+|---|---|---|---|
+| `GET` | `/notificacoes` | auth | Não lidas dos últimos 30 dias, no máximo 50, mais recentes primeiro |
+| `POST` | `/notificacoes/:id/lida` | auth | Marca uma. **Idempotente**: 204 mesmo se já estava |
+| `POST` | `/notificacoes/lidas` | auth | Marca todas as que aquela pessoa veria. 204 |
+
+A listagem **já vem filtrada**: sem as do próprio autor, sem as anteriores à entrada do membro, sem as
+já lidas. Não existe campo `read` na resposta, e o cliente não peneira nada.
+
+### Coleção `notifications` (spec 012)
+
+**ID do documento: `video__{badgeId}__{youtubeId}` ou `pergunta__{questionId}`.**
+
+- `kind` (`video` | `pergunta`)
+- `title` (string) — do vídeo ou da pergunta, cru; abreviar é decisão de layout
+- `badgeId` (string)
+- `actorUid` (string) — quem publicou, e quem **não** é notificado
+- `targetId` (string) — o `youtubeId` ou o id da pergunta
+- `createdAt` (Timestamp)
+
+O que cada pessoa leu vive em **`profiles/{uid}/notification_reads/{notificationId}`**, lido com um
+`getAll` por caminho como o `findMyVotes` do Mural. Um array no perfil cresceria sem teto, e o perfil é
+lido em toda requisição autenticada.
+
+**É a única coleção onde `set()` é correto e `create()` seria errado**: marcar como lida tem dois
+chamadores no painel — o modal da notificação e o botão de check da linha — e precisa ser idempotente.
+Um 409 em "já li isso" seria um erro sem nada a consertar.
+
+> **Notificar nunca derruba a publicação.** O aviso é escrito depois do vídeo e da pergunta, fora de
+> qualquer transação, e a falha vira log. Um `POST` que responde 500 porque a notificação falhou é uma
+> API que perde o trabalho de quem publicou por causa de um acessório.
+
 ### Índices compostos que produção exige
 
 Esta é a lista única. As seções acima apontam para cá em vez de repeti-la: uma lista de índices
@@ -462,6 +504,14 @@ copiada em três lugares diverge dos três.
 | `mural_questions` | `weekId` asc + `createdAt` asc | `listByWeek(byVotes: false)`, a semana em coleta |
 | `badge_videos` | `badgeId` asc + `order` asc | `listByBadge()` **sem** `kind` — a visão da administração |
 | `badge_videos` | `badgeId` asc + `kind` asc + `order` asc | `listByBadge(kind)` — as abas Aulas e Perguntas Frequentes |
+
+**A spec 012 não acrescentou nenhuma linha a esta tabela, e isso é decisão.** A consulta de
+notificações é `orderBy('createdAt', 'desc').limit(50)` — ordenação por um campo só, que o índice de
+campo único do Firestore já atende. É por isso que os cortes por autor e por data de entrada acontecem
+em memória no service e não em `where`: cada `where` aqui viraria uma linha nova acima. E o
+`ordem=recentes` do Mural também não pede índice — inverter **todas** as direções de uma consulta
+ordenada usa o mesmo índice `weekId` + `createdAt` da segunda linha. Criar um "por precaução" é pagar
+escrita para sempre por uma consulta que não existe.
 
 A terceira linha é fácil de perder de vista, e ela já tinha sido perdida uma vez: `kind` é opcional em
 `listByBadge`, então **`badgeId` + `order` é uma consulta de verdade**, não um prefixo da de baixo. O
