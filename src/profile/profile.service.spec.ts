@@ -226,6 +226,149 @@ describe('ProfileService', () => {
       ).rejects.toThrow(NotFoundException);
     });
 
+    it('caso 6a: as redes entram no patch e saem no ProfileDto', async () => {
+      repository.findById.mockResolvedValue({
+        found: true,
+        entry: {
+          id: 'user-1',
+          name: 'Nome',
+          phone: '11999998888',
+          bio: 'Bio antiga de cadastro inicial.',
+          grade: 1,
+          linkedin: null,
+          instagram: null,
+          completedAt: new Date('2026-01-01T00:00:00.000Z'),
+        },
+      });
+
+      repository.update.mockResolvedValue({
+        entry: {
+          id: 'user-1',
+          name: 'Nome',
+          phone: '11999998888',
+          bio: 'Bio antiga de cadastro inicial.',
+          grade: 1,
+          linkedin: 'https://www.linkedin.com/in/fulano',
+          instagram: null,
+          completedAt: new Date('2026-01-01T00:00:00.000Z'),
+        },
+      });
+
+      const dto = await service.updateProfile(
+        'user-1',
+        'email@test.com',
+        null,
+        {
+          name: 'Nome',
+          phone: '11999998888',
+          bio: 'Bio antiga de cadastro inicial.',
+          linkedin: 'https://www.linkedin.com/in/fulano',
+          instagram: null,
+        },
+      );
+
+      expect(repository.update).toHaveBeenCalledWith('user-1', {
+        name: 'Nome',
+        phone: '11999998888',
+        bio: 'Bio antiga de cadastro inicial.',
+        linkedin: 'https://www.linkedin.com/in/fulano',
+        instagram: null,
+      });
+      expect(dto.linkedin).toBe('https://www.linkedin.com/in/fulano');
+      expect(dto.instagram).toBeNull();
+    });
+
+    it('caso 6b: teste-trava — campo ausente no corpo NAO apaga a rede guardada', async () => {
+      // "Nao mencionei" e "quero apagar" sao coisas diferentes, e a segunda
+      // chega como `null` depois do DTO. Um patch que manda `undefined` para o
+      // Firestore apaga em silencio o LinkedIn de quem so editou a bio.
+      repository.findById.mockResolvedValue({
+        found: true,
+        entry: {
+          id: 'user-1',
+          name: 'Nome',
+          phone: '11999998888',
+          bio: 'Bio antiga de cadastro inicial.',
+          grade: 1,
+          linkedin: 'https://www.linkedin.com/in/fulano',
+          instagram: 'https://www.instagram.com/fulano',
+          completedAt: new Date('2026-01-01T00:00:00.000Z'),
+        },
+      });
+
+      repository.update.mockResolvedValue({
+        entry: {
+          id: 'user-1',
+          name: 'Nome',
+          phone: '11999998888',
+          bio: 'Bio nova, sem tocar nas redes.',
+          grade: 1,
+          linkedin: 'https://www.linkedin.com/in/fulano',
+          instagram: 'https://www.instagram.com/fulano',
+          completedAt: new Date('2026-01-01T00:00:00.000Z'),
+        },
+      });
+
+      await service.updateProfile('user-1', 'email@test.com', null, {
+        name: 'Nome',
+        phone: '11999998888',
+        bio: 'Bio nova, sem tocar nas redes.',
+      });
+
+      const [, patchData] = repository.update.mock.calls[0] as [
+        string,
+        Record<string, unknown>,
+      ];
+      expect('linkedin' in patchData).toBe(false);
+      expect('instagram' in patchData).toBe(false);
+    });
+
+    it('caso 6c: teste-trava — editar o perfil de quem ja concluiu nao recarimba completedAt', async () => {
+      // Esta spec e a primeira a chamar o endpoint duas vezes na vida de um
+      // usuario, entao e a primeira em que quebrar isso apareceria.
+      const original = new Date('2026-01-01T00:00:00.000Z');
+
+      repository.findById.mockResolvedValue({
+        found: true,
+        entry: {
+          id: 'user-1',
+          name: 'Nome',
+          phone: '11999998888',
+          bio: 'Bio antiga de cadastro inicial.',
+          grade: 1,
+          linkedin: null,
+          instagram: null,
+          completedAt: original,
+        },
+      });
+
+      repository.update.mockResolvedValue({
+        entry: {
+          id: 'user-1',
+          name: 'Nome',
+          phone: '11999998888',
+          bio: 'Bio nova depois do onboarding.',
+          grade: 1,
+          linkedin: null,
+          instagram: null,
+          completedAt: original,
+        },
+      });
+
+      await service.updateProfile('user-1', 'email@test.com', null, {
+        name: 'Nome',
+        phone: '11999998888',
+        bio: 'Bio nova depois do onboarding.',
+        linkedin: 'https://www.linkedin.com/in/fulano',
+      });
+
+      const [, patchData] = repository.update.mock.calls[0] as [
+        string,
+        Record<string, unknown>,
+      ];
+      expect('completedAt' in patchData).toBe(false);
+    });
+
     it('caso 6: grade nunca e alterado por este endpoint', async () => {
       repository.findById.mockResolvedValue({
         found: true,

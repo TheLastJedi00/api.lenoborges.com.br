@@ -43,6 +43,11 @@ export class ProfileRepository {
     // para nao existir caminho de criacao que esqueca de defini-lo.
     const entry: Profile = {
       tier: 'dev-tier',
+      // Perfil nasce sem rede social. O default vive aqui, e nao no chamador,
+      // pelo mesmo motivo do `tier`: para nao existir caminho de criacao que
+      // esqueca de definir o campo e grave `undefined` no documento.
+      linkedin: null,
+      instagram: null,
       ...data,
       createdAt: now,
       updatedAt: now,

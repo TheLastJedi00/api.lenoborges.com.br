@@ -1,12 +1,49 @@
 import {
   IsNotEmpty,
+  IsOptional,
   IsString,
   Matches,
   MaxLength,
   MinLength,
+  Validate,
+  ValidatorConstraint,
 } from 'class-validator';
+import type { ValidatorConstraintInterface } from 'class-validator';
 import { Transform } from 'class-transformer';
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { isInstagramUrl, isLinkedinUrl } from '../../common/social-url';
+
+/**
+ * String vazia vira `null`: quem apagou o campo quer que ele suma, nao que
+ * fique `''`. Ausente continua ausente -- e a diferenca entre "nao mencionei" e
+ * "quero apagar", e ela e decidida aqui, uma vez, para os dois campos.
+ */
+const emptyToNull = ({ value }: { value: unknown }): unknown =>
+  typeof value === 'string' && value.trim() === '' ? null : value;
+
+// `@IsOptional()` ja pula a validacao quando o valor e `null` ou `undefined`,
+// entao estas duas classes so veem string de verdade.
+@ValidatorConstraint({ name: 'linkedinUrl' })
+class LinkedinUrlConstraint implements ValidatorConstraintInterface {
+  validate(value: unknown): boolean {
+    return typeof value === 'string' && isLinkedinUrl(value);
+  }
+
+  defaultMessage(): string {
+    return 'LinkedIn deve ser uma URL https do linkedin.com';
+  }
+}
+
+@ValidatorConstraint({ name: 'instagramUrl' })
+class InstagramUrlConstraint implements ValidatorConstraintInterface {
+  validate(value: unknown): boolean {
+    return typeof value === 'string' && isInstagramUrl(value);
+  }
+
+  defaultMessage(): string {
+    return 'Instagram deve ser uma URL https do instagram.com';
+  }
+}
 
 export class UpdateProfileDto {
   @ApiProperty({
@@ -47,4 +84,32 @@ export class UpdateProfileDto {
   @MinLength(10, { message: 'Bio deve ter no mínimo 10 caracteres' })
   @MaxLength(500, { message: 'Bio deve ter no máximo 500 caracteres' })
   bio: string;
+
+  @ApiPropertyOptional({
+    example: 'https://www.linkedin.com/in/fulano',
+    nullable: true,
+    maxLength: 200,
+    description:
+      'URL completa do perfil no LinkedIn. String vazia remove o valor; campo ' +
+      'ausente deixa o valor guardado intacto',
+  })
+  @IsOptional()
+  @Transform(emptyToNull)
+  @MaxLength(200, { message: 'LinkedIn deve ter no máximo 200 caracteres' })
+  @Validate(LinkedinUrlConstraint)
+  linkedin?: string | null;
+
+  @ApiPropertyOptional({
+    example: 'https://www.instagram.com/fulano',
+    nullable: true,
+    maxLength: 200,
+    description:
+      'URL completa do perfil no Instagram. String vazia remove o valor; campo ' +
+      'ausente deixa o valor guardado intacto',
+  })
+  @IsOptional()
+  @Transform(emptyToNull)
+  @MaxLength(200, { message: 'Instagram deve ter no máximo 200 caracteres' })
+  @Validate(InstagramUrlConstraint)
+  instagram?: string | null;
 }

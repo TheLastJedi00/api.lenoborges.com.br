@@ -34,6 +34,8 @@ export class ProfileService {
       phone: profile.entry.phone,
       bio: profile.entry.bio,
       grade: profile.entry.grade,
+      linkedin: profile.entry.linkedin,
+      instagram: profile.entry.instagram,
       profileCompleted: profile.entry.completedAt !== null,
       role,
       tier: profile.entry.tier,
@@ -63,12 +65,25 @@ export class ProfileService {
       name: string;
       phone: string;
       bio: string;
+      linkedin?: string | null;
+      instagram?: string | null;
       completedAt?: Date;
     } = {
       name: normalizedName,
       phone: normalizedPhone,
       bio: normalizedBio,
     };
+
+    // **Campo ausente no corpo nao apaga o valor guardado.** O DTO ja traduziu
+    // string vazia em `null`, entao o que chega aqui como `undefined` e
+    // "nao mencionei" -- e "nao mencionei" nunca entra no patch. E a diferenca
+    // que todo update parcial erra quando ninguem escreve o teste.
+    if (dto.linkedin !== undefined) {
+      patchData.linkedin = dto.linkedin;
+    }
+    if (dto.instagram !== undefined) {
+      patchData.instagram = dto.instagram;
+    }
 
     if (!profile.entry.completedAt) {
       patchData.completedAt = new Date();
@@ -83,6 +98,8 @@ export class ProfileService {
       phone: updated.entry.phone,
       bio: updated.entry.bio,
       grade: updated.entry.grade,
+      linkedin: updated.entry.linkedin,
+      instagram: updated.entry.instagram,
       profileCompleted: updated.entry.completedAt !== null,
       role,
       tier: updated.entry.tier,

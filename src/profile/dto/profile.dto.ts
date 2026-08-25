@@ -61,6 +61,20 @@ export class ProfileDto {
   role: 'admin' | null;
 
   @ApiProperty({
+    example: 'https://www.linkedin.com/in/fulano',
+    nullable: true,
+    description: 'URL completa do perfil no LinkedIn, ou nulo',
+  })
+  linkedin: string | null;
+
+  @ApiProperty({
+    example: 'https://www.instagram.com/fulano',
+    nullable: true,
+    description: 'URL completa do perfil no Instagram, ou nulo',
+  })
+  instagram: string | null;
+
+  @ApiProperty({
     example: 'dev-tier',
     enum: ['dev-tier', 'great-dev-tier', 'ultra-dev-tier', 'master-dev-tier'],
     description:
