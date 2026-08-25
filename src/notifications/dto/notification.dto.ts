@@ -1,5 +1,9 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { NotificationKind } from '../entities/notification.entity';
+// `import type`, e nao `import`: com `isolatedModules` e `emitDecoratorMetadata`
+// ligados, um tipo usado numa propriedade decorada precisa vir assim, ou o
+// `nest build` recusa com TS1272. O `npm test` NAO pega isso -- o ts-jest
+// transpila arquivo a arquivo e nunca faz esta checagem. Ver `fix.md` da spec.
+import type { NotificationKind } from '../entities/notification.entity';
 
 /**
  * Uma notificacao nao lida, como o painel a recebe (spec 012).
