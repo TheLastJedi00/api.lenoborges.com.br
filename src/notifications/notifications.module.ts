@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { NotificationRepository } from './notification.repository';
 import { NotificationReadRepository } from './notification-read.repository';
 import { NotificationsService } from './notifications.service';
@@ -13,7 +13,7 @@ import { ProfileModule } from '../profile/profile.module';
  * chamam este service e **nenhum deles pode falhar por causa dele**.
  */
 @Module({
-  imports: [ProfileModule],
+  imports: [forwardRef(() => ProfileModule)],
   controllers: [NotificationsController],
   providers: [
     NotificationRepository,
