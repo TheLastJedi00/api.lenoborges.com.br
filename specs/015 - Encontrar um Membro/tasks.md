@@ -30,43 +30,43 @@ Nenhuma rota nova e nenhum comportamento visível. Ao fim desta fase o servidor 
   aparecendo depois de salvar), e qual é o sinal de que passou do ponto (decisão 4). É o comentário que
   impede alguém de "otimizar" isso com um `Map` estático numa tarde.
 
-# Fase 02: Buscar e filtrar [ ]
+# Fase 02: Buscar e filtrar [x]
 Branch: `feat/015-busca-e-filtros`
 
 Ao fim desta fase `GET /admin/users` responde ao recorte, e o contrato muda.
 
-- [ ] Task 01: DTO da consulta. Arquivo: `src/admin/dto/list-users-query.dto.ts`. Objetivo: `q`,
+- [x] Task 01: DTO da consulta. Arquivo: `src/admin/dto/list-users-query.dto.ts`. Objetivo: `q`,
   `onboarding` (`'pendente' | 'concluido'`), `tiers` com `@IsIn(TIER_IDS)` por item, `gradeMin`/`gradeMax`
   entre `GRADE_MIN` e `GRADE_MAX`, `limit` e `offset`. **Os filtros de tier e grade têm a mesma forma do
   `AudienceFilterDto` da spec 014** (decisão 7) — reusar o que der, e o comentário registra por que os dois
   precisam continuar iguais.
-- [ ] Task 02 (TDD + implementação): A busca. Objetivo: `q` comparado por `includes` contra `name` e
+- [x] Task 02 (TDD + implementação): A busca. Objetivo: `q` comparado por `includes` contra `name` e
   `email`, os dois normalizados pela Task 03 da Fase 01. Testes-trava: (a) `q: 'borges'` acha "Leno Borges";
   (b) `q: 'eno'` acha "Leno" — **prefixo não basta, e é o teste que impede alguém trocar por
   `startsWith`**; (c) `q: 'jose'` acha "José"; (d) **telefone não é buscável** (decisão 5).
-- [ ] Task 03 (TDD + implementação): Onboarding pendente. Objetivo: `onboarding: 'pendente'` devolve quem
+- [x] Task 03 (TDD + implementação): Onboarding pendente. Objetivo: `onboarding: 'pendente'` devolve quem
   tem `profileCompleted === false`. **Teste-trava: quem não tem documento de perfil nenhum entra no
   resultado**, junto de quem tem documento com `completedAt` nulo (decisão 6) — os dois estados, um filtro.
-- [ ] Task 04 (TDD + implementação): Tier e faixa de insígnia. Objetivo: `tiers` e `gradeMin`/`gradeMax`
+- [x] Task 04 (TDD + implementação): Tier e faixa de insígnia. Objetivo: `tiers` e `gradeMin`/`gradeMax`
   aplicados **em memória**, depois da junção. Testes-trava: (a) filtro ausente significa **todos**, e nunca
   ninguém — é a inversão que uma lista não pode errar; (b) `gradeMin > gradeMax` responde **400**, e não um
   recorte vazio em silêncio.
-- [ ] Task 05 (TDD + implementação): Ordem e página. Objetivo: ordenar por `createdAt` decrescente e fatiar
+- [x] Task 05 (TDD + implementação): Ordem e página. Objetivo: ordenar por `createdAt` decrescente e fatiar
   por `offset`/`limit`, com `limit` fixado em 200 (decisão 3). Teste-trava: **a ordem é aplicada antes do
   fatiamento** — inverter as duas coisas devolve a página certa de uma lista errada, e a tela não teria como
   saber.
-- [ ] Task 06: A resposta nova. Arquivos: `src/admin/dto/admin-user-page.dto.ts`,
+- [x] Task 06: A resposta nova. Arquivos: `src/admin/dto/admin-user-page.dto.ts`,
   `admin-users.controller.ts`. Objetivo: `total`, `offset` e `limit` no lugar de `nextPageToken`
   (decisão 2). O `@ApiProperty` de `total` diz que ele é **do recorte, e não da base** — é a frase que
   impede a próxima tela de escrever "213 membros" com um filtro ligado.
-- [ ] Task 07: `tier` no `AdminUserDto`, e `phone` fora. Arquivo: `src/admin/dto/admin-user.dto.ts`,
+- [x] Task 07: `tier` no `AdminUserDto`, e `phone` fora. Arquivo: `src/admin/dto/admin-user.dto.ts`,
   `admin-users.service.ts`, `.spec.ts`. Objetivo: `tier` passa a sair na linha (decisão 9 — a spec 010
   esqueceu, e o front lê o campo desde então) e `phone` sai da listagem (decisão 8). Teste-trava:
   **nenhum telefone na resposta da listagem**, e o comentário diz por que a regra é da API e não do CSS.
-- [ ] Task 08: `emailOptOut` na linha. Objetivo: o campo que a Task 05 da Fase 06 da spec 014 já pedia.
+- [x] Task 08: `emailOptOut` na linha. Objetivo: o campo que a Task 05 da Fase 06 da spec 014 já pedia.
   **Se a 014 ainda não estiver no código, esta task não entra aqui** e continua sendo daquela spec — está
   escrita para as duas não implementarem o mesmo campo duas vezes.
-- [ ] Task 09: Swagger. Objetivo: as seis queries documentadas, e uma frase em `GET /admin/users` dizendo
+- [x] Task 09: Swagger. Objetivo: as seis queries documentadas, e uma frase em `GET /admin/users` dizendo
   que **a busca e os filtros são aplicados sobre a base inteira antes da paginação** — sem isso, quem lê a
   documentação supõe que o filtro age sobre a página, que é justamente o erro que a spec existe para não
   cometer.
