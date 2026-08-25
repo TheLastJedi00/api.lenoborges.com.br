@@ -34,12 +34,14 @@ function buildFirestore() {
     doc: jest.fn(() => doc),
   };
   collection.withConverter.mockReturnValue(collection);
+  const getAll = jest.fn().mockResolvedValue([]);
   const firestore = {
     collection: jest.fn(() => collection),
     batch: jest.fn(() => batch),
+    getAll,
   };
 
-  return { firestore, collection, doc, batch, listDocuments };
+  return { firestore, collection, doc, batch, listDocuments, getAll };
 }
 
 const profile = {
@@ -130,6 +132,44 @@ describe('ProfileRepository', () => {
 
       expect(result.entry.createdAt).toBeInstanceOf(Date);
       expect(result.entry.updatedAt).toBeInstanceOf(Date);
+    });
+  });
+
+  describe('findManyByIds', () => {
+    it('le por caminho, num getAll so para o conjunto inteiro', async () => {
+      // Nunca N leituras em laco: e o que transforma uma listagem em conta no
+      // fim do mes.
+      mocks.getAll.mockResolvedValue([
+        { exists: true, id: 'uid-1', data: () => profile },
+        { exists: true, id: 'uid-2', data: () => profile },
+      ]);
+
+      const encontrados = await repository.findManyByIds(['uid-1', 'uid-2']);
+
+      expect(mocks.getAll).toHaveBeenCalledTimes(1);
+      expect(encontrados.size).toBe(2);
+    });
+
+    it('uid sem documento simplesmente nao entra no mapa', async () => {
+      // A ausencia e informacao: e o retrato de quem criou conta e parou antes
+      // do onboarding. Quem chama decide o que fazer com ela.
+      mocks.getAll.mockResolvedValue([
+        { exists: true, id: 'uid-1', data: () => profile },
+        { exists: false, id: 'uid-sem-perfil' },
+      ]);
+
+      const encontrados = await repository.findManyByIds([
+        'uid-1',
+        'uid-sem-perfil',
+      ]);
+
+      expect([...encontrados.keys()]).toEqual(['uid-1']);
+    });
+
+    it('lista vazia nao chama o getAll, que estouraria sem documentos', async () => {
+      await expect(repository.findManyByIds([])).resolves.toEqual(new Map());
+
+      expect(mocks.getAll).not.toHaveBeenCalled();
     });
   });
 

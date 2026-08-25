@@ -41,6 +41,45 @@ export class ProfileRepository {
     return { found: true, entry: snapshot.data()! };
   }
 
+  /**
+   * Os perfis de uma lista de UIDs, **por caminho**.
+   *
+   * Um `getAll` só para o conjunto inteiro: sem consulta, sem índice, uma ida
+   * de rede para a página toda. Nunca N leituras em laço, que é o que
+   * transforma uma listagem em conta no fim do mês.
+   *
+   * **UID sem documento simplesmente não entra no mapa**, e a ausência é
+   * informação: é o retrato de quem criou conta e parou antes do onboarding.
+   * Quem chama decide o que fazer com isso — a Administração mostra a linha com
+   * nulos, a audiência de e-mail corta a pessoa fora.
+   *
+   * Nasceu privado dentro do `AdminUsersService` e saiu para cá na spec 014,
+   * quando a audiência do disparo passou a precisar da mesma junção.
+   */
+  async findManyByIds(uids: readonly string[]): Promise<Map<string, Profile>> {
+    if (uids.length === 0) {
+      // getAll() sem documento nenhum estoura no Firestore, e lista vazia é
+      // normal — uma página de usuários sem ninguém, por exemplo.
+      return new Map();
+    }
+
+    // O getAll perde o converter no caminho de volta: ele devolve
+    // DocumentSnapshot<DocumentData>, e nao o tipo da colecao. O cast e aqui, num
+    // lugar so, e nao espalhado por quem chama.
+    const snapshots = await this.firebase.firestore.getAll(
+      ...uids.map((uid) => this.collection.doc(uid)),
+    );
+
+    const profiles = new Map<string, Profile>();
+    for (const snapshot of snapshots) {
+      if (snapshot.exists) {
+        profiles.set(snapshot.id, snapshot.data() as Profile);
+      }
+    }
+
+    return profiles;
+  }
+
   async create(data: CreateProfileData): Promise<{ entry: Profile }> {
     // Sem ORM nao ha @CreateDateColumn: quem preenche os carimbos e este metodo.
     const now = new Date();

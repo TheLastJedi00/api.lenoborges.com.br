@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { MailerService } from './mailer.service';
 import { EmailsController } from './emails.controller';
+import { AdminEmailsController } from './admin-emails.controller';
+import { AudienceService } from './audience.service';
 import { ProfileModule } from '../profile/profile.module';
 
 /**
@@ -12,8 +14,8 @@ import { ProfileModule } from '../profile/profile.module';
  */
 @Module({
   imports: [ProfileModule],
-  controllers: [EmailsController],
-  providers: [MailerService],
-  exports: [MailerService],
+  controllers: [EmailsController, AdminEmailsController],
+  providers: [MailerService, AudienceService],
+  exports: [MailerService, AudienceService],
 })
 export class EmailsModule {}

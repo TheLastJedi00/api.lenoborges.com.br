@@ -42,25 +42,23 @@ function profile(id: string, grade: number): Profile {
 describe('AdminUsersService', () => {
   let service: AdminUsersService;
   let listUsers: jest.Mock;
-  let getAll: jest.Mock;
-  let profileRepository: jest.Mocked<Pick<ProfileRepository, 'update'>>;
+  // A juncao por caminho mora no repositorio desde a spec 014: a audiencia do
+  // disparo de e-mail precisa exatamente dela, e duas copias divergiriam no
+  // primeiro campo novo do perfil.
+  let findManyByIds: jest.Mock;
+  let profileRepository: jest.Mocked<
+    Pick<ProfileRepository, 'update' | 'findManyByIds'>
+  >;
 
   beforeEach(() => {
     listUsers = jest.fn();
-    getAll = jest.fn().mockResolvedValue([]);
-    profileRepository = { update: jest.fn() };
-
-    const firebase = {
-      auth: { listUsers },
-      firestore: {
-        getAll,
-        collection: jest.fn().mockReturnValue({
-          withConverter: jest
-            .fn()
-            .mockReturnValue({ doc: jest.fn((id: string) => ({ id })) }),
-        }),
-      },
+    findManyByIds = jest.fn().mockResolvedValue(new Map());
+    profileRepository = {
+      update: jest.fn(),
+      findManyByIds,
     };
+
+    const firebase = { auth: { listUsers } };
 
     service = new AdminUsersService(
       firebase as unknown as FirebaseService,
@@ -73,9 +71,7 @@ describe('AdminUsersService', () => {
       users: [authUser('uid-1')],
       pageToken: undefined,
     });
-    getAll.mockResolvedValue([
-      { exists: true, id: 'uid-1', data: () => profile('uid-1', 5) },
-    ]);
+    findManyByIds.mockResolvedValue(new Map([['uid-1', profile('uid-1', 5)]]));
 
     const page = await service.list(50);
 
@@ -102,7 +98,8 @@ describe('AdminUsersService', () => {
       users: [authUser('uid-sem-perfil')],
       pageToken: undefined,
     });
-    getAll.mockResolvedValue([{ exists: false, id: 'uid-sem-perfil' }]);
+    // Sem documento, o uid simplesmente nao entra no mapa.
+    findManyByIds.mockResolvedValue(new Map());
 
     const page = await service.list(50);
 
@@ -144,7 +141,7 @@ describe('AdminUsersService', () => {
 
     // getAll() sem documentos estoura no Firestore, e uma página vazia é normal
     // na última página da listagem.
-    expect(getAll).not.toHaveBeenCalled();
+    expect(findManyByIds).not.toHaveBeenCalled();
     expect(page.users).toEqual([]);
   });
 
