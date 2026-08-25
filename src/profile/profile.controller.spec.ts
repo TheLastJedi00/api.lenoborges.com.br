@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ProfileController } from './profile.controller';
 import { ProfileService } from './profile.service';
+import { CookieService } from '../auth/cookie.service';
 import { FirebaseAuthGuard } from '../auth/guards/firebase-auth.guard';
 import { CurrentUserData } from '../auth/decorators/current-user.decorator';
 
@@ -9,7 +10,10 @@ describe('ProfileController', () => {
   let service: {
     getProfile: jest.Mock;
     updateProfile: jest.Mock;
+    changeEmail: jest.Mock;
+    changePassword: jest.Mock;
   };
+  let cookieService: { clearRefreshToken: jest.Mock };
 
   const mockUser: CurrentUserData = {
     id: 'user-123',
@@ -21,7 +25,11 @@ describe('ProfileController', () => {
     service = {
       getProfile: jest.fn(),
       updateProfile: jest.fn(),
+      changeEmail: jest.fn(),
+      changePassword: jest.fn(),
     };
+
+    cookieService = { clearRefreshToken: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [ProfileController],
@@ -30,6 +38,7 @@ describe('ProfileController', () => {
           provide: ProfileService,
           useValue: service,
         },
+        { provide: CookieService, useValue: cookieService },
       ],
     })
       .overrideGuard(FirebaseAuthGuard)
@@ -60,6 +69,26 @@ describe('ProfileController', () => {
       'user@email.com',
       null,
     );
+  });
+
+  it('POST /me/password limpa o cookie deste navegador depois de trocar', async () => {
+    // Revogar mata a sessao no servidor; limpar o cookie e o que faz este
+    // navegador parar de tentar renovar com um token que nao vale mais.
+    const res = {} as never;
+    service.changePassword.mockResolvedValue(undefined);
+
+    await controller.changePassword(
+      mockUser,
+      { currentPassword: 'atual', newPassword: 'nova-senha-forte' },
+      res,
+    );
+
+    expect(service.changePassword).toHaveBeenCalledWith(
+      'user-123',
+      'user@email.com',
+      { currentPassword: 'atual', newPassword: 'nova-senha-forte' },
+    );
+    expect(cookieService.clearRefreshToken).toHaveBeenCalledWith(res);
   });
 
   it('should call profileService.updateProfile on PATCH /me/profile', async () => {

@@ -39,6 +39,17 @@ export interface Profile {
    * relogio.
    */
   tier: TierId;
+  /**
+   * Perfil no LinkedIn, **URL completa** ou nulo (spec 013, decisao 1).
+   *
+   * Guardar handle e montar a URL na exibicao espalharia a regra de montagem
+   * por todo consumidor futuro, e o primeiro deles montaria errado. Quem
+   * normaliza `@fulano` em URL e o front; a API valida o dominio e recusa o
+   * resto.
+   */
+  linkedin: string | null;
+  /** Perfil no Instagram, **URL completa** ou nulo. Mesma regra do `linkedin`. */
+  instagram: string | null;
   completedAt: Date | null;
   waitlistEntryId: string | null;
   createdAt: Date;
@@ -52,6 +63,8 @@ interface ProfileDocument extends DocumentData {
   bio: string | null;
   grade: number;
   tier: TierId;
+  linkedin: string | null;
+  instagram: string | null;
   completedAt: Timestamp | null;
   waitlistEntryId: string | null;
   createdAt: Timestamp;
@@ -88,6 +101,8 @@ export const profileConverter: FirestoreDataConverter<Profile> = {
       bio: profile.bio,
       grade: profile.grade,
       tier: profile.tier,
+      linkedin: profile.linkedin,
+      instagram: profile.instagram,
       completedAt: profile.completedAt
         ? Timestamp.fromDate(profile.completedAt)
         : null,
@@ -111,6 +126,12 @@ export const profileConverter: FirestoreDataConverter<Profile> = {
       // vira falsa em silencio para a base inteira. E o mesmo cuidado do
       // `completedAt ?? null` logo abaixo, e pela mesma razao.
       tier: data.tier ?? 'dev-tier',
+      // Documento antigo nao tem as redes -- e sao todos, no dia em que a spec
+      // 013 sobe. E o mesmo cuidado do `tier` acima e do `completedAt` abaixo, e
+      // pela mesma razao: sem o `?? null` o valor chega `undefined` e toda
+      // comparacao vira falsa em silencio.
+      linkedin: data.linkedin ?? null,
+      instagram: data.instagram ?? null,
       // completedAt nulo e o estado normal de quem ainda nao fez o onboarding, e
       // e por ele que profileCompleted e decidido. Um undefined vindo de
       // documento antigo viraria "completou", entao o ?? null e carga util.

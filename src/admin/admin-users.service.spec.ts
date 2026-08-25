@@ -27,6 +27,8 @@ function profile(id: string, grade: number): Profile {
     bio: 'bio',
     grade,
     tier: 'dev-tier',
+    linkedin: null,
+    instagram: null,
     completedAt: new Date(),
     waitlistEntryId: null,
     createdAt: new Date(),

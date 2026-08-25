@@ -539,4 +539,81 @@ describe('AuthService', () => {
       ).resolves.toBeUndefined();
     });
   });
+
+  describe('reauthenticate', () => {
+    it('caso 19: senha certa devolve o idToken fresco', async () => {
+      firebase.identityToolkit.mockResolvedValue({
+        idToken: 'id-token-novo',
+        refreshToken: 'refresh',
+        expiresIn: '3600',
+        localId: 'uid-123',
+      });
+
+      await expect(
+        service.reauthenticate('  Fulano@Email.com  ', 'senha-certa'),
+      ).resolves.toBe('id-token-novo');
+
+      expect(firebase.identityToolkit).toHaveBeenCalledWith(
+        'signInWithPassword',
+        {
+          email: 'fulano@email.com',
+          password: 'senha-certa',
+          returnSecureToken: true,
+        },
+      );
+    });
+
+    it('caso 20: senha errada vira 401', async () => {
+      firebase.identityToolkit.mockRejectedValue(
+        new Error('INVALID_LOGIN_CREDENTIALS'),
+      );
+
+      await expect(
+        service.reauthenticate('fulano@email.com', 'senha-errada'),
+      ).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('caso 21: e-mail inexistente responde a MESMA mensagem de senha errada', async () => {
+      // Distinguir aqui responderia quais e-mails existem para quem so precisa
+      // de um login qualquer para perguntar.
+      firebase.identityToolkit.mockRejectedValue(new Error('EMAIL_NOT_FOUND'));
+      const naoExiste = await service
+        .reauthenticate('ninguem@email.com', 'x')
+        .catch((error: Error) => error.message);
+
+      firebase.identityToolkit.mockRejectedValue(
+        new Error('INVALID_LOGIN_CREDENTIALS'),
+      );
+      const senhaErrada = await service
+        .reauthenticate('fulano@email.com', 'x')
+        .catch((error: Error) => error.message);
+
+      expect(naoExiste).toBe('Senha incorreta.');
+      expect(senhaErrada).toBe(naoExiste);
+    });
+
+    it('caso 22: teste-trava — login e reauthenticate batem no MESMO endpoint', async () => {
+      // Dois verificadores de senha divergem na primeira excecao, e a excecao
+      // sempre chega. Este teste e o que impede o segundo de nascer.
+      firebase.identityToolkit.mockResolvedValue({
+        idToken: 'id-token',
+        refreshToken: 'refresh',
+        expiresIn: '3600',
+        localId: 'uid-123',
+        email: 'fulano@email.com',
+      });
+      profileRepository.findById.mockResolvedValue({
+        found: true,
+        entry: profileVazio,
+      });
+
+      await service.login({ email: 'fulano@email.com', password: 'senha' });
+      await service.reauthenticate('fulano@email.com', 'senha');
+
+      const endpoints = firebase.identityToolkit.mock.calls.map(
+        (call: unknown[]) => call[0],
+      );
+      expect(endpoints).toEqual(['signInWithPassword', 'signInWithPassword']);
+    });
+  });
 });
