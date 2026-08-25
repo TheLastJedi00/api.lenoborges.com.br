@@ -15,6 +15,9 @@ const baseEnv = {
       '-----BEGIN PRIVATE KEY-----\\nMIIEv\\n-----END PRIVATE KEY-----\\n',
   }),
   FIREBASE_WEB_API_KEY: 'web-api-key',
+  EMAIL_FROM: 'Liga Dev <comunidade@lenoborges.com.br>',
+  EMAIL_REPLY_TO: 'leno@lenoborges.com.br',
+  EMAIL_UNSUBSCRIBE_SECRET: 'segredo-de-teste',
 };
 
 describe('validate (env)', () => {
@@ -89,5 +92,55 @@ describe('validate (env)', () => {
 
   it('recusa AUTH_COOKIE_SECURE fora de true e false', () => {
     expect(() => validate({ ...baseEnv, AUTH_COOKIE_SECURE: 'sim' })).toThrow();
+  });
+  describe('e-mail (spec 014)', () => {
+    it('fora de producao, boot sem RESEND_API_KEY sobe', () => {
+      // O padrao precisa ser inofensivo: sem chave o mailer loga e nao envia.
+      expect(() => validate({ ...baseEnv })).not.toThrow();
+    });
+
+    it('teste-trava: em producao, boot sem RESEND_API_KEY falha', () => {
+      // Uma API de producao que registra o e-mail e nao envia e um recurso
+      // quebrado em silencio -- e "silencio" e literal: nada na resposta diz
+      // que ninguem recebeu.
+      expect(() =>
+        validate({
+          ...baseEnv,
+          NODE_ENV: 'production',
+          RESEND_WEBHOOK_SECRET: 'whsec_x',
+        }),
+      ).toThrow(/RESEND_API_KEY/);
+    });
+
+    it('em producao, boot sem RESEND_WEBHOOK_SECRET falha', () => {
+      expect(() =>
+        validate({
+          ...baseEnv,
+          NODE_ENV: 'production',
+          RESEND_API_KEY: 're_x',
+        }),
+      ).toThrow(/RESEND_WEBHOOK_SECRET/);
+    });
+
+    it('em producao com as duas chaves, sobe', () => {
+      expect(() =>
+        validate({
+          ...baseEnv,
+          NODE_ENV: 'production',
+          RESEND_API_KEY: 're_x',
+          RESEND_WEBHOOK_SECRET: 'whsec_x',
+        }),
+      ).not.toThrow();
+    });
+
+    it('falha quando falta o remetente ou o segredo do descadastro', () => {
+      const { EMAIL_FROM, ...semFrom } = baseEnv;
+      expect(EMAIL_FROM).toBeDefined();
+      expect(() => validate(semFrom)).toThrow();
+
+      const { EMAIL_UNSUBSCRIBE_SECRET, ...semSegredo } = baseEnv;
+      expect(EMAIL_UNSUBSCRIBE_SECRET).toBeDefined();
+      expect(() => validate(semSegredo)).toThrow();
+    });
   });
 });

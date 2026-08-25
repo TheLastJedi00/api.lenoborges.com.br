@@ -66,6 +66,45 @@ class EnvironmentVariables {
   @IsNumber()
   @IsOptional()
   AUTH_COOKIE_MAX_AGE_DAYS?: number;
+
+  // E-mail (spec 014)
+  //
+  // Chave do Resend. **Opcional aqui e obrigatoria em producao**, checada logo
+  // abaixo em validate(): sem ela o MailerService escreve o e-mail no log e
+  // devolve sucesso. O perigo do desenvolvimento nao e o e-mail que nao sai, e o
+  // que sai -- uma maquina local apontada para o Firestore de producao rodando o
+  // gatilho de video manda para a base inteira. O padrao precisa ser inofensivo,
+  // e ligar precisa ser um ato deliberado. Ver a decisao 16 da spec 014.
+  @IsString()
+  @IsOptional()
+  RESEND_API_KEY?: string;
+
+  // Remetente, no formato `Nome <endereco@dominio>`. **Do dominio proprio,
+  // nunca o dominio de teste do provedor** (decisao 2): e-mail de dominio nao
+  // autenticado cai em spam, e reputacao de dominio se perde uma vez.
+  @IsString()
+  @IsNotEmpty()
+  EMAIL_FROM: string;
+
+  // Para onde vai a resposta de quem responder ao e-mail. Sem ele, responder ao
+  // aviso de video novo cai numa caixa que ninguem le.
+  @IsString()
+  @IsNotEmpty()
+  EMAIL_REPLY_TO: string;
+
+  // Segredo do HMAC do token de descadastro (decisao 9). Trocar este valor
+  // invalida todo link de descadastro ja enviado -- e link de descadastro morto
+  // e pior que qualquer risco que ele carrega, porque o botao que a pessoa acha
+  // depois e o "marcar como spam" do cliente de e-mail.
+  @IsString()
+  @IsNotEmpty()
+  EMAIL_UNSUBSCRIBE_SECRET: string;
+
+  // Segredo da assinatura do webhook de bounce e reclamacao (decisao 10).
+  // Obrigatorio em producao, pela mesma checagem da RESEND_API_KEY.
+  @IsString()
+  @IsOptional()
+  RESEND_WEBHOOK_SECRET?: string;
 }
 
 export function validate(config: Record<string, unknown>) {
@@ -92,6 +131,25 @@ export function validate(config: Record<string, unknown>) {
       'AUTH_COOKIE_SAMESITE=none exige AUTH_COOKIE_SECURE=true. ' +
         'O navegador descarta cookie SameSite=None sem Secure, e a sessao nunca persiste.',
     );
+  }
+
+  // Em producao o modo log da decisao 16 e defeito, nao conveniencia: uma API
+  // de producao que registra o e-mail e nao envia e um recurso quebrado em
+  // silencio. Fora de producao a ausencia e o padrao seguro.
+  if (validatedConfig.NODE_ENV === 'production') {
+    if (!validatedConfig.RESEND_API_KEY) {
+      throw new Error(
+        'RESEND_API_KEY e obrigatoria em producao. Sem ela o mailer apenas ' +
+          'registra o e-mail no log e nada e enviado.',
+      );
+    }
+
+    if (!validatedConfig.RESEND_WEBHOOK_SECRET) {
+      throw new Error(
+        'RESEND_WEBHOOK_SECRET e obrigatoria em producao. Sem ela o webhook de ' +
+          'bounce recusa tudo, e endereco morto nunca se desliga sozinho.',
+      );
+    }
   }
 
   // Chave de servico malformada so apareceria como erro de PEM invalido dentro
