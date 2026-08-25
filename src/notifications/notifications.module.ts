@@ -1,15 +1,25 @@
 import { Module } from '@nestjs/common';
 import { NotificationRepository } from './notification.repository';
 import { NotificationReadRepository } from './notification-read.repository';
+import { NotificationsService } from './notifications.service';
+import { NotificationsController } from './notifications.controller';
+import { ProfileModule } from '../profile/profile.module';
 
 /**
  * O canal de notificacao interna do produto (spec 012).
  *
- * Exporta os repositorios e, na Fase 02, o service: quem dispara os avisos e o
- * `BadgeVideoService` e o `MuralService`, que vivem em outros modulos.
+ * Exporta o `NotificationsService` porque quem dispara os avisos mora fora daqui:
+ * o `BadgeVideoService` publica video e o `MuralService` cria pergunta. Os dois
+ * chamam este service e **nenhum deles pode falhar por causa dele**.
  */
 @Module({
-  providers: [NotificationRepository, NotificationReadRepository],
-  exports: [NotificationRepository, NotificationReadRepository],
+  imports: [ProfileModule],
+  controllers: [NotificationsController],
+  providers: [
+    NotificationRepository,
+    NotificationReadRepository,
+    NotificationsService,
+  ],
+  exports: [NotificationsService],
 })
 export class NotificationsModule {}
