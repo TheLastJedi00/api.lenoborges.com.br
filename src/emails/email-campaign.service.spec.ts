@@ -23,6 +23,8 @@ function campanha(overrides: Partial<EmailCampaign> = {}): EmailCampaign {
     ctaLabel: null,
     ctaUrl: null,
     filters: { tiers: null, gradeMin: null, gradeMax: null },
+    recipientUid: null,
+    recipientLabel: null,
     status: 'enviando',
     audienceCount: 0,
     sentCount: 0,
