@@ -643,3 +643,160 @@ continua não existindo: é spec própria, com trilha de auditoria.
 `where('authorUid', '==', uid)` de campo único, que o índice automático já atende; e achar os votos é
 varredura de `mural_questions` com `getAll` por caminho, não consulta — índice de collection group seria
 custo mensal por um evento que acontece uma vez na vida de cada membro.
+
+---
+
+## Disparo de E-mails (spec 014)
+
+A spec 012 criou o canal de notificação e o fechou dentro do painel: o aviso só existia para quem
+entrava. **Um aviso que depende da visita não avisa ninguém.** Esta spec abre o primeiro canal que sai do
+produto — e-mail —, e faz duas coisas pelo mesmo caminho de envio: **vídeo novo vira e-mail
+automaticamente**, e **o admin escreve e dispara** para todos ou para um recorte.
+
+### O que dispara e-mail, e o que não dispara
+
+| Origem | Vira e-mail? | Por quê |
+|---|---|---|
+| **Vídeo novo numa insígnia** | **Sim** | Evento do produto: raro, previsível, um por semana |
+| **Pergunta nova no Mural** | **Não** | Evento de membro: o volume cresce com a comunidade |
+| **Disparo manual do admin** | **Sim** | É a metade desta spec |
+| Troca de e-mail, senha, verificação | Fora | São os e-mails que o **próprio Firebase** dispara (spec 007) |
+
+A ausência da pergunta é a decisão mais importante da tabela. Vídeo é publicado pelo produto e o número
+não muda quando a comunidade dobra; pergunta é escrita por membro, e o número **é** o tamanho da
+comunidade. Com cinquenta membros ativos, "pergunta nova vira e-mail" são cinquenta e-mails por semana na
+caixa de cada um — e o resultado não é engajamento, é a regra de filtro que a pessoa cria para o
+remetente. Depois disso, o e-mail de vídeo também nunca mais é visto. **O painel avisa do que é
+frequente; o e-mail avisa do que é raro.**
+
+### Endpoints
+
+| Método | Rota | Guard | O que faz |
+|---|---|---|---|
+| `POST` | `/admin/emails/audiencia` | admin | Contagem da audiência para um conjunto de filtros. **Só o número** |
+| `POST` | `/admin/emails/teste` | admin | Monta e envia para o próprio admin. Não cria campanha |
+| `POST` | `/admin/emails` | admin | Cria a campanha e dispara. **409** se já houver uma enviando |
+| `POST` | `/admin/emails/:id/retomar` | admin | Retoma uma `interrompida` a partir do `cursorUid` |
+| `GET` | `/admin/emails` | admin | As 20 mais recentes, para o histórico |
+| `POST` | `/emails/descadastro` | **público**, token | Descadastra. Idempotente: 204 mesmo se já estava |
+| `POST` | `/emails/webhook/resend` | **público**, assinatura | Bounce permanente e reclamação viram descadastro |
+| `PATCH` | `/me/emails` | auth | O membro liga e desliga o recebimento pelo próprio perfil |
+
+A prévia devolve contagem e **não devolve a lista de e-mails**: o admin precisa saber *quantos*, e a tela
+já lista os membros em `/dashboard/admin/usuarios`. Uma rota que despeja a base a cada mudança de filtro
+é um vazamento esperando um bug de autorização.
+
+**`POST /admin/emails` envia dentro da requisição**, e a resposta é o resultado, não um aceite.
+
+| Situação | Resposta |
+|---|---|
+| Já existe campanha enviando | `409` |
+| Filtros que não pegam ninguém | `400` — campanha para zero pessoa é sempre engano |
+| Token de descadastro inválido | `204` mesmo assim: distinguir seria um oráculo de `uid` |
+| Assinatura de webhook inválida | `401`, e nada é escrito |
+| Campanha `concluida` recebendo `retomar` | `409` |
+
+### O descadastro é absoluto
+
+Três campos em `profiles/{uid}`: `emailOptOut`, `emailOptOutReason` (`membro`, `bounce` ou `reclamacao`) e
+`emailOptOutAt`.
+
+**Não existe "e-mail que ignora o descadastro" neste código.** Nem o manual, nem o automático, nem um
+futuro "aviso importante". A exceção legítima — e-mail de conta, como redefinição de senha e verificação
+de endereço — não passa por aqui: quem os dispara é o Firebase, por outro caminho (spec 007). Essa
+separação é o que permite a regra ser absoluta sem prejudicar ninguém.
+
+O link do rodapé carrega `uid` e uma assinatura HMAC-SHA256, o endpoint é **público** e o token **não
+expira**. Exigir login para descadastrar é a prática que gera denúncia de spam: quem quer sair não vai
+lembrar a senha, e o botão que ele encontra primeiro é o "marcar como spam" do cliente de e-mail — que
+custa reputação de domínio, ao contrário do descadastro, que não custa nada.
+
+Junto vão os cabeçalhos `List-Unsubscribe` e `List-Unsubscribe-Post: List-Unsubscribe=One-Click`.
+**São requisito de remetente em massa do Gmail e do Yahoo desde 2024**, não refinamento: sem eles a
+entrega degrada por política, independentemente do conteúdo.
+
+**Bounce permanente e reclamação de spam desligam o endereço sozinhos**, pelo webhook. Bounce temporário
+não desliga nada: caixa cheia volta a funcionar, e tratar `soft bounce` como descadastro remove membro
+válido por causa de uma semana de férias.
+
+### O envio: lotes de 100 e um cursor
+
+A audiência sai do Firebase Auth cruzado com `profiles`, **ordenada por `uid`**, e é enviada em lotes de
+100. Depois de cada lote, a campanha grava `cursorUid` e `sentCount`.
+
+Saem da audiência, sempre e sem exceção configurável: `disabled: true` no Auth, `emailVerified: false`
+(endereço não confirmado é candidato a erro de digitação, e cada um é um bounce que corrói a reputação) e
+`emailOptOut: true`. No disparo automático sai também **quem publicou**.
+
+O cursor é o que torna a falha recuperável. Se a função morrer no lote sete, a campanha fica
+`interrompida` com o cursor no fim do lote seis, e "Retomar" continua dali. **A ordem por `uid` é o que
+sustenta isso** — é estável e não muda entre uma tentativa e outra.
+
+> **Um lote pode duplicar, e está aceito.** Se o envio for aceito pelo provedor e a gravação do cursor
+> falhar logo depois, retomar reenvia aquelas cem pessoas. Duplicar um e-mail para cem pessoas é um
+> incômodo; perder o envio para as outras mil é o recurso não funcionando.
+
+**Um disparo por vez.** Dois concorrentes estouram o limite do provedor, embaralham os dois cursores e,
+no pior caso, mandam duas campanhas para a mesma pessoa no mesmo minuto.
+
+**O teto é declarado:** o envio é síncrono dentro da requisição. Mil membros são dez lotes e cerca de
+cinco segundos; dez mil são cem lotes e quase um minuto, que é onde a função serverless morre. O sinal de
+que passou do ponto é campanha terminando `interrompida` com frequência — e a saída então é **fila ou
+cron, em spec própria**, não um `timeout` maior.
+
+### Coleção `email_campaigns` (spec 014)
+
+**ID: `video__{badgeId}__{youtubeId}` para o gatilho automático, auto-id para o manual.** O caminho como
+unicidade de novo: com `create()`, um `POST` repetido por retry de rede não consegue anunciar o mesmo
+vídeo duas vezes para a base inteira.
+
+- `kind` (`video` | `manual`), `subject`, `body` (texto puro), `ctaLabel`, `ctaUrl`
+- `filters` (`tiers`, `gradeMin`, `gradeMax` — `null` significa **todos**)
+- `status` (`enviando` | `concluida` | `interrompida`), `audienceCount`, `sentCount`, `failedCount`
+- `cursorUid`, `createdBy`, `createdAt`, `finishedAt`, `error`
+
+**Não é log: é o registro.** É o único lugar onde fica escrito o que foi enviado, para quantos e quando.
+
+`profiles` ganha `emailOptOut`, `emailOptOutReason` e `emailOptOutAt`. **`emailOptOut` ausente é lido
+como `false`** no converter — e é o fallback mais caro de perder: `undefined` numa comparação booleana faz
+a base inteira parecer descadastrada, e o primeiro disparo sai para zero pessoa sem erro nenhum.
+
+**A tabela de índices compostos não muda.** A audiência não é consulta ao Firestore — é `listUsers` do
+Auth cruzado com `getAll` por caminho, e os filtros acontecem em memória. O histórico é
+`orderBy('createdAt','desc').limit(20)`, de campo único; o trinco é `where('status','==','enviando')`,
+também de campo único. "Spec nova, índice novo" é a suposição padrão, e aqui ela é falsa.
+
+### Antes do primeiro envio real: o DNS
+
+**Esta é a única parte desta spec que não vive no código, e a única que não dá para consertar depois.**
+
+O remetente é `EMAIL_FROM`, do **domínio próprio**, e o domínio precisa estar autenticado no DNS antes de
+qualquer disparo:
+
+- **SPF** — registro TXT autorizando o provedor a enviar pelo domínio.
+- **DKIM** — as chaves que o provedor gera, publicadas como TXT.
+- **DMARC** — a política que diz o que fazer com mensagem que falha nas duas acima.
+
+**O domínio de teste do provedor não é opção.** E-mail enviado de domínio não autenticado cai em spam, e
+uma vez que a base aprende que o remetente é spam, os envios seguintes já nascem lá — inclusive os bons.
+Reputação de domínio se constrói uma vez e se perde uma vez.
+
+Domínio novo também não tem reputação, e volume súbito parece spam: do ponto de vista do Gmail, o
+primeiro disparo para a base inteira é um remetente desconhecido mandando centenas de mensagens de uma
+vez. Com dezenas de membros isso é irrelevante; com centenas, a prática é aquecer — começar pequeno e
+subir ao longo de semanas.
+
+### Variáveis de ambiente
+
+| Variável | Obrigatória | Para quê |
+|---|---|---|
+| `RESEND_API_KEY` | em produção | Sem ela o mailer **loga e não envia** |
+| `EMAIL_FROM` | sim | `Liga Dev <comunidade@lenoborges.com.br>` |
+| `EMAIL_REPLY_TO` | sim | Para onde vai a resposta de quem responder ao e-mail |
+| `EMAIL_UNSUBSCRIBE_SECRET` | sim | Segredo do HMAC do token de descadastro |
+| `RESEND_WEBHOOK_SECRET` | em produção | Verificação de assinatura do webhook |
+| `API_PUBLIC_URL` | em produção | Onde esta API responde, em absoluto — **e-mail não tem roteador** |
+
+As três marcadas como "em produção" são checadas no boot. Sem `API_PUBLIC_URL`, todo link de descadastro
+aponta para `localhost`: quem quiser sair da lista não consegue, e o que ele aperta em seguida é
+"marcar como spam".

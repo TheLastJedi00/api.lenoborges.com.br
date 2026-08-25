@@ -12,6 +12,7 @@ import { UpdateProfileDto } from './dto/update-profile.dto';
 import { ChangeEmailDto } from './dto/change-email.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { DeleteAccountDto } from './dto/delete-account.dto';
+import { EmailPreferenceDto } from './dto/email-preference.dto';
 import { ProfileDto } from './dto/profile.dto';
 import type { UserRole } from '../auth/decorators/current-user.decorator';
 import { AuthService } from '../auth/auth.service';
@@ -91,6 +92,7 @@ export class ProfileService {
       grade: profile.entry.grade,
       linkedin: profile.entry.linkedin,
       instagram: profile.entry.instagram,
+      emailOptOut: profile.entry.emailOptOut,
       profileCompleted: profile.entry.completedAt !== null,
       role,
       tier: profile.entry.tier,
@@ -271,6 +273,28 @@ export class ProfileService {
     await this.firebase.auth.deleteUser(userId);
   }
 
+  /**
+   * O interruptor de e-mail do próprio membro (spec 014, decisão 8).
+   *
+   * É o mesmo campo que o link do rodapé escreve, e por isso o mesmo método do
+   * repositório: dois caminhos até o mesmo opt-out, e um só lugar que o grava.
+   * O motivo é sempre `membro` — quem chega aqui está logado e pediu.
+   */
+  async setEmailPreference(
+    userId: string,
+    dto: EmailPreferenceDto,
+  ): Promise<void> {
+    const { found } = await this.repository.setEmailOptOut(
+      userId,
+      !dto.receber,
+      'membro',
+    );
+
+    if (!found) {
+      throw new NotFoundException('Perfil não encontrado.');
+    }
+  }
+
   async updateProfile(
     userId: string,
     email: string,
@@ -329,6 +353,7 @@ export class ProfileService {
       grade: updated.entry.grade,
       linkedin: updated.entry.linkedin,
       instagram: updated.entry.instagram,
+      emailOptOut: updated.entry.emailOptOut,
       profileCompleted: updated.entry.completedAt !== null,
       role,
       tier: updated.entry.tier,

@@ -6,6 +6,8 @@ import {
 import { BadgeVideoService } from './badge-video.service';
 import { BadgeVideoRepository } from './badge-video.repository';
 import { NotificationsService } from '../notifications/notifications.service';
+import { EmailCampaignService } from '../emails/email-campaign.service';
+import { ConfigService } from '@nestjs/config';
 import { BadgeVideo, BadgeVideoKind } from './entities/badge-video.entity';
 
 function video(
@@ -31,6 +33,7 @@ function video(
 describe('BadgeVideoService', () => {
   let service: BadgeVideoService;
   let notifications: jest.Mocked<Pick<NotificationsService, 'notifyVideo'>>;
+  let campaigns: { createAndSend: jest.Mock };
   let repository: jest.Mocked<
     Pick<
       BadgeVideoRepository,
@@ -52,10 +55,125 @@ describe('BadgeVideoService', () => {
       notifyVideo: jest.fn().mockResolvedValue(undefined),
     };
 
+    campaigns = {
+      createAndSend: jest.fn().mockResolvedValue({
+        id: 'camp-1',
+        status: 'concluida',
+        audienceCount: 1,
+        sentCount: 1,
+        failedCount: 0,
+      }),
+    };
+
     service = new BadgeVideoService(
       repository as unknown as BadgeVideoRepository,
       notifications as unknown as NotificationsService,
+      campaigns as unknown as EmailCampaignService,
+      {
+        getOrThrow: () => 'https://edu.lenoborges.com.br',
+      } as unknown as ConfigService,
     );
+  });
+
+  describe('o anuncio por e-mail (spec 014)', () => {
+    function publicar() {
+      repository.create.mockResolvedValue({
+        entry: {
+          id: 'logica__dQw4w9WgXcQ',
+          badgeId: 'logica',
+          title: 'Variáveis, do zero',
+          description: null,
+          youtubeId: 'dQw4w9WgXcQ',
+          kind: 'aula',
+          questionId: null,
+          devTierFree: false,
+          order: 0,
+          createdAt: new Date('2026-08-25T12:00:00.000Z'),
+          updatedAt: new Date('2026-08-25T12:00:00.000Z'),
+        },
+      });
+
+      return service.create(
+        'logica',
+        {
+          title: 'Variáveis, do zero',
+          youtubeUrl: 'https://youtu.be/dQw4w9WgXcQ',
+        },
+        'admin-1',
+      );
+    }
+
+    it('publicar dispara a campanha de video, com o id do caminho', async () => {
+      await publicar();
+
+      expect(campaigns.createAndSend).toHaveBeenCalledTimes(1);
+      const [pedido] = campaigns.createAndSend.mock.calls[0] as [
+        Record<string, unknown>,
+      ];
+      expect(pedido.id).toBe('video__logica__dQw4w9WgXcQ');
+      expect(pedido.kind).toBe('video');
+      expect(pedido.subject).toContain('Variáveis, do zero');
+    });
+
+    it('quem publicou nao recebe o proprio anuncio', async () => {
+      await publicar();
+
+      const [pedido] = campaigns.createAndSend.mock.calls[0] as [
+        Record<string, unknown>,
+      ];
+      expect(pedido.excludeUid).toBe('admin-1');
+    });
+
+    it('o botao leva a trilha daquela insignia, com URL absoluta', async () => {
+      // E-mail nao tem roteador: o link precisa ser inteiro.
+      await publicar();
+
+      const [pedido] = campaigns.createAndSend.mock.calls[0] as [
+        Record<string, unknown>,
+      ];
+      expect(pedido.ctaUrl).toBe(
+        'https://edu.lenoborges.com.br/dashboard/trilha/logica',
+      );
+      expect(pedido.body).toContain('Insígnia da Lógica');
+    });
+
+    it('o anuncio sai para todo mundo: sem filtro de tier no gatilho', async () => {
+      // Ponto em aberto 3 da spec: aplicar o filtro de tier aqui e uma linha de
+      // codigo e uma decisao de produto, e esta escrita como "nao" por ora.
+      await publicar();
+
+      const [pedido] = campaigns.createAndSend.mock.calls[0] as [
+        Record<string, unknown>,
+      ];
+      expect(pedido.filters).toEqual({
+        tiers: null,
+        gradeMin: null,
+        gradeMax: null,
+      });
+    });
+
+    /**
+     * O mesmo teste que a spec 012 escreveu para a notificação, agora com um
+     * segundo efeito colateral bem mais caro: N/100 requisições HTTP para fora.
+     */
+    it('teste-trava: e-mail falhando, o video continua criado e a resposta e a mesma', async () => {
+      campaigns.createAndSend.mockRejectedValue(
+        new Error('provedor fora do ar'),
+      );
+
+      await expect(publicar()).resolves.toMatchObject({
+        id: 'logica__dQw4w9WgXcQ',
+        badgeId: 'logica',
+      });
+    });
+
+    it('teste-trava: notificacao falhando tambem nao derruba o e-mail', async () => {
+      // As duas garantias sao independentes: cada uma tem o proprio catch.
+      notifications.notifyVideo.mockRejectedValue(new Error('offline'));
+
+      await expect(publicar()).resolves.toBeDefined();
+      expect(campaigns.createAndSend).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('listagem', () => {

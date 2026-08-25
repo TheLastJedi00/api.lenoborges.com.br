@@ -75,6 +75,14 @@ export class ProfileDto {
   instagram: string | null;
 
   @ApiProperty({
+    example: false,
+    description:
+      'Se este membro saiu da lista de e-mails. O front desenha o interruptor ' +
+      'de Meu Perfil com este valor — sem ele, ele nasceria sempre ligado',
+  })
+  emailOptOut: boolean;
+
+  @ApiProperty({
     example: 'dev-tier',
     enum: ['dev-tier', 'great-dev-tier', 'ultra-dev-tier', 'master-dev-tier'],
     description:

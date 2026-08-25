@@ -10,7 +10,10 @@ import { NotificationsModule } from '../notifications/notifications.module';
 @Module({
   // O ciclo com o ProfileModule nasceu na spec 013: excluir a conta anonimiza
   // as perguntas e apaga os votos. Ver o comentario em profile.module.ts.
-  imports: [forwardRef(() => ProfileModule), NotificationsModule],
+  imports: [
+    forwardRef(() => ProfileModule),
+    forwardRef(() => NotificationsModule),
+  ],
   controllers: [MuralController, AdminMuralController],
   providers: [MuralRepository, MuralService, VoteService],
   exports: [MuralRepository, MuralService],

@@ -1,4 +1,14 @@
 import type { TierId } from '../../billing/billing.tiers';
+
+/**
+ * Por que o endereco saiu da lista (spec 014, decisao 8).
+ *
+ * `membro` e o descadastro pedido pela pessoa; `bounce` e `reclamacao` chegam
+ * pelo webhook do provedor e dizem que o endereco esta quebrado ou que a
+ * mensagem foi denunciada. Confundir os tres apaga a informacao de que existe
+ * um endereco morto na base.
+ */
+export type EmailOptOutReason = 'membro' | 'bounce' | 'reclamacao';
 import {
   DocumentData,
   FirestoreDataConverter,
@@ -50,6 +60,26 @@ export interface Profile {
   linkedin: string | null;
   /** Perfil no Instagram, **URL completa** ou nulo. Mesma regra do `linkedin`. */
   instagram: string | null;
+  /**
+   * Se esta pessoa saiu da lista de e-mails (spec 014, decisao 8).
+   *
+   * **Nao existe "e-mail que ignora o descadastro" neste codigo.** Nem o
+   * disparo manual, nem o automatico, nem um futuro "aviso importante". A
+   * excecao legitima -- e-mail de conta, como redefinicao de senha e
+   * verificacao de endereco -- nao passa por aqui: quem os dispara e o
+   * Firebase, por outro caminho (spec 007, decisao 3). E essa separacao que
+   * permite a regra ser absoluta sem prejudicar ninguem.
+   */
+  emailOptOut: boolean;
+  /**
+   * Por que saiu.
+   *
+   * "A pessoa pediu para sair" e "o provedor recusou o endereco" sao fatos
+   * diferentes com a mesma consequencia, e confundi-los apaga a informacao de
+   * que existe um endereco quebrado na base.
+   */
+  emailOptOutReason: EmailOptOutReason | null;
+  emailOptOutAt: Date | null;
   completedAt: Date | null;
   waitlistEntryId: string | null;
   createdAt: Date;
@@ -65,6 +95,9 @@ interface ProfileDocument extends DocumentData {
   tier: TierId;
   linkedin: string | null;
   instagram: string | null;
+  emailOptOut: boolean;
+  emailOptOutReason: EmailOptOutReason | null;
+  emailOptOutAt: Timestamp | null;
   completedAt: Timestamp | null;
   waitlistEntryId: string | null;
   createdAt: Timestamp;
@@ -103,6 +136,11 @@ export const profileConverter: FirestoreDataConverter<Profile> = {
       tier: profile.tier,
       linkedin: profile.linkedin,
       instagram: profile.instagram,
+      emailOptOut: profile.emailOptOut,
+      emailOptOutReason: profile.emailOptOutReason,
+      emailOptOutAt: profile.emailOptOutAt
+        ? Timestamp.fromDate(profile.emailOptOutAt)
+        : null,
       completedAt: profile.completedAt
         ? Timestamp.fromDate(profile.completedAt)
         : null,
@@ -132,6 +170,14 @@ export const profileConverter: FirestoreDataConverter<Profile> = {
       // comparacao vira falsa em silencio.
       linkedin: data.linkedin ?? null,
       instagram: data.instagram ?? null,
+      // **O `?? false` aqui e carga util, e o pior dos fallbacks de perder.**
+      // Documento antigo nao tem o campo -- e sao todos, no dia em que a spec
+      // 014 sobe --, e `undefined` numa comparacao booleana faz a base inteira
+      // parecer descadastrada: o primeiro disparo sai para zero pessoa, sem
+      // erro nenhum e sem nada na tela dizendo o que houve.
+      emailOptOut: data.emailOptOut ?? false,
+      emailOptOutReason: data.emailOptOutReason ?? null,
+      emailOptOutAt: data.emailOptOutAt ? data.emailOptOutAt.toDate() : null,
       // completedAt nulo e o estado normal de quem ainda nao fez o onboarding, e
       // e por ele que profileCompleted e decidido. Um undefined vindo de
       // documento antigo viraria "completou", entao o ?? null e carga util.

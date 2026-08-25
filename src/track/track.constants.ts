@@ -30,6 +30,35 @@ export const BADGE_IDS = [
 export type BadgeId = (typeof BADGE_IDS)[number];
 
 /**
+ * O nome legivel de cada etapa.
+ *
+ * **Esta e a segunda copia dos titulos, e ela so passou a existir na spec 014.**
+ * Ate aqui o backend so precisava dos ids: quem traduzia id em nome era o front,
+ * que tem o `community.service.ts` e uma tela para renderizar. **E-mail nao tem
+ * renderer** -- o texto sai daqui pronto e chega numa caixa de entrada --, entao
+ * o nome precisa existir deste lado.
+ *
+ * O que **nao** pode divergir sao os ids, que sao o vinculo entre video,
+ * pergunta e insignia. Um titulo fora de sincronia produz um e-mail com o nome
+ * antigo; um id fora de sincronia produz conteudo orfao.
+ */
+export const BADGE_TITLES: Readonly<Record<BadgeId, string>> = {
+  logica: 'Insígnia da Lógica',
+  poo: 'Insígnia da POO',
+  'git-github': 'Insígnia do Git e GitHub',
+  'spring-boot': 'Insígnia do Spring Boot',
+  'html-css': 'Insígnia do HTML e CSS',
+  'js-ts': 'Insígnia do JavaScript e TypeScript',
+  angular: 'Insígnia do Angular',
+  nestjs: 'Insígnia do NestJS',
+  'oitavas-vercel': 'Oitavas de Final: Vercel',
+  'quartas-baas': 'Quartas de Final: Firebase e Supabase',
+  'semifinais-docker': 'Semifinais: Docker',
+  'final-gcp': 'Final: Google Cloud Platform',
+  'frontier-ia': 'Battle Frontier: IA Aplicada ao Desenvolvimento',
+};
+
+/**
  * Existe para o `badgeId` de uma URL nunca virar dado.
  *
  * A trilha e fixa e desenhada; um `badgeId` livre so serviria para criar video
