@@ -9,6 +9,7 @@ describe('ProfileController', () => {
   let service: {
     getProfile: jest.Mock;
     updateProfile: jest.Mock;
+    changeEmail: jest.Mock;
   };
 
   const mockUser: CurrentUserData = {
@@ -21,6 +22,7 @@ describe('ProfileController', () => {
     service = {
       getProfile: jest.fn(),
       updateProfile: jest.fn(),
+      changeEmail: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({

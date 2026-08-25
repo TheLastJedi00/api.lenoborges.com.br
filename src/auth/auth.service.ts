@@ -67,8 +67,12 @@ export class AuthService {
    *
    * O `?entrar=1` existe porque o login do front e um dialogo na landing, nao
    * uma rota: e o parametro que manda a landing abrir o dialogo.
+   *
+   * Publico porque a troca de e-mail (spec 013) dispara outro `sendOobCode` e
+   * precisa do mesmo destino de retorno. Um segundo calculo do mesmo endereco
+   * seria um segundo lugar para esquecer de autorizar o dominio.
    */
-  private readonly continueUrl: string;
+  readonly continueUrl: string;
 
   constructor(
     private readonly firebase: FirebaseService,

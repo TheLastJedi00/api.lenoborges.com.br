@@ -1,7 +1,13 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ProfileService } from './profile.service';
 import { ProfileRepository } from './profile.repository';
+import { AuthService } from '../auth/auth.service';
+import { FirebaseService } from '../auth/firebase.service';
 import { Profile } from './entities/profile.entity';
 
 describe('ProfileService', () => {
@@ -10,11 +16,19 @@ describe('ProfileService', () => {
     findById: jest.Mock;
     update: jest.Mock;
   };
+  let firebase: { identityToolkit: jest.Mock };
+  let authService: { reauthenticate: jest.Mock; continueUrl: string };
 
   beforeEach(async () => {
     repository = {
       findById: jest.fn(),
       update: jest.fn(),
+    };
+
+    firebase = { identityToolkit: jest.fn() };
+    authService = {
+      reauthenticate: jest.fn().mockResolvedValue('id-token-fresco'),
+      continueUrl: 'http://localhost:4200/?entrar=1',
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -24,10 +38,79 @@ describe('ProfileService', () => {
           provide: ProfileRepository,
           useValue: repository,
         },
+        { provide: FirebaseService, useValue: firebase },
+        { provide: AuthService, useValue: authService },
       ],
     }).compile();
 
     service = module.get<ProfileService>(ProfileService);
+  });
+
+  describe('changeEmail', () => {
+    const dto = { newEmail: 'novo@email.com', password: 'senha-certa' };
+
+    it('reautentica e pede a confirmacao PARA O ENDERECO NOVO', async () => {
+      firebase.identityToolkit.mockResolvedValue({});
+
+      await expect(
+        service.changeEmail('uid-1', 'atual@email.com', dto),
+      ).resolves.toEqual({ status: 'confirmation_sent' });
+
+      expect(authService.reauthenticate).toHaveBeenCalledWith(
+        'atual@email.com',
+        'senha-certa',
+      );
+      const [endpoint, body] = firebase.identityToolkit.mock.calls[0] as [
+        string,
+        Record<string, unknown>,
+      ];
+      expect(endpoint).toBe('sendOobCode');
+      expect(body.requestType).toBe('VERIFY_AND_CHANGE_EMAIL');
+      expect(body.newEmail).toBe('novo@email.com');
+      expect(body.idToken).toBe('id-token-fresco');
+    });
+
+    it('teste-trava: senha errada da 401 e NAO dispara e-mail nenhum', async () => {
+      // A ordem e reautenticar primeiro, sempre. Invertida, o endpoint vira um
+      // jeito de mandar e-mail para terceiros sem saber senha nenhuma.
+      authService.reauthenticate.mockRejectedValue(
+        new UnauthorizedException('Senha incorreta.'),
+      );
+
+      await expect(
+        service.changeEmail('uid-1', 'atual@email.com', dto),
+      ).rejects.toThrow(UnauthorizedException);
+
+      expect(firebase.identityToolkit).not.toHaveBeenCalled();
+    });
+
+    it('e-mail novo igual ao atual da 400 antes de qualquer ida ao Firebase', async () => {
+      await expect(
+        service.changeEmail('uid-1', '  Novo@Email.com ', dto),
+      ).rejects.toThrow(BadRequestException);
+
+      expect(authService.reauthenticate).not.toHaveBeenCalled();
+      expect(firebase.identityToolkit).not.toHaveBeenCalled();
+    });
+
+    it('teste-trava: EMAIL_EXISTS responde byte a byte igual a e-mail invalido', async () => {
+      // E a decisao mais facil de "melhorar" depois em nome da UX, e melhora-la
+      // reabre o oraculo de enumeracao que a spec 005 fechou.
+      firebase.identityToolkit.mockRejectedValue(new Error('EMAIL_EXISTS'));
+      const jaExiste = await service
+        .changeEmail('uid-1', 'atual@email.com', dto)
+        .catch((error: Error) => error.message);
+
+      firebase.identityToolkit.mockRejectedValue(
+        new Error('INVALID_NEW_EMAIL'),
+      );
+      const invalido = await service
+        .changeEmail('uid-1', 'atual@email.com', dto)
+        .catch((error: Error) => error.message);
+
+      expect(jaExiste).toBe('Não foi possível usar este e-mail.');
+      expect(invalido).toBe(jaExiste);
+    });
   });
 
   describe('getProfile', () => {
