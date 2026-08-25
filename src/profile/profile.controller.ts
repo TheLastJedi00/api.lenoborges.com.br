@@ -23,6 +23,7 @@ import { UpdateProfileDto } from './dto/update-profile.dto';
 import { ChangeEmailDto } from './dto/change-email.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { DeleteAccountDto } from './dto/delete-account.dto';
+import { EmailPreferenceDto } from './dto/email-preference.dto';
 import { CookieService } from '../auth/cookie.service';
 import { ProfileDto } from './dto/profile.dto';
 import { FirebaseAuthGuard } from '../auth/guards/firebase-auth.guard';
@@ -164,6 +165,27 @@ export class ProfileController {
     );
 
     this.cookieService.clearRefreshToken(res);
+  }
+
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @Patch('emails')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({
+    summary: 'Ligar ou desligar o recebimento de e-mails',
+    description:
+      'Escreve o mesmo opt-out que o link do rodapé de todo e-mail escreve. ' +
+      'Vale para tudo que o produto dispara — não existe e-mail que ignore o ' +
+      'descadastro. Os e-mails de conta (definir senha, verificar endereço) são ' +
+      'do Firebase e não passam por aqui, e é isso que permite a regra ser absoluta.',
+  })
+  @ApiResponse({ status: 204, description: 'Preferência registrada.' })
+  @ApiResponse({ status: 404, description: 'Perfil não encontrado.' })
+  @ApiResponse({ status: 429, description: 'Limite de requisições excedido.' })
+  async setEmailPreference(
+    @CurrentUser() user: CurrentUserData,
+    @Body() dto: EmailPreferenceDto,
+  ): Promise<void> {
+    await this.profileService.setEmailPreference(user.id, dto);
   }
 
   @Throttle({ default: { limit: 10, ttl: 60000 } })

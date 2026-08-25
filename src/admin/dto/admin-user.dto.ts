@@ -53,4 +53,12 @@ export class AdminUserDto {
     description: 'Falso também para quem não tem perfil nenhum',
   })
   profileCompleted: boolean;
+
+  @ApiProperty({
+    example: false,
+    description:
+      'Se este membro saiu da lista de e-mails. Sem este campo, "não chegou o ' +
+      'e-mail para o fulano" vira investigação sem pista',
+  })
+  emailOptOut: boolean;
 }

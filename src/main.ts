@@ -8,7 +8,16 @@ import type { Request, Response } from 'express';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    // O corpo cru, para a assinatura do webhook do provedor de e-mail poder ser
+    // conferida (spec 014). Assinatura calculada sobre JSON ja parseado e
+    // reserializado nao confere -- a ordem das chaves e os espacos mudam --, e o
+    // sintoma e "o webhook nunca valida", sem nenhuma pista do motivo.
+    //
+    // O Nest guarda o cru **alem** do parseado, entao nada muda para as outras
+    // rotas: `@Body()` continua recebendo o objeto.
+    rawBody: true,
+  });
   const configService = app.get(ConfigService);
 
   app.use(cookieParser());

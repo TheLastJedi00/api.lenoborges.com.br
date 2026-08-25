@@ -1,12 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { UserRecord } from 'firebase-admin/auth';
-import { DocumentReference } from 'firebase-admin/firestore';
 import { FirebaseService } from '../auth/firebase.service';
-import {
-  PROFILE_COLLECTION,
-  ProfileRepository,
-} from '../profile/profile.repository';
-import { Profile, profileConverter } from '../profile/entities/profile.entity';
+import { ProfileRepository } from '../profile/profile.repository';
+import { Profile } from '../profile/entities/profile.entity';
 import { roleOf } from '../auth/role';
 import { AdminUserDto } from './dto/admin-user.dto';
 import { AdminUserPageDto } from './dto/admin-user-page.dto';
@@ -38,7 +34,9 @@ export class AdminUsersService {
       return { users: [], nextPageToken: page.pageToken ?? null };
     }
 
-    const profiles = await this.readProfiles(page.users.map((u) => u.uid));
+    const profiles = await this.profileRepository.findManyByIds(
+      page.users.map((u) => u.uid),
+    );
 
     return {
       users: page.users.map((user) => this.toDto(user, profiles.get(user.uid))),
@@ -75,26 +73,6 @@ export class AdminUsersService {
     }
   }
 
-  /** Perfis da página, por caminho. Documento ausente vira `undefined`. */
-  private async readProfiles(uids: string[]): Promise<Map<string, Profile>> {
-    const collection = this.firebase.firestore
-      .collection(PROFILE_COLLECTION)
-      .withConverter(profileConverter);
-
-    const snapshots = await this.firebase.firestore.getAll(
-      ...uids.map((uid) => collection.doc(uid) as DocumentReference),
-    );
-
-    const profiles = new Map<string, Profile>();
-    for (const snapshot of snapshots) {
-      if (snapshot.exists) {
-        profiles.set(snapshot.id, snapshot.data() as Profile);
-      }
-    }
-
-    return profiles;
-  }
-
   private toDto(user: UserRecord, profile?: Profile): AdminUserDto {
     return {
       id: user.uid,
@@ -110,6 +88,9 @@ export class AdminUsersService {
       phone: profile?.phone ?? null,
       grade: profile?.grade ?? null,
       profileCompleted: profile?.completedAt != null,
+      // Sem isto, "nao chegou o e-mail para o fulano" vira investigacao sem
+      // pista: o admin nao teria como ver que a pessoa saiu da lista.
+      emailOptOut: profile?.emailOptOut ?? false,
     };
   }
 }
