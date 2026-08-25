@@ -1,7 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { CollectionReference, Timestamp } from 'firebase-admin/firestore';
 import { FirebaseService } from '../auth/firebase.service';
-import { Profile, profileConverter } from './entities/profile.entity';
+import {
+  EmailOptOutReason,
+  Profile,
+  profileConverter,
+} from './entities/profile.entity';
 import { NOTIFICATION_READ_SUBCOLLECTION } from '../notifications/notification-read.repository';
 
 export const PROFILE_COLLECTION = 'profiles';
@@ -49,6 +53,11 @@ export class ProfileRepository {
       // esqueca de definir o campo e grave `undefined` no documento.
       linkedin: null,
       instagram: null,
+      // E nasce recebendo. Quem entra na comunidade consentiu com o contato do
+      // produto; a saida existe e esta a um clique no rodape de todo e-mail.
+      emailOptOut: false,
+      emailOptOutReason: null,
+      emailOptOutAt: null,
       ...data,
       createdAt: now,
       updatedAt: now,
@@ -85,6 +94,41 @@ export class ProfileRepository {
     batch.delete(ref);
 
     await batch.commit();
+  }
+
+  /**
+   * Liga e desliga o recebimento de e-mail (spec 014, decisao 8).
+   *
+   * **Idempotente de proposito.** Descadastrar duas vezes nao e erro: o link do
+   * rodape nao expira e pode ser clicado de novo, o webhook do provedor repete
+   * evento, e o "cancelar inscricao" nativo do Gmail dispara um `POST` sem
+   * pedir confirmacao. E a mesma inversao que a spec 012 registrou para
+   * `notification_reads` -- um 409 em "ja sai da lista" seria um erro sem nada
+   * a consertar.
+   *
+   * Perfil inexistente e ignorado em silencio, e nao e falha: o endpoint publico
+   * responde 204 de qualquer forma, e distinguir seria um oraculo de `uid`.
+   */
+  async setEmailOptOut(
+    id: string,
+    optOut: boolean,
+    reason: EmailOptOutReason | null,
+  ): Promise<{ found: boolean }> {
+    const ref = this.collection.doc(id);
+    const snapshot = await ref.get();
+
+    if (!snapshot.exists) {
+      return { found: false };
+    }
+
+    await ref.update({
+      emailOptOut: optOut,
+      emailOptOutReason: optOut ? reason : null,
+      emailOptOutAt: optOut ? Timestamp.now() : null,
+      updatedAt: Timestamp.now(),
+    });
+
+    return { found: true };
   }
 
   async update(

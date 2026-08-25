@@ -133,6 +133,49 @@ describe('ProfileRepository', () => {
     });
   });
 
+  describe('setEmailOptOut', () => {
+    it('grava o opt-out com motivo e carimbo', async () => {
+      mocks.doc.get.mockResolvedValue({ exists: true, data: () => profile });
+      mocks.doc.update.mockResolvedValue(undefined);
+
+      await expect(
+        repository.setEmailOptOut('uid-123', true, 'membro'),
+      ).resolves.toEqual({ found: true });
+
+      const [patchData] = mocks.doc.update.mock.calls[0] as [
+        Record<string, unknown>,
+      ];
+      expect(patchData.emailOptOut).toBe(true);
+      expect(patchData.emailOptOutReason).toBe('membro');
+      expect(patchData.emailOptOutAt).not.toBeNull();
+    });
+
+    it('religar limpa o motivo e o carimbo, e nao deixa rastro velho', async () => {
+      mocks.doc.get.mockResolvedValue({ exists: true, data: () => profile });
+      mocks.doc.update.mockResolvedValue(undefined);
+
+      await repository.setEmailOptOut('uid-123', false, null);
+
+      const [patchData] = mocks.doc.update.mock.calls[0] as [
+        Record<string, unknown>,
+      ];
+      expect(patchData.emailOptOut).toBe(false);
+      expect(patchData.emailOptOutReason).toBeNull();
+      expect(patchData.emailOptOutAt).toBeNull();
+    });
+
+    it('perfil inexistente devolve { found: false } em vez de lancar', async () => {
+      // O endpoint publico responde 204 de qualquer forma: distinguir seria um
+      // oraculo de uid.
+      mocks.doc.get.mockResolvedValue({ exists: false });
+
+      await expect(
+        repository.setEmailOptOut('uid-fantasma', true, 'bounce'),
+      ).resolves.toEqual({ found: false });
+      expect(mocks.doc.update).not.toHaveBeenCalled();
+    });
+  });
+
   describe('remove', () => {
     /**
      * Subcolecao nao some com o pai no Firestore. Um delete() sozinho em

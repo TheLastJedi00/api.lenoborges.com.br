@@ -19,6 +19,7 @@ describe('ProfileService', () => {
     findById: jest.Mock;
     update: jest.Mock;
     remove: jest.Mock;
+    setEmailOptOut: jest.Mock;
   };
   let firebase: {
     identityToolkit: jest.Mock;
@@ -38,6 +39,7 @@ describe('ProfileService', () => {
       findById: jest.fn(),
       update: jest.fn(),
       remove: jest.fn(),
+      setEmailOptOut: jest.fn().mockResolvedValue({ found: true }),
     };
 
     ordem = [];
@@ -81,6 +83,36 @@ describe('ProfileService', () => {
     }).compile();
 
     service = module.get<ProfileService>(ProfileService);
+  });
+
+  describe('setEmailPreference', () => {
+    it('receber: false vira opt-out com motivo membro', async () => {
+      await service.setEmailPreference('uid-1', { receber: false });
+
+      expect(repository.setEmailOptOut).toHaveBeenCalledWith(
+        'uid-1',
+        true,
+        'membro',
+      );
+    });
+
+    it('receber: true religa', async () => {
+      await service.setEmailPreference('uid-1', { receber: true });
+
+      expect(repository.setEmailOptOut).toHaveBeenCalledWith(
+        'uid-1',
+        false,
+        'membro',
+      );
+    });
+
+    it('perfil inexistente lanca NotFoundException', async () => {
+      repository.setEmailOptOut.mockResolvedValue({ found: false });
+
+      await expect(
+        service.setEmailPreference('uid-fantasma', { receber: true }),
+      ).rejects.toThrow(NotFoundException);
+    });
   });
 
   describe('deleteAccount', () => {

@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 import { MailerService } from './mailer.service';
+import { EmailsController } from './emails.controller';
+import { ProfileModule } from '../profile/profile.module';
 
 /**
  * O canal externo do produto (spec 014).
@@ -9,6 +11,8 @@ import { MailerService } from './mailer.service';
  * conhece o provedor**: o pacote `resend` é importado só em `mailer.service.ts`.
  */
 @Module({
+  imports: [ProfileModule],
+  controllers: [EmailsController],
   providers: [MailerService],
   exports: [MailerService],
 })

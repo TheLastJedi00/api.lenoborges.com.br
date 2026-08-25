@@ -12,6 +12,7 @@ describe('ProfileController', () => {
     updateProfile: jest.Mock;
     changeEmail: jest.Mock;
     changePassword: jest.Mock;
+    setEmailPreference: jest.Mock;
   };
   let cookieService: { clearRefreshToken: jest.Mock };
 
@@ -27,6 +28,7 @@ describe('ProfileController', () => {
       updateProfile: jest.fn(),
       changeEmail: jest.fn(),
       changePassword: jest.fn(),
+      setEmailPreference: jest.fn(),
     };
 
     cookieService = { clearRefreshToken: jest.fn() };
@@ -89,6 +91,16 @@ describe('ProfileController', () => {
       { currentPassword: 'atual', newPassword: 'nova-senha-forte' },
     );
     expect(cookieService.clearRefreshToken).toHaveBeenCalledWith(res);
+  });
+
+  it('PATCH /me/emails repassa a preferencia para o service', async () => {
+    service.setEmailPreference.mockResolvedValue(undefined);
+
+    await controller.setEmailPreference(mockUser, { receber: false });
+
+    expect(service.setEmailPreference).toHaveBeenCalledWith('user-123', {
+      receber: false,
+    });
   });
 
   it('should call profileService.updateProfile on PATCH /me/profile', async () => {
