@@ -4,9 +4,10 @@ import { BadgeVideoService } from './badge-video.service';
 import { TrackController } from './track.controller';
 import { AdminTrackController } from './admin-track.controller';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { EmailsModule } from '../emails/emails.module';
 
 @Module({
-  imports: [NotificationsModule],
+  imports: [NotificationsModule, EmailsModule],
   controllers: [TrackController, AdminTrackController],
   providers: [BadgeVideoRepository, BadgeVideoService],
   exports: [BadgeVideoRepository, BadgeVideoService],

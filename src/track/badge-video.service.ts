@@ -2,11 +2,13 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { BadgeVideoRepository } from './badge-video.repository';
 import { ALREADY_EXISTS } from '../waitlist/waitlist.repository';
-import { BadgeId, isBadgeId } from './track.constants';
+import { BADGE_TITLES, BadgeId, isBadgeId } from './track.constants';
 import { extractYoutubeId } from './youtube-id';
 import { CreateBadgeVideoDto } from './dto/create-badge-video.dto';
 import { UpdateBadgeVideoDto } from './dto/update-badge-video.dto';
@@ -14,6 +16,8 @@ import { ReorderVideosDto } from './dto/reorder-videos.dto';
 import { BadgeVideoDto, BadgeVideoListDto } from './dto/badge-video.dto';
 import { BadgeVideo, BadgeVideoKind } from './entities/badge-video.entity';
 import { NotificationsService } from '../notifications/notifications.service';
+import { EmailCampaignService } from '../emails/email-campaign.service';
+import { videoCampaignId } from '../emails/entities/email-campaign.entity';
 
 function toDto(video: BadgeVideo): BadgeVideoDto {
   return {
@@ -31,9 +35,13 @@ function toDto(video: BadgeVideo): BadgeVideoDto {
 
 @Injectable()
 export class BadgeVideoService {
+  private readonly logger = new Logger(BadgeVideoService.name);
+
   constructor(
     private readonly repository: BadgeVideoRepository,
     private readonly notifications: NotificationsService,
+    private readonly campaigns: EmailCampaignService,
+    private readonly configService: ConfigService,
   ) {}
 
   /**
@@ -140,7 +148,71 @@ export class BadgeVideoService {
       // publicou: o video esta no ar.
     }
 
+    await this.emailVideo(created.entry, actorUid);
+
     return toDto(created.entry);
+  }
+
+  /**
+   * O anuncio por e-mail do video novo (spec 014, decisao 6).
+   *
+   * **E acessorio, e nenhuma falha dele pode virar status de erro.** Vale a
+   * decisao 7 da spec 012 sem mudanca: o video ja esta gravado e a notificacao
+   * ja saiu quando isto roda, e um 500 aqui perderia o trabalho do admin por
+   * causa de um aviso. O `catch` parece descuido e e decisao.
+   *
+   * **O que muda em relacao a notificacao interna e o custo.** Escrever uma
+   * notificacao e uma escrita e leva milissegundos; disparar e-mail para a base
+   * inteira sao N/100 requisicoes HTTP para fora, e o admin espera por elas.
+   * Isso e conhecido e aceito no tamanho de hoje -- dezenas de membros --, e e
+   * **sincrono por ora**: ver a decisao 15 e o ponto em aberto 1 da spec 014. O
+   * sinal de que passou do ponto e campanha terminando `interrompida` com
+   * frequencia, e a saida entao e fila, nao `timeout` maior.
+   *
+   * Quem publicou nao recebe o proprio anuncio, que e a decisao 5 da spec 012
+   * aplicada ao e-mail.
+   */
+  private async emailVideo(video: BadgeVideo, actorUid: string): Promise<void> {
+    // **A primeira vez que este repositorio monta uma rota do front**, e a spec
+    // 012 proibia isso para a API de notificacao -- la o front recebia
+    // `badgeId` e resolvia o destino com o proprio roteador. Aqui nao ha
+    // roteador: e-mail e um documento que chega numa caixa de entrada, e o link
+    // precisa ser absoluto. Alguem tem que monta-lo, e este e o unico lugar que
+    // sabe qual video acabou de entrar.
+    const frontendUrl = this.configService
+      .getOrThrow<string>('FRONTEND_URL')
+      .split(',')[0]
+      .trim()
+      .replace(/\/+$/, '');
+
+    const insignia = BADGE_TITLES[video.badgeId];
+
+    try {
+      await this.campaigns.createAndSend({
+        // O caminho e a unicidade: um POST repetido por retry de rede nao
+        // consegue anunciar o mesmo video duas vezes para a base inteira.
+        id: videoCampaignId(video.badgeId, video.youtubeId),
+        kind: 'video',
+        subject: `Vídeo novo: ${video.title}`,
+        body:
+          `Saiu um vídeo novo na ${insignia}.\n\n` +
+          `${video.title}\n\n` +
+          'Ele já está na trilha, no lugar dele.',
+        ctaLabel: 'Ver na trilha',
+        ctaUrl: `${frontendUrl}/dashboard/trilha/${video.badgeId}`,
+        filters: { tiers: null, gradeMin: null, gradeMax: null },
+        createdBy: actorUid,
+        excludeUid: actorUid,
+      });
+    } catch (error: unknown) {
+      // O id da campanha e o do video vao juntos no log: sem eles, "as vezes nao
+      // avisa" vira investigacao sem pista.
+      this.logger.error(
+        `Falha ao enviar o e-mail do video ${video.id} ` +
+          `(campanha ${videoCampaignId(video.badgeId, video.youtubeId)}): ` +
+          `${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
 
   async update(
