@@ -1,46 +1,85 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { UserRecord } from 'firebase-admin/auth';
-import { FirebaseService } from '../auth/firebase.service';
 import { ProfileRepository } from '../profile/profile.repository';
 import { Profile } from '../profile/entities/profile.entity';
 import { roleOf } from '../auth/role';
+import { normalizeSearchText } from '../common/normalize';
 import { AdminUserDto } from './dto/admin-user.dto';
 import { AdminUserPageDto } from './dto/admin-user-page.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import {
+  LIST_USERS_DEFAULT_LIMIT,
+  LIST_USERS_MAX_LIMIT,
+  ListUsersQueryDto,
+} from './dto/list-users-query.dto';
+import {
+  DirectoryMember,
+  MemberDirectoryService,
+} from './member-directory.service';
 
 @Injectable()
 export class AdminUsersService {
   constructor(
-    private readonly firebase: FirebaseService,
     private readonly profileRepository: ProfileRepository,
+    private readonly directory: MemberDirectoryService,
   ) {}
 
   /**
-   * Lista os usuários cadastrados, juntando as duas fontes.
+   * A base inteira, recortada por busca e filtros, paginada por `offset`.
    *
-   * **A paginação é a do Firebase Auth**, com `pageToken`, e não a do Firestore.
-   * A razão está na decisão 10 da spec 009: o Auth é a fonte de quem existe, e
-   * paginar pelo Firestore esconderia todo usuário que ainda não tem documento
-   * de perfil — que é exatamente a pessoa que o admin mais precisa ver, a que se
-   * cadastrou e não terminou o onboarding.
+   * **A ordem das quatro etapas é o desenho inteiro** (spec 015, decisão 1):
+   * varrer, filtrar, ordenar, fatiar. Filtrar depois de fatiar é filtrar uma
+   * página — com 213 membros e um filtro de "onboarding pendente", uma página de
+   * 50 devolveria os pendentes que por acaso caíram nos primeiros 50 `uid`s, e a
+   * tela diria "3 membros" com toda a confiança do mundo, sem nada denunciar.
    *
-   * A leitura dos perfis da página é um `getAll` por caminho: sem consulta, sem
-   * índice, uma ida só para a página inteira.
+   * **`total` é o tamanho do recorte, e não da base** (decisão 2). Ele só existe
+   * porque a varredura é completa; o `pageToken` do Auth nunca soube dizer
+   * quantos faltavam, porque era cursor de uma lista que ele mesmo montava.
    */
-  async list(limit: number, pageToken?: string): Promise<AdminUserPageDto> {
-    const page = await this.firebase.auth.listUsers(limit, pageToken);
-
-    if (page.users.length === 0) {
-      return { users: [], nextPageToken: page.pageToken ?? null };
+  async list(query: ListUsersQueryDto): Promise<AdminUserPageDto> {
+    if (
+      query.gradeMin != null &&
+      query.gradeMax != null &&
+      query.gradeMin > query.gradeMax
+    ) {
+      // Faixa invertida e engano de digitacao. Um recorte vazio em silencio
+      // esconderia isso, e o admin procuraria o defeito na base.
+      throw new BadRequestException(
+        'A insígnia mínima não pode ser maior que a máxima.',
+      );
     }
 
-    const profiles = await this.profileRepository.findManyByIds(
-      page.users.map((u) => u.uid),
+    const recorte = (await this.directory.loadAll())
+      .filter((membro) => this.matchesSearch(membro, query.q))
+      .filter((membro) => this.matchesOnboarding(membro, query.onboarding))
+      .filter((membro) => this.matchesTier(membro, query.tiers))
+      .filter((membro) => this.matchesGrade(membro, query));
+
+    // Os mais recentes primeiro (decisao 3): e a ordem da pergunta que o admin
+    // faz mais vezes, "quem entrou esta semana". Ela so e possivel agora, porque
+    // ordenar a base inteira exige ter a base inteira.
+    recorte.sort((a, b) => criadoEm(b.user) - criadoEm(a.user));
+
+    // Acima do teto e fixado no teto, sem erro: e paginacao, e nao pedido de
+    // dados.
+    const limit = Math.min(
+      query.limit ?? LIST_USERS_DEFAULT_LIMIT,
+      LIST_USERS_MAX_LIMIT,
     );
+    const offset = query.offset ?? 0;
 
     return {
-      users: page.users.map((user) => this.toDto(user, profiles.get(user.uid))),
-      nextPageToken: page.pageToken ?? null,
+      users: recorte
+        .slice(offset, offset + limit)
+        .map((membro) => this.toDto(membro.user, membro.profile)),
+      total: recorte.length,
+      offset,
+      limit,
     };
   }
 
@@ -73,7 +112,83 @@ export class AdminUsersService {
     }
   }
 
-  private toDto(user: UserRecord, profile?: Profile): AdminUserDto {
+  /**
+   * `contains` sobre nome e e-mail, com os dois lados normalizados (decisão 5).
+   *
+   * **Prefixo não serve**, e é por isso que a comparação é `includes`: quem
+   * procura um membro pelo sobrenome, ou pelo domínio do e-mail, digita o meio
+   * da string. É a vantagem que a varredura em memória comprou.
+   *
+   * **Telefone não entra.** Não é a chave pela qual alguém procura uma pessoa, e
+   * transformar o telefone de todo mundo em índice de busca é ampliar o uso de
+   * um dado pessoal para ganhar um caso que não acontece.
+   */
+  private matchesSearch(membro: DirectoryMember, q?: string): boolean {
+    const alvo = normalizeSearchText(q);
+    if (alvo === '') {
+      return true;
+    }
+
+    return (
+      normalizeSearchText(membro.profile?.name).includes(alvo) ||
+      normalizeSearchText(membro.user.email).includes(alvo)
+    );
+  }
+
+  /**
+   * Onboarding pendente junta dois estados de propósito (decisão 6).
+   *
+   * **Não existe documento de perfil** e **existe documento com `completedAt`
+   * nulo** são fatos diferentes com a mesma consequência. Para o admin a
+   * pergunta é uma só — "quem criou conta e não terminou" — e separá-los em dois
+   * filtros seria expor detalhe de implementação numa tela de gestão. O detalhe
+   * do membro mostra a diferença para quem precisar dela.
+   */
+  private matchesOnboarding(
+    membro: DirectoryMember,
+    onboarding?: 'pendente' | 'concluido',
+  ): boolean {
+    if (!onboarding) {
+      return true;
+    }
+
+    const concluido = membro.profile?.completedAt != null;
+    return onboarding === 'concluido' ? concluido : !concluido;
+  }
+
+  /** Lista ausente ou vazia significa **todos os tiers**, e nunca nenhum. */
+  private matchesTier(membro: DirectoryMember, tiers?: string[]): boolean {
+    if (!tiers || tiers.length === 0) {
+      return true;
+    }
+
+    // Sem documento nao ha tier: quem nao terminou o onboarding nao tem como
+    // satisfazer um filtro sobre um campo que nao existe. Sem filtro nenhum ele
+    // continua na lista, que e o caso que a spec inteira protege.
+    return membro.profile != null && tiers.includes(membro.profile.tier);
+  }
+
+  /** Faixa ausente significa **sem piso e sem teto**, e nunca ninguém. */
+  private matchesGrade(
+    membro: DirectoryMember,
+    { gradeMin, gradeMax }: ListUsersQueryDto,
+  ): boolean {
+    if (gradeMin == null && gradeMax == null) {
+      return true;
+    }
+
+    if (!membro.profile) {
+      return false;
+    }
+
+    if (gradeMin != null && membro.profile.grade < gradeMin) {
+      return false;
+    }
+
+    return !(gradeMax != null && membro.profile.grade > gradeMax);
+  }
+
+  private toDto(user: UserRecord, profile: Profile | null): AdminUserDto {
     return {
       id: user.uid,
       email: user.email ?? null,
@@ -85,12 +200,25 @@ export class AdminUsersService {
       // Nulos aqui são informação, não ausência de dado: é o retrato de quem
       // criou conta e parou antes do onboarding.
       name: profile?.name ?? null,
-      phone: profile?.phone ?? null,
       grade: profile?.grade ?? null,
+      // A spec 010 fez o PATCH aceitar `tier` e nao fez o GET devolve-lo: o
+      // seletor do editor abre vazio desde entao. O conserto entra aqui porque e
+      // aqui que o campo passa a ser filtravel, e filtrar por um campo que a
+      // linha nao mostra e uma tela que mente.
+      tier: profile?.tier ?? null,
       profileCompleted: profile?.completedAt != null,
       // Sem isto, "nao chegou o e-mail para o fulano" vira investigacao sem
       // pista: o admin nao teria como ver que a pessoa saiu da lista.
       emailOptOut: profile?.emailOptOut ?? false,
     };
+    // **`phone` NAO sai daqui** (decisao 8). Ele vive so em
+    // `GET /admin/users/:id`, e a regra e da API e nao do CSS: uma listagem que
+    // carrega o telefone de 200 pessoas para desenhar 200 linhas trafega dado
+    // pessoal que ninguem pediu e o guarda no estado do navegador.
   }
+}
+
+/** `creationTime` do Auth é string RFC 1123; a ordenação precisa do número. */
+function criadoEm(user: UserRecord): number {
+  return new Date(user.metadata.creationTime).getTime();
 }
