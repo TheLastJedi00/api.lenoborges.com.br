@@ -53,6 +53,14 @@ export class MuralService {
     uid: string,
     fase: 'coleta' | 'votacao',
     now: Date = new Date(),
+    /**
+     * Inverte a coleta para a mais nova primeiro (spec 012).
+     *
+     * Só quem chega por uma notificação pede isto: a ordem padrão da aba —
+     * a mais antiga primeiro — continua sendo a de quem entra pelo menu, e é
+     * a certa para quem está lendo a semana inteira.
+     */
+    newestFirst = false,
   ): Promise<MuralQuestionDto[]> {
     const currentWeekId = weekIdOf(now);
     const weekId =
@@ -61,6 +69,7 @@ export class MuralService {
     const questions = await this.repository.listByWeek(
       weekId,
       fase === 'votacao',
+      newestFirst,
     );
 
     // Um `getAll` por caminho para a página inteira, e nunca N leituras em laço

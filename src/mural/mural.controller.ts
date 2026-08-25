@@ -53,14 +53,27 @@ export class MuralController {
   @Get('perguntas')
   @ApiOperation({ summary: 'Perguntas de uma fase do ciclo' })
   @ApiQuery({ name: 'fase', enum: ['coleta', 'votacao'], required: false })
+  @ApiQuery({
+    name: 'ordem',
+    enum: ['recentes'],
+    required: false,
+    description:
+      'Só na coleta: `recentes` inverte para a mais nova primeiro, que é como ' +
+      'o Mural abre para quem chegou por uma notificação de pergunta nova. ' +
+      'Sem o parâmetro, a mais antiga primeiro, que é a ordem de quem entra ' +
+      'pelo menu e lê a semana inteira.',
+  })
   @ApiResponse({ status: 200, type: [MuralQuestionDto] })
   async list(
     @CurrentUser() user: CurrentUserData,
     @Query('fase') fase?: string,
+    @Query('ordem') ordem?: string,
   ): Promise<MuralQuestionDto[]> {
     return this.mural.listQuestions(
       user.id,
       fase === 'coleta' ? 'coleta' : 'votacao',
+      undefined,
+      ordem === 'recentes',
     );
   }
 

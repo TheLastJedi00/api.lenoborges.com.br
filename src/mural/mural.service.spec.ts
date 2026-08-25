@@ -139,10 +139,33 @@ describe('MuralService', () => {
   describe('listagem', () => {
     it('ordena por votos na fase de votação, e por data na coleta', async () => {
       await service.listQuestions('uid-1', 'votacao', AGORA);
-      expect(repository.listByWeek).toHaveBeenCalledWith('2026-08-09', true);
+      expect(repository.listByWeek).toHaveBeenCalledWith(
+        '2026-08-09',
+        true,
+        false,
+      );
 
       await service.listQuestions('uid-1', 'coleta', AGORA);
-      expect(repository.listByWeek).toHaveBeenCalledWith('2026-08-16', false);
+      expect(repository.listByWeek).toHaveBeenCalledWith(
+        '2026-08-16',
+        false,
+        false,
+      );
+    });
+
+    /**
+     * Quem chega pela notificacao pede a mais nova primeiro; quem entra pelo
+     * menu continua vendo a mais antiga em cima. Trocar o padrao silenciosamente
+     * quebraria a leitura da semana inteira (spec 012, decisao 13).
+     */
+    it('inverte a coleta so quando pedem recentes', async () => {
+      await service.listQuestions('uid-1', 'coleta', AGORA, true);
+
+      expect(repository.listByWeek).toHaveBeenCalledWith(
+        '2026-08-16',
+        false,
+        true,
+      );
     });
 
     /**

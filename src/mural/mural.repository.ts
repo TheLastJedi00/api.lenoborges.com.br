@@ -41,8 +41,19 @@ export class MuralRepository {
    * (`weekId` + `voteCount`, e `weekId` + `createdAt`). O emulador não exige
    * índice, então a suíte passa verde e a falha só aparece no primeiro acesso
    * real, com um link no erro que ninguém está esperando.
+   *
+   * `newestFirst` inverte a coleta para a mais nova primeiro, que é como o Mural
+   * abre para quem chegou por uma notificação de pergunta nova (spec 012): a
+   * ordem padrão põe a anunciada no fim de tudo. **Não pede índice novo** —
+   * inverter todas as direções de uma consulta ordenada usa o mesmo índice, e
+   * este é `weekId` + `createdAt`, que já existe. Abrir chamado para criar um
+   * índice por causa desta linha é trabalho para nada.
    */
-  async listByWeek(weekId: string, byVotes: boolean): Promise<MuralQuestion[]> {
+  async listByWeek(
+    weekId: string,
+    byVotes: boolean,
+    newestFirst = false,
+  ): Promise<MuralQuestion[]> {
     const query = byVotes
       ? this.collection
           .where('weekId', '==', weekId)
@@ -50,7 +61,7 @@ export class MuralRepository {
           .orderBy('createdAt', 'asc')
       : this.collection
           .where('weekId', '==', weekId)
-          .orderBy('createdAt', 'asc');
+          .orderBy('createdAt', newestFirst ? 'desc' : 'asc');
 
     const snapshot = await query.get();
     return snapshot.docs.map((document) => document.data());
