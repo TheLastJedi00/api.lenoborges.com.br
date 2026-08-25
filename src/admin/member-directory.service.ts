@@ -59,6 +59,26 @@ export class MemberDirectoryService {
     private readonly profileRepository: ProfileRepository,
   ) {}
 
+  /**
+   * Um membro só, por caminho nas duas fontes.
+   *
+   * `null` quando o Auth não conhece o `uid` — que é a **única ausência real**.
+   * Não ter documento de perfil não é ausência: é o retrato de quem criou conta
+   * e parou, e ele volta daqui com `profile: null`.
+   */
+  async loadOne(uid: string): Promise<DirectoryMember | null> {
+    let user: UserRecord;
+    try {
+      user = await this.firebase.auth.getUser(uid);
+    } catch {
+      return null;
+    }
+
+    const { entry } = await this.profileRepository.findById(uid);
+
+    return { user, profile: entry };
+  }
+
   /** Todo mundo que existe no Auth, com o perfil ao lado quando houver. */
   async loadAll(): Promise<DirectoryMember[]> {
     const membros: DirectoryMember[] = [];

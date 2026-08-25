@@ -68,7 +68,6 @@ describe('AdminUsersService', () => {
     const firebase = { auth: { listUsers, getUser } };
 
     service = new AdminUsersService(
-      firebase as unknown as FirebaseService,
       profileRepository as unknown as ProfileRepository,
       new MemberDirectoryService(
         firebase as unknown as FirebaseService,

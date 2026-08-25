@@ -4,7 +4,6 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { UserRecord } from 'firebase-admin/auth';
-import { FirebaseService } from '../auth/firebase.service';
 import { ProfileRepository } from '../profile/profile.repository';
 import { Profile } from '../profile/entities/profile.entity';
 import { cannotReceiveEmailReason } from '../emails/email-eligibility';
@@ -27,7 +26,6 @@ import {
 @Injectable()
 export class AdminUsersService {
   constructor(
-    private readonly firebase: FirebaseService,
     private readonly profileRepository: ProfileRepository,
     private readonly directory: MemberDirectoryService,
   ) {}
@@ -100,14 +98,12 @@ export class AdminUsersService {
    * conhece, que é a única ausência real.
    */
   async getUser(userId: string): Promise<AdminUserDetailDto> {
-    let user: UserRecord;
-    try {
-      user = await this.firebase.auth.getUser(userId);
-    } catch {
+    const membro = await this.directory.loadOne(userId);
+    if (!membro) {
       throw new NotFoundException('Esse membro não existe.');
     }
 
-    const { entry: profile } = await this.profileRepository.findById(userId);
+    const { user, profile } = membro;
 
     // A pergunta "pode receber e-mail" tem uma implementacao so, e e a mesma que
     // corta a audiencia (decisao 12). Duas seriam como a tela passa a oferecer

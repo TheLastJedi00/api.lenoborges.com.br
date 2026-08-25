@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { MemberDirectoryService } from '../admin/member-directory.service';
 import { cannotReceiveEmailReason } from './email-eligibility';
+import type { CannotReceiveEmailReason } from './email-eligibility';
 import type { TierId } from '../billing/billing.tiers';
 
 /** Um destinatário. Só o que o envio precisa: para quem, e com que token. */
@@ -10,6 +11,13 @@ export interface AudienceMember {
 }
 
 export interface AudienceFilters {
+  /**
+   * O destinatário único de uma campanha `direto` (spec 015, decisão 11).
+   *
+   * **Não é filtro: é curto-circuito.** Quando ele existe, os outros campos não
+   * são nem lidos. Ver o comentário de `build`.
+   */
+  recipientUid?: string | null;
   /** `null` ou ausente significa **todos os tiers**, e nunca nenhum. */
   tiers?: TierId[] | null;
   gradeMin?: number | null;
@@ -55,6 +63,25 @@ export class AudienceService {
    * > entrando no meio de uma campanha reposicionaria a fila.
    */
   async build(filters: AudienceFilters = {}): Promise<AudienceMember[]> {
+    // =========================================================================
+    // O CURTO-CIRCUITO (spec 015, decisão 11). **A ordem é a proteção, e não o
+    // conteúdo.**
+    //
+    // Uma campanha `direto` grava `filters` com os três campos nulos, e filtro
+    // nulo significa TODOS OS MEMBROS. Se este `if` estivesse depois da
+    // varredura, ou se alguém "simplificasse" a função juntando as condições, um
+    // recado escrito para uma pessoa — retomado, reprocessado, ou refatorado por
+    // engano — montaria a base inteira e sairia para todo mundo.
+    //
+    // É por isso que ele é a primeira coisa da função, antes de qualquer leitura
+    // de filtro. O teste-trava se chama "campanha direto com os tres filtros
+    // nulos monta audiencia de UM": se ele quebrar, não conserte o teste.
+    // =========================================================================
+    if (filters.recipientUid) {
+      const { member } = await this.buildOne(filters.recipientUid);
+      return member ? [member] : [];
+    }
+
     const membros: AudienceMember[] = [];
 
     for (const { user, profile } of await this.directory.loadAll()) {
@@ -96,6 +123,47 @@ export class AudienceService {
     }
 
     return membros.sort((a, b) => (a.uid < b.uid ? -1 : a.uid > b.uid ? 1 : 0));
+  }
+
+  /**
+   * O destinatário de um e-mail direto, e **por que não**, quando for o caso.
+   *
+   * Passa pelos **mesmos três cortes** da campanha (spec 015, decisão 12): não
+   * há exceção para "é só uma pessoa". O que muda é a resposta — quem chama
+   * traduz o motivo num `422` nomeado, em vez do `400` de audiência zero, porque
+   * a tela precisa dizer *por que* não dá e uma mensagem em prosa a obrigaria a
+   * fazer análise de texto para escolher o que escrever.
+   *
+   * `member` e `reason` nulos ao mesmo tempo significam que o `uid` não existe
+   * no Auth — que quem chama traduz em `404`.
+   */
+  async buildOne(uid: string): Promise<{
+    member: AudienceMember | null;
+    reason: CannotReceiveEmailReason | null;
+    label: string | null;
+  }> {
+    const membro = await this.directory.loadOne(uid);
+    if (!membro) {
+      return { member: null, reason: null, label: null };
+    }
+
+    const { user, profile } = membro;
+    const reason = cannotReceiveEmailReason(user, profile);
+
+    // O rotulo e capturado aqui, no instante do envio, e nao lido depois: a
+    // conta pode mudar de nome ou deixar de existir, e a linha do historico
+    // precisa continuar legivel (decisao 15).
+    const label = profile?.name ?? user.email ?? null;
+
+    if (reason !== null || !user.email) {
+      return { member: null, reason, label };
+    }
+
+    return {
+      member: { uid: user.uid, email: user.email },
+      reason: null,
+      label,
+    };
   }
 
   /** Só a contagem, que é o que a prévia da tela do admin mostra (decisão 14). */
