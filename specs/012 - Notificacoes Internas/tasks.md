@@ -95,7 +95,10 @@ Branch: `feat/012-docs`
   escrita, ou alguém vai criar um "por precaução" (decisão 12).
 - [x] Task 03: `firestore.rules`. Objetivo: conferir que `notifications` e `notification_reads` caem no
   `deny` global. Nada muda; a regra já nega tudo e só o Admin SDK escreve. **Confirmar, não editar.**
-- [x] Task 04: `npm test` verde e `npm run lint` limpo.
+- [x] Task 04: `npm test` verde, `npm run lint` limpo **e `npm run build` limpo**. Os três, e não dois:
+  o `build` é o único que roda o compilador do jeito que o deploy roda — `ts-jest` transpila arquivo a
+  arquivo e o ESLint checa regras de lint, e **nenhum dos dois pega um erro de compilação**. Esta spec
+  provou isso na prática, com o deploy quebrando de suíte verde. Ver `fix.md`.
 - [ ] Task 05: Verificação no emulador. Objetivo: publicar um vídeo com uma conta e ler `/notificacoes`
   com outra — a segunda vê, a primeira não. Marcar como lida e conferir que sai da lista. Marcar de novo
   e conferir o 204.
@@ -109,6 +112,9 @@ Branch: `feat/012-docs`
 
 Quatro fases inteiras e a quinta em quatro de seis tasks. **242 testes verdes** em 31 suítes (eram 235
 em 31) e `npm run lint` limpo. No front, **296 testes** no Karma.
+
+> **Um fix foi aberto depois disto**, no primeiro deploy: `npm run build` nunca tinha sido executado
+> nesta spec, e ele reprovava com a suíte verde. Ver `fix.md`.
 
 ### O que ficou de fora, e por quê
 
