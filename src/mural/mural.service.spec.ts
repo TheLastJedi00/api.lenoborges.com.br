@@ -6,6 +6,7 @@ import {
 import { MuralService } from './mural.service';
 import { MuralRepository } from './mural.repository';
 import { ProfileRepository } from '../profile/profile.repository';
+import { NotificationsService } from '../notifications/notifications.service';
 import { Profile } from '../profile/entities/profile.entity';
 import { MuralQuestion } from './entities/mural-question.entity';
 import { TierId } from '../billing/billing.tiers';
@@ -61,6 +62,9 @@ describe('MuralService', () => {
     >
   >;
   let profiles: jest.Mocked<Pick<ProfileRepository, 'findById'>>;
+  let notifications: jest.Mocked<
+    Pick<NotificationsService, 'notifyQuestion' | 'forgetQuestion'>
+  >;
 
   beforeEach(() => {
     repository = {
@@ -79,9 +83,15 @@ describe('MuralService', () => {
         .mockResolvedValue({ found: true, entry: profile('great-dev-tier') }),
     };
 
+    notifications = {
+      notifyQuestion: jest.fn().mockResolvedValue(undefined),
+      forgetQuestion: jest.fn().mockResolvedValue(undefined),
+    };
+
     service = new MuralService(
       repository as unknown as MuralRepository,
       profiles as unknown as ProfileRepository,
+      notifications as unknown as NotificationsService,
     );
   });
 
@@ -129,10 +139,33 @@ describe('MuralService', () => {
   describe('listagem', () => {
     it('ordena por votos na fase de votação, e por data na coleta', async () => {
       await service.listQuestions('uid-1', 'votacao', AGORA);
-      expect(repository.listByWeek).toHaveBeenCalledWith('2026-08-09', true);
+      expect(repository.listByWeek).toHaveBeenCalledWith(
+        '2026-08-09',
+        true,
+        false,
+      );
 
       await service.listQuestions('uid-1', 'coleta', AGORA);
-      expect(repository.listByWeek).toHaveBeenCalledWith('2026-08-16', false);
+      expect(repository.listByWeek).toHaveBeenCalledWith(
+        '2026-08-16',
+        false,
+        false,
+      );
+    });
+
+    /**
+     * Quem chega pela notificacao pede a mais nova primeiro; quem entra pelo
+     * menu continua vendo a mais antiga em cima. Trocar o padrao silenciosamente
+     * quebraria a leitura da semana inteira (spec 012, decisao 13).
+     */
+    it('inverte a coleta so quando pedem recentes', async () => {
+      await service.listQuestions('uid-1', 'coleta', AGORA, true);
+
+      expect(repository.listByWeek).toHaveBeenCalledWith(
+        '2026-08-16',
+        false,
+        true,
+      );
     });
 
     /**
@@ -352,6 +385,56 @@ describe('MuralService', () => {
       const winners = await service.listWinners('uid-1', 1, AGORA);
 
       expect(winners[0].weekId).toBe('2026-08-02');
+    });
+  });
+
+  describe('notificacao (spec 012)', () => {
+    beforeEach(() => {
+      repository.create.mockResolvedValue({ entry: question() });
+    });
+
+    it('anuncia a pergunta criada, com o uid de quem escreveu', async () => {
+      await service.createQuestion(
+        'uid-1',
+        { badgeId: 'logica', title: 'Um titulo com dez ou mais' },
+        AGORA,
+      );
+
+      expect(notifications.notifyQuestion).toHaveBeenCalledWith(
+        expect.objectContaining({ badgeId: 'logica', actorUid: 'uid-1' }),
+      );
+    });
+
+    /**
+     * Um 500 aqui apagaria da tela um texto que a pessoa escreveu, e a pergunta
+     * ja esta gravada quando isto roda.
+     */
+    it('pergunta continua criada quando notificar falha', async () => {
+      notifications.notifyQuestion.mockRejectedValue(new Error('offline'));
+
+      await expect(
+        service.createQuestion(
+          'uid-1',
+          { badgeId: 'logica', title: 'Um titulo com dez ou mais' },
+          AGORA,
+        ),
+      ).resolves.toEqual(expect.objectContaining({ id: '2026-08-16__uid-1' }));
+    });
+
+    it('moderar a pergunta apaga a notificacao dela', async () => {
+      repository.findById.mockResolvedValue({ found: true, entry: question() });
+
+      await service.remove(question().id);
+
+      expect(notifications.forgetQuestion).toHaveBeenCalledWith(question().id);
+    });
+
+    it('falha ao esquecer a notificacao nao desfaz a moderacao', async () => {
+      repository.findById.mockResolvedValue({ found: true, entry: question() });
+      notifications.forgetQuestion.mockRejectedValue(new Error('offline'));
+
+      await expect(service.remove(question().id)).resolves.toBeUndefined();
+      expect(repository.remove).toHaveBeenCalled();
     });
   });
 });

@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { BadgeVideoService } from './badge-video.service';
 import { BadgeVideoRepository } from './badge-video.repository';
+import { NotificationsService } from '../notifications/notifications.service';
 import { BadgeVideo, BadgeVideoKind } from './entities/badge-video.entity';
 
 function video(
@@ -29,6 +30,7 @@ function video(
 
 describe('BadgeVideoService', () => {
   let service: BadgeVideoService;
+  let notifications: jest.Mocked<Pick<NotificationsService, 'notifyVideo'>>;
   let repository: jest.Mocked<
     Pick<
       BadgeVideoRepository,
@@ -46,8 +48,13 @@ describe('BadgeVideoService', () => {
       reorder: jest.fn().mockResolvedValue(undefined),
     };
 
+    notifications = {
+      notifyVideo: jest.fn().mockResolvedValue(undefined),
+    };
+
     service = new BadgeVideoService(
       repository as unknown as BadgeVideoRepository,
+      notifications as unknown as NotificationsService,
     );
   });
 
@@ -78,10 +85,14 @@ describe('BadgeVideoService', () => {
         entry: video('logica__dQw4w9WgXcQ', 0),
       });
 
-      await service.create('logica', {
-        title: 'Variáveis na prática',
-        youtubeUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=42s',
-      });
+      await service.create(
+        'logica',
+        {
+          title: 'Variáveis na prática',
+          youtubeUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=42s',
+        },
+        'admin-1',
+      );
 
       expect(repository.create).toHaveBeenCalledWith(
         expect.objectContaining({ youtubeId: 'dQw4w9WgXcQ' }),
@@ -92,19 +103,27 @@ describe('BadgeVideoService', () => {
     // aparece quando um aluno abre a insignia.
     it('recusa URL que nao e do YouTube', async () => {
       await expect(
-        service.create('logica', {
-          title: 'Um título válido',
-          youtubeUrl: 'https://vimeo.com/123456',
-        }),
+        service.create(
+          'logica',
+          {
+            title: 'Um título válido',
+            youtubeUrl: 'https://vimeo.com/123456',
+          },
+          'admin-1',
+        ),
       ).rejects.toThrow(BadRequestException);
     });
 
     it('recusa badgeId que nao e da trilha', async () => {
       await expect(
-        service.create('nao-existe', {
-          title: 'Um título válido',
-          youtubeUrl: 'https://youtu.be/dQw4w9WgXcQ',
-        }),
+        service.create(
+          'nao-existe',
+          {
+            title: 'Um título válido',
+            youtubeUrl: 'https://youtu.be/dQw4w9WgXcQ',
+          },
+          'admin-1',
+        ),
       ).rejects.toThrow(NotFoundException);
     });
 
@@ -116,10 +135,14 @@ describe('BadgeVideoService', () => {
       );
 
       await expect(
-        service.create('logica', {
-          title: 'Um título válido',
-          youtubeUrl: 'https://youtu.be/dQw4w9WgXcQ',
-        }),
+        service.create(
+          'logica',
+          {
+            title: 'Um título válido',
+            youtubeUrl: 'https://youtu.be/dQw4w9WgXcQ',
+          },
+          'admin-1',
+        ),
       ).rejects.toThrow(ConflictException);
     });
 
@@ -132,10 +155,14 @@ describe('BadgeVideoService', () => {
         entry: video('logica__dQw4w9WgXcQ', 2),
       });
 
-      await service.create('logica', {
-        title: 'Um título válido',
-        youtubeUrl: 'https://youtu.be/dQw4w9WgXcQ',
-      });
+      await service.create(
+        'logica',
+        {
+          title: 'Um título válido',
+          youtubeUrl: 'https://youtu.be/dQw4w9WgXcQ',
+        },
+        'admin-1',
+      );
 
       expect(repository.create).toHaveBeenCalledWith(
         expect.objectContaining({ order: 2 }),
@@ -301,12 +328,16 @@ describe('BadgeVideoService', () => {
         entry: video('logica__dQw4w9WgXcQ', 0, 'resposta'),
       });
 
-      await service.create('logica', {
-        title: 'Respondendo a pergunta da semana',
-        youtubeUrl: 'https://youtu.be/dQw4w9WgXcQ',
-        kind: 'resposta',
-        questionId: '2026-08-09__uid-1',
-      });
+      await service.create(
+        'logica',
+        {
+          title: 'Respondendo a pergunta da semana',
+          youtubeUrl: 'https://youtu.be/dQw4w9WgXcQ',
+          kind: 'resposta',
+          questionId: '2026-08-09__uid-1',
+        },
+        'admin-1',
+      );
 
       expect(repository.create).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -323,12 +354,16 @@ describe('BadgeVideoService', () => {
      */
     it('recusa vincular pergunta a uma aula', async () => {
       await expect(
-        service.create('logica', {
-          title: 'Uma aula comum',
-          youtubeUrl: 'https://youtu.be/dQw4w9WgXcQ',
-          kind: 'aula',
-          questionId: '2026-08-09__uid-1',
-        }),
+        service.create(
+          'logica',
+          {
+            title: 'Uma aula comum',
+            youtubeUrl: 'https://youtu.be/dQw4w9WgXcQ',
+            kind: 'aula',
+            questionId: '2026-08-09__uid-1',
+          },
+          'admin-1',
+        ),
       ).rejects.toThrow(BadRequestException);
     });
 
@@ -337,11 +372,15 @@ describe('BadgeVideoService', () => {
         entry: video('logica__dQw4w9WgXcQ', 0),
       });
 
-      await service.create('logica', {
-        title: 'Uma aula de vitrine',
-        youtubeUrl: 'https://youtu.be/dQw4w9WgXcQ',
-        devTierFree: true,
-      });
+      await service.create(
+        'logica',
+        {
+          title: 'Uma aula de vitrine',
+          youtubeUrl: 'https://youtu.be/dQw4w9WgXcQ',
+          devTierFree: true,
+        },
+        'admin-1',
+      );
 
       expect(repository.create).toHaveBeenCalledWith(
         expect.objectContaining({ devTierFree: true }),
@@ -354,14 +393,72 @@ describe('BadgeVideoService', () => {
         entry: video('logica__dQw4w9WgXcQ', 0),
       });
 
-      await service.create('logica', {
-        title: 'Uma aula comum',
-        youtubeUrl: 'https://youtu.be/dQw4w9WgXcQ',
-      });
+      await service.create(
+        'logica',
+        {
+          title: 'Uma aula comum',
+          youtubeUrl: 'https://youtu.be/dQw4w9WgXcQ',
+        },
+        'admin-1',
+      );
 
       expect(repository.create).toHaveBeenCalledWith(
         expect.objectContaining({ kind: 'aula', devTierFree: false }),
       );
+    });
+  });
+
+  describe('notificacao (spec 012)', () => {
+    it('anuncia o video publicado, com o uid de quem publicou', async () => {
+      repository.create.mockResolvedValue({
+        entry: video('logica__dQw4w9WgXcQ', 0),
+      });
+
+      await service.create(
+        'logica',
+        {
+          title: 'Variaveis na pratica',
+          youtubeUrl: 'https://youtu.be/dQw4w9WgXcQ',
+        },
+        'admin-1',
+      );
+
+      // O titulo anunciado e o que ficou GRAVADO, e nao o que veio no corpo da
+      // requisicao: se o repositorio normalizar alguma coisa, o aviso conta a
+      // versao que a trilha vai mostrar.
+      const gravado = video('logica__dQw4w9WgXcQ', 0);
+
+      expect(notifications.notifyVideo).toHaveBeenCalledWith({
+        badgeId: 'logica',
+        title: gravado.title,
+        youtubeId: 'dQw4w9WgXcQ',
+        actorUid: 'admin-1',
+      });
+    });
+
+    /**
+     * O conteudo e o essencial e o aviso e o acessorio. Um 500 aqui perderia o
+     * trabalho do admin por causa de uma notificacao, e o video ja esta gravado
+     * quando isto roda.
+     */
+    it('video continua criado e a resposta continua 201 quando notificar falha', async () => {
+      repository.create.mockResolvedValue({
+        entry: video('logica__dQw4w9WgXcQ', 0),
+      });
+      notifications.notifyVideo.mockRejectedValue(new Error('offline'));
+
+      await expect(
+        service.create(
+          'logica',
+          {
+            title: 'Variaveis na pratica',
+            youtubeUrl: 'https://youtu.be/dQw4w9WgXcQ',
+          },
+          'admin-1',
+        ),
+      ).resolves.toEqual(expect.objectContaining({ youtubeId: 'dQw4w9WgXcQ' }));
+
+      expect(repository.create).toHaveBeenCalled();
     });
   });
 });

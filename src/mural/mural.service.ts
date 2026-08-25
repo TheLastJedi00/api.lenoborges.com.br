@@ -17,12 +17,14 @@ import { MuralStateDto } from './dto/mural-state.dto';
 import { WinnerDto } from './dto/winner.dto';
 import { CreateQuestionDto } from './dto/create-question.dto';
 import { UpdateQuestionDto } from './dto/update-question.dto';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class MuralService {
   constructor(
     private readonly repository: MuralRepository,
     private readonly profiles: ProfileRepository,
+    private readonly notifications: NotificationsService,
   ) {}
 
   /**
@@ -51,6 +53,14 @@ export class MuralService {
     uid: string,
     fase: 'coleta' | 'votacao',
     now: Date = new Date(),
+    /**
+     * Inverte a coleta para a mais nova primeiro (spec 012).
+     *
+     * Só quem chega por uma notificação pede isto: a ordem padrão da aba —
+     * a mais antiga primeiro — continua sendo a de quem entra pelo menu, e é
+     * a certa para quem está lendo a semana inteira.
+     */
+    newestFirst = false,
   ): Promise<MuralQuestionDto[]> {
     const currentWeekId = weekIdOf(now);
     const weekId =
@@ -59,6 +69,7 @@ export class MuralService {
     const questions = await this.repository.listByWeek(
       weekId,
       fase === 'votacao',
+      newestFirst,
     );
 
     // Um `getAll` por caminho para a página inteira, e nunca N leituras em laço
@@ -136,8 +147,10 @@ export class MuralService {
     // escolhe a própria semana escolhe também votar na semana errada.
     const weekId = weekIdOf(now);
 
+    let created: { entry: MuralQuestion };
+
     try {
-      const created = await this.repository.create({
+      created = await this.repository.create({
         weekId,
         badgeId: dto.badgeId,
         authorUid: uid,
@@ -145,8 +158,6 @@ export class MuralService {
         title: dto.title,
         body: dto.body?.length ? dto.body : null,
       });
-
-      return this.toDto(created.entry, uid, false, now);
     } catch (error: unknown) {
       if (
         error &&
@@ -160,6 +171,26 @@ export class MuralService {
       }
       throw error;
     }
+
+    // O aviso vem DEPOIS da pergunta, fora do try que traduz o ALREADY_EXISTS, e
+    // nunca pode derrubá-la: quando isto roda a pergunta já está gravada, e um
+    // 500 aqui apagaria da tela um texto que a pessoa escreveu.
+    //
+    // O `catch` parece descuido e é decisão (spec 012, decisão 7). Quem não é
+    // notificado da própria pergunta é o autor, e disso cuida a listagem, pelo
+    // `actorUid` — não é este ponto que decide.
+    try {
+      await this.notifications.notifyQuestion({
+        badgeId: dto.badgeId,
+        title: created.entry.title,
+        questionId: created.entry.id,
+        actorUid: uid,
+      });
+    } catch {
+      // Já logado lá dentro. A pergunta está no Mural, que é o que importa.
+    }
+
+    return this.toDto(created.entry, uid, false, now);
   }
 
   /**
@@ -206,6 +237,15 @@ export class MuralService {
     }
 
     await this.repository.remove(questionId);
+
+    // A notificação da pergunta vai junto com os votos dela: um aviso que leva a
+    // uma pergunta moderada aponta para o vazio. Falhar aqui não desfaz a
+    // moderação, que é a operação que o admin de fato pediu (spec 012).
+    try {
+      await this.notifications.forgetQuestion(questionId);
+    } catch {
+      // Já logado lá dentro.
+    }
   }
 
   private async isPaid(uid: string): Promise<boolean> {

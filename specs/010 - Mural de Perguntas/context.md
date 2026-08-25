@@ -290,7 +290,9 @@ E, na 009, `POST`/`PATCH` de `/admin/badges/:badgeId/videos` ganham `kind`, `que
 - **Jogos e desafios.** Citados na tabela de tier porque a regra já está decidida — Dev Tier não
   participa —, mas nada disso existe ainda.
 - **Comentar ou responder pergunta por texto.** O mural é perguntar e votar. Discussão é o WhatsApp.
-- **Notificação** de "sua pergunta venceu" ou "o vídeo saiu". Não há canal de notificação no produto.
+- **Notificação** de "sua pergunta venceu" ou "o vídeo saiu". ~~Não há canal de notificação no produto.~~
+  **A spec 012 criou o canal**, e "o vídeo saiu" passou a ser um dos dois eventos dele. "Sua pergunta
+  venceu" continua fora: a vencedora é derivada e não tem instante de disparo para virar gatilho.
 - **Cobrança automática.** `tier` é editado à mão pelo admin, e continua assim até existir gateway.
 - **Gate de leitura de conteúdo por tier.** O `devTierFree` nasce, mas ninguém ainda o consulta para
   decidir acesso, porque não há acesso a decidir.
