@@ -13,6 +13,7 @@ import { UpdateBadgeVideoDto } from './dto/update-badge-video.dto';
 import { ReorderVideosDto } from './dto/reorder-videos.dto';
 import { BadgeVideoDto, BadgeVideoListDto } from './dto/badge-video.dto';
 import { BadgeVideo, BadgeVideoKind } from './entities/badge-video.entity';
+import { NotificationsService } from '../notifications/notifications.service';
 
 function toDto(video: BadgeVideo): BadgeVideoDto {
   return {
@@ -30,7 +31,10 @@ function toDto(video: BadgeVideo): BadgeVideoDto {
 
 @Injectable()
 export class BadgeVideoService {
-  constructor(private readonly repository: BadgeVideoRepository) {}
+  constructor(
+    private readonly repository: BadgeVideoRepository,
+    private readonly notifications: NotificationsService,
+  ) {}
 
   /**
    * Insignia inexistente e 404; insignia sem video e 200 com lista vazia.
@@ -53,6 +57,8 @@ export class BadgeVideoService {
   async create(
     badgeId: string,
     dto: CreateBadgeVideoDto,
+    /** Quem publicou. Vai na notificacao, e quem publica nao e notificado. */
+    actorUid: string,
   ): Promise<BadgeVideoDto> {
     const badge = this.assertBadge(badgeId);
 
@@ -81,8 +87,10 @@ export class BadgeVideoService {
     // resposta nascer na posicao 3 de uma lista que tem um item so.
     const existing = await this.repository.listByBadge(badge, kind);
 
+    let created: { entry: BadgeVideo };
+
     try {
-      const created = await this.repository.create({
+      created = await this.repository.create({
         badgeId: badge,
         title: dto.title,
         description: dto.description?.length ? dto.description : null,
@@ -94,8 +102,6 @@ export class BadgeVideoService {
         // uma operacao propria.
         order: existing.length,
       });
-
-      return toDto(created.entry);
     } catch (error: unknown) {
       if (
         error &&
@@ -112,6 +118,29 @@ export class BadgeVideoService {
       }
       throw error;
     }
+
+    // O aviso vem DEPOIS do video, fora do try que traduz o ALREADY_EXISTS, e
+    // nunca pode derrubar o que ja deu certo: quando isto roda o video ja esta
+    // gravado, e um 500 aqui perderia o trabalho do admin por causa de um aviso.
+    //
+    // O `catch` parece descuido e e decisao (spec 012, decisao 7). O
+    // `NotificationsService` ja captura tudo por dentro; este segundo cinto
+    // existe para a garantia ser estrutural e nao depender de o outro service
+    // continuar se comportando.
+    try {
+      await this.notifications.notifyVideo({
+        badgeId: badge,
+        // O titulo anunciado e o que ficou gravado, e nao o que veio no corpo.
+        title: created.entry.title,
+        youtubeId: created.entry.youtubeId,
+        actorUid,
+      });
+    } catch {
+      // Ja logado la dentro. Aqui nao ha nada a fazer e nada a contar a quem
+      // publicou: o video esta no ar.
+    }
+
+    return toDto(created.entry);
   }
 
   async update(

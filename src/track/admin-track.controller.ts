@@ -24,6 +24,8 @@ import { ReorderVideosDto } from './dto/reorder-videos.dto';
 import { BadgeVideoDto, BadgeVideoListDto } from './dto/badge-video.dto';
 import { FirebaseAuthGuard } from '../auth/guards/firebase-auth.guard';
 import { AdminGuard } from '../auth/guards/admin.guard';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import type { CurrentUserData } from '../auth/decorators/current-user.decorator';
 
 /**
  * Administração dos vídeos da trilha.
@@ -60,8 +62,11 @@ export class AdminTrackController {
   async create(
     @Param('badgeId') badgeId: string,
     @Body() dto: CreateBadgeVideoDto,
+    @CurrentUser() user: CurrentUserData,
   ): Promise<BadgeVideoDto> {
-    return this.videos.create(badgeId, dto);
+    // O uid do admin vai junto porque publicar avisa a comunidade, e quem
+    // publica não é notificado do próprio evento (spec 012, decisão 5).
+    return this.videos.create(badgeId, dto, user.id);
   }
 
   /**
