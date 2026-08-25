@@ -4,27 +4,27 @@
 > dependem delas** e podem entrar antes; onde um campo da 013 ou da 014 ainda não existir, ele sai do DTO e
 > volta quando aquela spec subir. As Fases 04 e 05 esperam a 014.
 
-# Fase 01: A varredura [ ]
+# Fase 01: A varredura [x]
 Branch: `feat/015-varredura`
 
 Nenhuma rota nova e nenhum comportamento visível. Ao fim desta fase o servidor sabe montar a base inteira
 — Auth cruzado com perfis — num lugar só, e a lista de hoje continua respondendo igual.
 
-- [ ] Task 01 (TDD + implementação): O varredor. Arquivos: `src/admin/member-directory.service.ts`,
+- [x] Task 01 (TDD + implementação): O varredor. Arquivos: `src/admin/member-directory.service.ts`,
   `.spec.ts`. Objetivo: `loadAll()` percorrendo `listUsers` **até o fim**, em páginas de 1000, cruzando com
   `profiles` por `getAll` de caminho. Testes-trava: (a) base com 1200 usuários faz **duas** chamadas ao Auth
   e devolve os 1200 — um `listUsers` sem laço devolve mil e ninguém percebe; (b) usuário **sem documento de
   perfil aparece no resultado**, com os campos nulos — é a pessoa que a spec inteira existe para achar.
-- [ ] Task 02: O dono único da junção. Arquivos: `src/admin/admin-users.service.ts`,
+- [x] Task 02: O dono único da junção. Arquivos: `src/admin/admin-users.service.ts`,
   `src/emails/audience.service.ts`. Objetivo: as duas passam a usar o varredor da Task 01 em vez de cada uma
   ter a sua leitura de perfis. **Se a 014 ainda não estiver no código, esta task é só o `AdminUsersService`**,
   e a Task 01 da Fase 03 da 014 passa a apontar para cá. O comentário registra que a junção tem um dono, e
   por quê: duas implementações da mesma junção divergem no primeiro campo novo.
-- [ ] Task 03 (TDD + implementação): Normalização de texto. Arquivos: `src/common/text/normalize.ts`,
+- [x] Task 03 (TDD + implementação): Normalização de texto. Arquivos: `src/common/text/normalize.ts`,
   `.spec.ts`. Objetivo: minúsculas e acentos removidos (`NFD` + remoção de diacríticos). Testes-trava:
   `normalize('José') === normalize('jose')`; `normalize(null)` devolve string vazia e não lança — nome nulo
   é o estado normal de metade da base que esta spec lista.
-- [ ] Task 04: O comentário do teto. Arquivo: `member-directory.service.ts`. Objetivo: registrar em cima da
+- [x] Task 04: O comentário do teto. Arquivo: `member-directory.service.ts`. Objetivo: registrar em cima da
   classe que **cada chamada varre a base inteira**, quanto isso custa (`N/1000` chamadas ao Auth mais `N`
   leituras), que **não existe cache e por que não** (função serverless, cache por instância, tier antigo
   aparecendo depois de salvar), e qual é o sinal de que passou do ponto (decisão 4). É o comentário que

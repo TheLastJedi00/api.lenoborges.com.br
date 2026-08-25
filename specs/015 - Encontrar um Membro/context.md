@@ -1,5 +1,27 @@
 # Spec 015: Encontrar um Membro
 
+> ## Ajustes durante a execução
+>
+> Três coisas mudaram de lugar em relação ao que o `tasks.md` escreveu, e nenhuma delas muda uma decisão.
+>
+> 1. **`normalizeSearchText` mora em `src/common/normalize.ts`**, e não num `src/common/text/normalize.ts`
+>    novo. Já existe um `normalize.ts` naquela pasta com as outras normalizações do produto, e dois arquivos
+>    com o mesmo nome e a mesma responsabilidade são a próxima confusão de import.
+> 2. **Existe um `MemberDirectoryModule`**, com o varredor dentro. O serviço continua em
+>    `src/admin/member-directory.service.ts`, mas o provider não pode morar no `AdminModule`: a Fase 04 faz a
+>    Administração importar o `EmailsModule` (pelo e-mail direto) e o `EmailsModule` já precisa do varredor,
+>    o que fecharia o grafo em ciclo. Um módulo de uma linha resolve sem `forwardRef` — e `forwardRef` que
+>    existe por acidente de arrumação é dívida indistinguível do `forwardRef` que existe por decisão, como o
+>    do `ProfileModule`.
+> 3. **O `AdminUsersService` trocou de fonte na Fase 02, e não na Fase 01.** Fazer na Fase 01 exigiria
+>    emular `pageToken` sobre uma lista já filtrada, que o Auth nunca viu, só para apagar o código dois
+>    commits depois. A Fase 01 entregou o varredor e o `AudienceService`; a lista trocou junto com o
+>    contrato, que é onde a mudança é visível de qualquer forma.
+>
+> Os três cortes de e-mail saíram para `src/emails/email-eligibility.ts` já na Fase 01, em vez da Fase 03,
+> porque o `AudienceService` passou a precisar deles no mesmo commit em que perdeu a junção. A regra da
+> decisão 12 — **uma função só** — é o que importa, e ela vale desde o primeiro commit.
+
 ## Objetivo
 A spec 009 criou `GET /admin/users` e resolveu a pergunta "quem se cadastrou". A lista devolve uma página
 do Firebase Auth por vez, na ordem que o Auth quiser, sem busca, sem filtro e sem total — e isso bastava
