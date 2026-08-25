@@ -4,8 +4,11 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { UserRecord } from 'firebase-admin/auth';
+import { FirebaseService } from '../auth/firebase.service';
 import { ProfileRepository } from '../profile/profile.repository';
 import { Profile } from '../profile/entities/profile.entity';
+import { cannotReceiveEmailReason } from '../emails/email-eligibility';
+import { AdminUserDetailDto } from './dto/admin-user-detail.dto';
 import { roleOf } from '../auth/role';
 import { normalizeSearchText } from '../common/normalize';
 import { AdminUserDto } from './dto/admin-user.dto';
@@ -24,6 +27,7 @@ import {
 @Injectable()
 export class AdminUsersService {
   constructor(
+    private readonly firebase: FirebaseService,
     private readonly profileRepository: ProfileRepository,
     private readonly directory: MemberDirectoryService,
   ) {}
@@ -80,6 +84,56 @@ export class AdminUsersService {
       total: recorte.length,
       offset,
       limit,
+    };
+  }
+
+  /**
+   * Um membro inteiro (spec 015, decisão 8).
+   *
+   * Duas leituras por caminho: `getUser` do Auth e `profiles/{uid}`. Nenhuma
+   * consulta, nenhum índice.
+   *
+   * **Usuário sem documento de perfil responde 200 com os campos nulos, e nunca
+   * 404.** Ele existe — é justamente quem o filtro de onboarding pendente
+   * encontra —, e um 404 aqui faria a tela dizer "não existe" sobre a pessoa que
+   * ela acabou de listar. O 404 fica reservado para o `uid` que o Auth não
+   * conhece, que é a única ausência real.
+   */
+  async getUser(userId: string): Promise<AdminUserDetailDto> {
+    let user: UserRecord;
+    try {
+      user = await this.firebase.auth.getUser(userId);
+    } catch {
+      throw new NotFoundException('Esse membro não existe.');
+    }
+
+    const { entry: profile } = await this.profileRepository.findById(userId);
+
+    // A pergunta "pode receber e-mail" tem uma implementacao so, e e a mesma que
+    // corta a audiencia (decisao 12). Duas seriam como a tela passa a oferecer
+    // um envio que a API recusa com 422, depois de o admin escrever o recado
+    // inteiro.
+    const cannotReceiveReason = cannotReceiveEmailReason(user, profile);
+
+    return {
+      ...this.toDto(user, profile),
+      phone: profile?.phone ?? null,
+      bio: profile?.bio ?? null,
+      linkedin: profile?.linkedin ?? null,
+      instagram: profile?.instagram ?? null,
+      // O motivo e a data do descadastro **so aparecem aqui**, e e o oposto do
+      // que Meu Perfil faz (spec 014, decisao 12). A diferenca e quem le: para o
+      // membro, "seu provedor recusou nossos e-mails" nao o ajuda a fazer nada;
+      // para o admin, e a unica informacao que explica o "nao chegou para o
+      // fulano" — e ele e quem pode conferir o endereco e falar com a pessoa por
+      // outro caminho.
+      emailOptOutReason: profile?.emailOptOutReason ?? null,
+      emailOptOutAt: profile?.emailOptOutAt?.toISOString() ?? null,
+      waitlistEntryId: profile?.waitlistEntryId ?? null,
+      profileCreatedAt: profile?.createdAt.toISOString() ?? null,
+      profileUpdatedAt: profile?.updatedAt.toISOString() ?? null,
+      canReceiveEmail: cannotReceiveReason === null,
+      cannotReceiveReason,
     };
   }
 

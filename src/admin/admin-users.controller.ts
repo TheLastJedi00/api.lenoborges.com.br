@@ -17,6 +17,7 @@ import {
 } from '@nestjs/swagger';
 import { AdminUsersService } from './admin-users.service';
 import { AdminUserPageDto } from './dto/admin-user-page.dto';
+import { AdminUserDetailDto } from './dto/admin-user-detail.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import {
   LIST_USERS_DEFAULT_LIMIT,
@@ -108,6 +109,28 @@ export class AdminUsersController {
   @ApiResponse({ status: 403, description: 'Não é administrador.' })
   async list(@Query() query: ListUsersQueryDto): Promise<AdminUserPageDto> {
     return this.users.list(query);
+  }
+
+  @Get(':id')
+  @ApiOperation({
+    summary: 'Um membro inteiro',
+    description:
+      'O ÚNICO lugar em que dado pessoal de terceiro sai desta API: telefone, ' +
+      'bio e redes sociais. É rota própria, e não campos a mais na listagem, ' +
+      'porque uma listagem que carrega isso de 200 pessoas trafega dado pessoal ' +
+      'que ninguém pediu.\n\n' +
+      'Usuário sem documento de perfil responde 200 com os campos de perfil ' +
+      'nulos, e NUNCA 404: ele existe, é quem o filtro de onboarding pendente ' +
+      'encontra, e um 404 aqui diria "não existe" sobre quem a lista acabou de ' +
+      'mostrar.\n\n' +
+      'ISTO NÃO É O PERFIL PÚBLICO DE MEMBRO que a spec 013 adiou — aquela ' +
+      'decisão é sobre membro vendo membro, e continua valendo. Aqui é o admin ' +
+      'vendo o cadastro, atrás do AdminGuard.',
+  })
+  @ApiResponse({ status: 200, type: AdminUserDetailDto })
+  @ApiResponse({ status: 404, description: 'Esse uid não existe no Auth.' })
+  async detail(@Param('id') id: string): Promise<AdminUserDetailDto> {
+    return this.users.getUser(id);
   }
 
   @Patch(':id')

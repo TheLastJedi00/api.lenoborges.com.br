@@ -68,6 +68,7 @@ describe('AdminUsersService', () => {
     const firebase = { auth: { listUsers, getUser } };
 
     service = new AdminUsersService(
+      firebase as unknown as FirebaseService,
       profileRepository as unknown as ProfileRepository,
       new MemberDirectoryService(
         firebase as unknown as FirebaseService,
@@ -438,6 +439,104 @@ describe('AdminUsersService', () => {
       // O cursor era do Auth, e a paginacao nao e mais do Auth: nao existe
       // token para devolver sobre uma lista que ele nunca viu.
       expect(page).not.toHaveProperty('nextPageToken');
+    });
+  });
+
+  describe('getUser', () => {
+    it('devolve o membro inteiro, com o que só existe no detalhe', async () => {
+      getUser.mockResolvedValue(authUser('uid-1'));
+      findById.mockResolvedValue({
+        found: true,
+        entry: profile('uid-1', {
+          phone: '47999990000',
+          bio: 'Estudando back-end.',
+          linkedin: 'https://linkedin.com/in/leno',
+          instagram: null,
+          waitlistEntryId: 'leno@email.com',
+        }),
+      });
+
+      const detalhe = await service.getUser('uid-1');
+
+      expect(detalhe).toMatchObject({
+        id: 'uid-1',
+        phone: '47999990000',
+        bio: 'Estudando back-end.',
+        linkedin: 'https://linkedin.com/in/leno',
+        instagram: null,
+        waitlistEntryId: 'leno@email.com',
+        canReceiveEmail: true,
+        cannotReceiveReason: null,
+      });
+      expect(detalhe.profileCreatedAt).toBe('2026-08-18T09:02:00.000Z');
+    });
+
+    /**
+     * **Um 404 aqui diria "não existe" sobre alguém que a lista acabou de
+     * mostrar.** Quem criou conta e parou não tem documento de perfil, e é
+     * justamente quem o filtro de onboarding pendente encontra: abrir o detalhe
+     * dessa pessoa tem que funcionar.
+     */
+    it('teste-trava: usuário sem perfil responde 200 com os campos nulos', async () => {
+      getUser.mockResolvedValue(authUser('uid-sem-perfil'));
+      findById.mockResolvedValue({ found: false, entry: null });
+
+      const detalhe = await service.getUser('uid-sem-perfil');
+
+      expect(detalhe).toMatchObject({
+        id: 'uid-sem-perfil',
+        name: null,
+        phone: null,
+        bio: null,
+        tier: null,
+        profileCompleted: false,
+        profileCreatedAt: null,
+        // Sem perfil nao ha descadastro: essa pessoa nunca entrou na lista.
+        canReceiveEmail: true,
+      });
+    });
+
+    it('uid que o Auth não conhece responde 404', async () => {
+      getUser.mockRejectedValue(new Error('auth/user-not-found'));
+
+      await expect(service.getUser('uid-x')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+    });
+
+    /**
+     * **O oposto do que Meu Perfil faz, e de propósito** (decisão 11). Lá quem
+     * lê não pode agir sobre um bounce; aqui pode — conferir o endereço, falar
+     * com a pessoa por outro caminho, corrigir.
+     */
+    it('diz por que o membro não recebe e-mail, com o motivo e a data', async () => {
+      getUser.mockResolvedValue(authUser('uid-1'));
+      findById.mockResolvedValue({
+        found: true,
+        entry: profile('uid-1', {
+          emailOptOut: true,
+          emailOptOutReason: 'bounce',
+          emailOptOutAt: new Date('2026-08-20T12:00:00.000Z'),
+        }),
+      });
+
+      const detalhe = await service.getUser('uid-1');
+
+      expect(detalhe).toMatchObject({
+        canReceiveEmail: false,
+        cannotReceiveReason: 'descadastrado',
+        emailOptOutReason: 'bounce',
+        emailOptOutAt: '2026-08-20T12:00:00.000Z',
+      });
+    });
+
+    it('conta desativada não pode receber, e o motivo é o da conta', async () => {
+      getUser.mockResolvedValue(authUser('uid-1', { disabled: true }));
+      findById.mockResolvedValue({ found: true, entry: profile('uid-1') });
+
+      const detalhe = await service.getUser('uid-1');
+
+      expect(detalhe.cannotReceiveReason).toBe('desativado');
     });
   });
 
