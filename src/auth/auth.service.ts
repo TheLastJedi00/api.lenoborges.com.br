@@ -196,6 +196,42 @@ export class AuthService {
     };
   }
 
+  /**
+   * Confere a senha atual de quem ja esta logado, e devolve um ID token fresco.
+   *
+   * **E o unico lugar do projeto capaz de dizer "essa senha confere" alem do
+   * login -- e e o mesmo lugar**: bate no mesmo `accounts:signInWithPassword`.
+   * Um verificador proprio seria o segundo, e dois verificadores divergem na
+   * primeira excecao (spec 013, decisao 5).
+   *
+   * **O token devolvido nunca vira cookie e nunca vira `SessionResponseDto`.**
+   * Ele e carga util, nao sessao: o `accounts:update` da troca de senha e o
+   * `sendOobCode` da troca de e-mail exigem um token do usuario, e o que chega
+   * no header pode estar a cinquenta minutos de idade. Quem "aproveitar" este
+   * token para devolver sessao cria uma segunda porta de login, ao lado da que
+   * ja existe e ja e testada.
+   *
+   * `INVALID_LOGIN_CREDENTIALS` e `EMAIL_NOT_FOUND` viram a **mesma** mensagem:
+   * distinguir aqui responderia uma pergunta que nem quem ja esta logado
+   * deveria conseguir fazer.
+   */
+  async reauthenticate(email: string, password: string): Promise<string> {
+    try {
+      const data = await this.firebase.identityToolkit<SignInResponse>(
+        'signInWithPassword',
+        {
+          email: normalizeEmail(email),
+          password,
+          returnSecureToken: true,
+        },
+      );
+
+      return data.idToken;
+    } catch {
+      throw new UnauthorizedException('Senha incorreta.');
+    }
+  }
+
   async refresh(
     refreshToken?: string,
   ): Promise<{ session: SessionResponseDto; refreshToken: string }> {
