@@ -6,8 +6,10 @@ import {
   Body,
   HttpCode,
   HttpStatus,
+  Res,
   UseGuards,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { Throttle } from '@nestjs/throttler';
 import {
   ApiTags,
@@ -18,6 +20,8 @@ import {
 import { ProfileService } from './profile.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { ChangeEmailDto } from './dto/change-email.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
+import { CookieService } from '../auth/cookie.service';
 import { ProfileDto } from './dto/profile.dto';
 import { FirebaseAuthGuard } from '../auth/guards/firebase-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -28,7 +32,10 @@ import type { CurrentUserData } from '../auth/decorators/current-user.decorator'
 @Controller('me')
 @UseGuards(FirebaseAuthGuard)
 export class ProfileController {
-  constructor(private readonly profileService: ProfileService) {}
+  constructor(
+    private readonly profileService: ProfileService,
+    private readonly cookieService: CookieService,
+  ) {}
 
   @Get()
   @ApiOperation({ summary: 'Obter dados do perfil do membro autenticado' })
@@ -82,6 +89,40 @@ export class ProfileController {
     @Body() dto: ChangeEmailDto,
   ): Promise<{ status: 'confirmation_sent' }> {
     return this.profileService.changeEmail(user.id, user.email, dto);
+  }
+
+  @Throttle({ default: { limit: 3, ttl: 60000 } })
+  @Post('password')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({
+    summary: 'Trocar a senha',
+    description:
+      'ATENÇÃO: A SESSÃO TERMINA. Trocar a senha revoga os refresh tokens de ' +
+      'todos os aparelhos e limpa o cookie deste navegador — trocar a senha ' +
+      'por desconfiar de invasão e seguir com o invasor logado é não ter ' +
+      'trocado a senha. O ID token já emitido continua valendo por até uma ' +
+      'hora (CHECK_REVOKED = false, decisão 2 da spec 007).',
+  })
+  @ApiResponse({
+    status: 204,
+    description: 'Senha trocada e sessão encerrada.',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Nova senha recusada pela política de senha do projeto.',
+  })
+  @ApiResponse({ status: 401, description: 'Senha atual incorreta.' })
+  @ApiResponse({ status: 429, description: 'Limite de requisições excedido.' })
+  async changePassword(
+    @CurrentUser() user: CurrentUserData,
+    @Body() dto: ChangePasswordDto,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<void> {
+    await this.profileService.changePassword(user.id, user.email, dto);
+
+    // Revogar mata a sessao no servidor; limpar o cookie e o que faz este
+    // navegador parar de tentar renovar com um token que nao vale mais.
+    this.cookieService.clearRefreshToken(res);
   }
 
   @Throttle({ default: { limit: 10, ttl: 60000 } })

@@ -16,7 +16,10 @@ describe('ProfileService', () => {
     findById: jest.Mock;
     update: jest.Mock;
   };
-  let firebase: { identityToolkit: jest.Mock };
+  let firebase: {
+    identityToolkit: jest.Mock;
+    auth: { revokeRefreshTokens: jest.Mock };
+  };
   let authService: { reauthenticate: jest.Mock; continueUrl: string };
 
   beforeEach(async () => {
@@ -25,7 +28,10 @@ describe('ProfileService', () => {
       update: jest.fn(),
     };
 
-    firebase = { identityToolkit: jest.fn() };
+    firebase = {
+      identityToolkit: jest.fn(),
+      auth: { revokeRefreshTokens: jest.fn().mockResolvedValue(undefined) },
+    };
     authService = {
       reauthenticate: jest.fn().mockResolvedValue('id-token-fresco'),
       continueUrl: 'http://localhost:4200/?entrar=1',
@@ -44,6 +50,59 @@ describe('ProfileService', () => {
     }).compile();
 
     service = module.get<ProfileService>(ProfileService);
+  });
+
+  describe('changePassword', () => {
+    const dto = {
+      currentPassword: 'senha-atual',
+      newPassword: 'senha-nova-forte',
+    };
+
+    it('reautentica, troca com o token fresco e revoga a sessao', async () => {
+      firebase.identityToolkit.mockResolvedValue({});
+
+      await service.changePassword('uid-1', 'fulano@email.com', dto);
+
+      expect(authService.reauthenticate).toHaveBeenCalledWith(
+        'fulano@email.com',
+        'senha-atual',
+      );
+      const [endpoint, body] = firebase.identityToolkit.mock.calls[0] as [
+        string,
+        Record<string, unknown>,
+      ];
+      expect(endpoint).toBe('update');
+      expect(body.idToken).toBe('id-token-fresco');
+      expect(body.password).toBe('senha-nova-forte');
+      expect(firebase.auth.revokeRefreshTokens).toHaveBeenCalledWith('uid-1');
+    });
+
+    it('teste-trava: senha atual errada da 401 e NADA e revogado', async () => {
+      // Revogar antes de conferir desloga em todo aparelho quem so errou de
+      // digitacao.
+      authService.reauthenticate.mockRejectedValue(
+        new UnauthorizedException('Senha incorreta.'),
+      );
+
+      await expect(
+        service.changePassword('uid-1', 'fulano@email.com', dto),
+      ).rejects.toThrow(UnauthorizedException);
+
+      expect(firebase.identityToolkit).not.toHaveBeenCalled();
+      expect(firebase.auth.revokeRefreshTokens).not.toHaveBeenCalled();
+    });
+
+    it('senha nova recusada pela politica vira 400, e nada e revogado', async () => {
+      firebase.identityToolkit.mockRejectedValue(
+        new Error('WEAK_PASSWORD : Password should be at least 6 characters'),
+      );
+
+      await expect(
+        service.changePassword('uid-1', 'fulano@email.com', dto),
+      ).rejects.toThrow(BadRequestException);
+
+      expect(firebase.auth.revokeRefreshTokens).not.toHaveBeenCalled();
+    });
   });
 
   describe('changeEmail', () => {
