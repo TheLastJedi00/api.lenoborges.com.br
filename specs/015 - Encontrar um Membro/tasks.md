@@ -71,24 +71,24 @@ Ao fim desta fase `GET /admin/users` responde ao recorte, e o contrato muda.
   documentação supõe que o filtro age sobre a página, que é justamente o erro que a spec existe para não
   cometer.
 
-# Fase 03: O detalhe do membro [ ]
+# Fase 03: O detalhe do membro [x]
 Branch: `feat/015-detalhe`
 
-- [ ] Task 01: DTO do detalhe. Arquivo: `src/admin/dto/admin-user-detail.dto.ts`. Objetivo: tudo da linha
+- [x] Task 01: DTO do detalhe. Arquivo: `src/admin/dto/admin-user-detail.dto.ts`. Objetivo: tudo da linha
   mais `phone`, `bio`, `linkedin`, `instagram`, `waitlistEntryId`, `profileCreatedAt`, `profileUpdatedAt`,
   e os três campos de descadastro. Comentário registrando que **este é o único lugar onde dado pessoal de
   terceiro sai da API**, e que é por isso que ele é rota própria (decisão 8).
-- [ ] Task 02 (TDD + implementação): `GET /admin/users/:id`. Arquivos: `admin-users.controller.ts`,
+- [x] Task 02 (TDD + implementação): `GET /admin/users/:id`. Arquivos: `admin-users.controller.ts`,
   `admin-users.service.ts`, `.spec.ts`. Objetivo: `getUserRecord` do Auth mais leitura por caminho do
   perfil. Testes-trava: (a) `uid` inexistente no Auth responde **404**; (b) usuário **sem perfil responde
   200** com os campos nulos, e nunca 404 — um 404 aqui diria "não existe" sobre alguém que a lista acabou
   de mostrar.
-- [ ] Task 03 (TDD + implementação): `canReceiveEmail`. Arquivos: `src/emails/audience.service.ts` (ou o
+- [x] Task 03 (TDD + implementação): `canReceiveEmail`. Arquivos: `src/emails/audience.service.ts` (ou o
   módulo comum, se a 014 ainda não subiu), `.spec.ts`. Objetivo: **uma função só** decide se um membro pode
   receber, e ela é a mesma que a audiência usa para cortar (decisão 12). Devolve o motivo:
   `'desativado' | 'email-nao-verificado' | 'descadastrado' | null`. Teste-trava: os três casos, um por
   corte — duas implementações da mesma pergunta é como a tela passa a oferecer um envio que a API recusa.
-- [ ] Task 04: A ordem dos motivos. Objetivo: quando mais de um corte se aplica, o motivo devolvido é o
+- [x] Task 04: A ordem dos motivos. Objetivo: quando mais de um corte se aplica, o motivo devolvido é o
   primeiro da ordem `desativado`, `email-nao-verificado`, `descadastrado`. Não é arbitrário: é da conta mais
   grave para a preferência do membro, e sem ordem definida o texto da tela muda entre requisições sem nada
   ter mudado.
