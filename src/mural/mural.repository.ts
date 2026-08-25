@@ -6,6 +6,8 @@ import {
 } from 'firebase-admin/firestore';
 import { FirebaseService } from '../auth/firebase.service';
 import {
+  ANONYMOUS_AUTHOR_NAME,
+  ANONYMOUS_AUTHOR_UID,
   MuralQuestion,
   muralQuestionConverter,
   questionDocId,
@@ -226,6 +228,93 @@ export class MuralRepository {
       .get();
 
     return snapshot.exists;
+  }
+
+  /**
+   * Tira o autor das perguntas de alguem, sem apagar as perguntas (spec 013).
+   *
+   * `authorUid` vira `ANONYMOUS_AUTHOR_UID` e `authorName` vira
+   * `ANONYMOUS_AUTHOR_NAME`, num lote so. **Texto, `badgeId`, `voteCount` e
+   * `answerVideoId` ficam intactos**: os votos sao de outras pessoas e o video
+   * de resposta ja foi publicado respondendo aquilo.
+   *
+   * Consequencia que vale registrar: depois desta escrita, **`authorUid` deixa
+   * de ser garantia de que existe um perfil por tras dele**. Quem cruzar os dois
+   * precisa tolerar a ausencia.
+   */
+  async anonymizeAuthor(uid: string): Promise<number> {
+    const snapshot = await this.collection.where('authorUid', '==', uid).get();
+
+    if (snapshot.empty) {
+      return 0;
+    }
+
+    const batch = this.firebase.firestore.batch();
+    for (const document of snapshot.docs) {
+      batch.update(document.ref, {
+        authorUid: ANONYMOUS_AUTHOR_UID,
+        authorName: ANONYMOUS_AUTHOR_NAME,
+        updatedAt: Timestamp.now(),
+      });
+    }
+
+    await batch.commit();
+
+    return snapshot.size;
+  }
+
+  /**
+   * Apaga os votos que alguem deu, **decrementando os contadores no mesmo lote**.
+   *
+   * O `uid` esta no caminho do voto -- `{questionId}/votes/{uid}` --, entao ele
+   * sai junto com a conta. E o `voteCount` acompanha: contador que discorda da
+   * subcolecao e um numero que ninguem consegue conferir depois.
+   *
+   * **Achar os votos e varredura, nao consulta**, e isso e escolha. Nao existe
+   * consulta que devolva "todos os votos deste uid" sem indice de collection
+   * group, e criar esse indice e pagar custo mensal por um evento que acontece
+   * uma vez na vida de cada membro. `mural_questions` e pequena por construcao
+   * -- uma pergunta por membro por semana --, e a leitura e o mesmo `getAll` por
+   * caminho que o `findMyVotes` ja faz.
+   *
+   * O numero a olhar quando isto incomodar esta no ponto em aberto 4 da spec
+   * 013: com cem membros ativos por um ano sao cinco mil documentos.
+   */
+  async removeVotesBy(uid: string): Promise<number> {
+    const questions = await this.collection.listDocuments();
+
+    if (questions.length === 0) {
+      return 0;
+    }
+
+    const voteRefs = questions.map((question) =>
+      question.collection(VOTE_SUBCOLLECTION).doc(uid),
+    );
+    const snapshots = await this.firebase.firestore.getAll(...voteRefs);
+
+    const batch = this.firebase.firestore.batch();
+    let removed = 0;
+
+    snapshots.forEach((snapshot, index) => {
+      if (!snapshot.exists) {
+        return;
+      }
+
+      removed += 1;
+      batch.delete(snapshot.ref);
+      batch.update(questions[index], {
+        voteCount: FieldValue.increment(-1),
+        updatedAt: Timestamp.now(),
+      });
+    });
+
+    if (removed === 0) {
+      return 0;
+    }
+
+    await batch.commit();
+
+    return removed;
   }
 
   /**

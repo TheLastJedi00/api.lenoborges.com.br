@@ -5,6 +5,7 @@ interface DocMock {
   get: jest.Mock;
   create: jest.Mock;
   update: jest.Mock;
+  collection: jest.Mock;
   id: string;
 }
 
@@ -16,20 +17,29 @@ interface CollectionMock {
 // Os tipos sao explicitos porque `withConverter: jest.fn(() => collection)`
 // dentro do proprio literal se auto-referencia, e a inferencia desiste em `any`.
 function buildFirestore() {
+  const listDocuments = jest.fn().mockResolvedValue([]);
   const doc: DocMock = {
     get: jest.fn(),
     create: jest.fn(),
     update: jest.fn(),
+    collection: jest.fn(() => ({ listDocuments })),
     id: 'uid-123',
+  };
+  const batch = {
+    delete: jest.fn(),
+    commit: jest.fn().mockResolvedValue(undefined),
   };
   const collection: CollectionMock = {
     withConverter: jest.fn(),
     doc: jest.fn(() => doc),
   };
   collection.withConverter.mockReturnValue(collection);
-  const firestore = { collection: jest.fn(() => collection) };
+  const firestore = {
+    collection: jest.fn(() => collection),
+    batch: jest.fn(() => batch),
+  };
 
-  return { firestore, collection, doc };
+  return { firestore, collection, doc, batch, listDocuments };
 }
 
 const profile = {
@@ -120,6 +130,35 @@ describe('ProfileRepository', () => {
 
       expect(result.entry.createdAt).toBeInstanceOf(Date);
       expect(result.entry.updatedAt).toBeInstanceOf(Date);
+    });
+  });
+
+  describe('remove', () => {
+    /**
+     * Subcolecao nao some com o pai no Firestore. Um delete() sozinho em
+     * profiles/{uid} deixaria notification_reads orfa: invisivel no console,
+     * cobrada na fatura e impossivel de achar, porque nao ha mais documento pai
+     * por onde chegar nela.
+     */
+    it('apaga a subcolecao notification_reads antes do perfil, no mesmo lote', async () => {
+      mocks.listDocuments.mockResolvedValue([{ id: 'n1' }, { id: 'n2' }]);
+
+      await repository.remove('uid-123');
+
+      expect(mocks.doc.collection).toHaveBeenCalledWith('notification_reads');
+      // Duas leituras + o proprio perfil, e o perfil por ultimo.
+      expect(mocks.batch.delete).toHaveBeenCalledTimes(3);
+      expect(mocks.batch.delete).toHaveBeenLastCalledWith(mocks.doc);
+      expect(mocks.batch.commit).toHaveBeenCalledTimes(1);
+    });
+
+    it('apaga o perfil mesmo quando a pessoa nunca leu notificacao nenhuma', async () => {
+      mocks.listDocuments.mockResolvedValue([]);
+
+      await repository.remove('uid-123');
+
+      expect(mocks.batch.delete).toHaveBeenCalledTimes(1);
+      expect(mocks.batch.commit).toHaveBeenCalledTimes(1);
     });
   });
 

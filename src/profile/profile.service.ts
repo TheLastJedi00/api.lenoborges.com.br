@@ -1,4 +1,5 @@
 import {
+  ForbiddenException,
   Inject,
   Injectable,
   Logger,
@@ -10,9 +11,12 @@ import { ProfileRepository } from './profile.repository';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { ChangeEmailDto } from './dto/change-email.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { DeleteAccountDto } from './dto/delete-account.dto';
 import { ProfileDto } from './dto/profile.dto';
 import type { UserRole } from '../auth/decorators/current-user.decorator';
 import { AuthService } from '../auth/auth.service';
+import { MuralRepository } from '../mural/mural.repository';
+import { WaitlistRepository } from '../waitlist/waitlist.repository';
 import { FirebaseService } from '../auth/firebase.service';
 import {
   normalizeName,
@@ -63,6 +67,9 @@ export class ProfileService {
     private readonly firebase: FirebaseService,
     @Inject(forwardRef(() => AuthService))
     private readonly authService: AuthService,
+    @Inject(forwardRef(() => MuralRepository))
+    private readonly muralRepository: MuralRepository,
+    private readonly waitlistRepository: WaitlistRepository,
   ) {}
 
   async getProfile(
@@ -197,6 +204,71 @@ export class ProfileService {
 
     // Mata toda sessao viva, em qualquer aparelho.
     await this.firebase.auth.revokeRefreshTokens(userId);
+  }
+
+  /**
+   * Exclui a conta. **Imediata, irreversivel, e sem lixeira.**
+   *
+   * A exclusao tem duas metades (spec 013, decisao 6). Some de verdade: o
+   * usuario do Firebase Auth, `profiles/{uid}`, a subcolecao
+   * `notification_reads`, os votos dados e a entrada na lista de espera. Vira
+   * anonimo: as perguntas do Mural de autoria dela -- porque elas tem votos de
+   * outras pessoas e podem ter virado video na trilha.
+   *
+   * **A ordem e fixa e o Auth e o ultimo a morrer** (decisao 9). Nao existe
+   * transacao atravessando Firestore e Firebase Auth, entao o que da para
+   * escolher e qual metade fica de pe quando a outra falha. Com o Auth por
+   * ultimo, uma falha no meio deixa a conta viva e a pessoa capaz de tentar de
+   * novo. Com o Auth primeiro, deixa dado pessoal orfao no Firestore -- sem
+   * conta, sem sessao e sem ninguem com direito de pedir a remocao --, que e o
+   * pior resultado possivel da operacao cujo proposito inteiro e remover dado
+   * pessoal.
+   *
+   * No dia em que houver gateway de pagamento, **cancelar a cobranca entra
+   * aqui, antes do `deleteUser`**.
+   */
+  async deleteAccount(
+    userId: string,
+    email: string,
+    role: UserRole | null,
+    dto: DeleteAccountDto,
+  ): Promise<void> {
+    // **Antes da reautenticacao**, para o admin nao gastar a senha descobrindo
+    // que nao podia. Nao e protecao de seguranca, e trava contra tijolo: a claim
+    // `role` e aplicada a mao pelo console (spec 009), e um admin que se exclui
+    // leva junto a unica forma de administrar o produto -- devolver isso exige
+    // console do Firebase, service account e alguem que saiba o caminho. Esta no
+    // backend porque o front esconder o botao seria protecao nenhuma.
+    if (role === 'admin') {
+      throw new ForbiddenException(
+        'Contas de administração não podem ser excluídas por aqui.',
+      );
+    }
+
+    const profile = await this.repository.findById(userId);
+    if (!profile.found || !profile.entry) {
+      throw new NotFoundException('Perfil não encontrado.');
+    }
+
+    await this.authService.reauthenticate(email, dto.password);
+
+    // 2. As perguntas viram anonimas: o texto e os votos de terceiros ficam.
+    await this.muralRepository.anonymizeAuthor(userId);
+
+    // 3. Os votos dados saem, e os contadores acompanham no mesmo lote.
+    await this.muralRepository.removeVotesBy(userId);
+
+    // 4. A subcolecao de leituras, e so entao o perfil.
+    await this.repository.remove(userId);
+
+    // 5. A inscricao na lista de espera, que e nome, telefone e e-mail crus.
+    if (profile.entry.waitlistEntryId) {
+      await this.waitlistRepository.remove(profile.entry.waitlistEntryId);
+    }
+
+    // 6. O Auth por ultimo. Nada depois desta linha pode falhar de um jeito que
+    // importe: o que vem depois e cookie e status.
+    await this.firebase.auth.deleteUser(userId);
   }
 
   async updateProfile(

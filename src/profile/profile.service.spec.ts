@@ -1,12 +1,15 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import {
   BadRequestException,
+  ForbiddenException,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ProfileService } from './profile.service';
 import { ProfileRepository } from './profile.repository';
 import { AuthService } from '../auth/auth.service';
+import { MuralRepository } from '../mural/mural.repository';
+import { WaitlistRepository } from '../waitlist/waitlist.repository';
 import { FirebaseService } from '../auth/firebase.service';
 import { Profile } from './entities/profile.entity';
 
@@ -15,23 +18,49 @@ describe('ProfileService', () => {
   let repository: {
     findById: jest.Mock;
     update: jest.Mock;
+    remove: jest.Mock;
   };
   let firebase: {
     identityToolkit: jest.Mock;
-    auth: { revokeRefreshTokens: jest.Mock };
+    auth: { revokeRefreshTokens: jest.Mock; deleteUser: jest.Mock };
   };
+  let muralRepository: {
+    anonymizeAuthor: jest.Mock;
+    removeVotesBy: jest.Mock;
+  };
+  let waitlistRepository: { remove: jest.Mock };
+  /** Ordem real das chamadas, para o teste-trava da decisao 9. */
+  let ordem: string[];
   let authService: { reauthenticate: jest.Mock; continueUrl: string };
 
   beforeEach(async () => {
     repository = {
       findById: jest.fn(),
       update: jest.fn(),
+      remove: jest.fn(),
     };
+
+    ordem = [];
+    const registra = (nome: string) =>
+      jest.fn().mockImplementation(() => {
+        ordem.push(nome);
+        return Promise.resolve(undefined);
+      });
 
     firebase = {
       identityToolkit: jest.fn(),
-      auth: { revokeRefreshTokens: jest.fn().mockResolvedValue(undefined) },
+      auth: {
+        revokeRefreshTokens: jest.fn().mockResolvedValue(undefined),
+        deleteUser: registra('deleteUser'),
+      },
     };
+
+    muralRepository = {
+      anonymizeAuthor: registra('anonymizeAuthor'),
+      removeVotesBy: registra('removeVotesBy'),
+    };
+    waitlistRepository = { remove: registra('waitlist.remove') };
+    repository.remove = registra('profile.remove');
     authService = {
       reauthenticate: jest.fn().mockResolvedValue('id-token-fresco'),
       continueUrl: 'http://localhost:4200/?entrar=1',
@@ -46,10 +75,103 @@ describe('ProfileService', () => {
         },
         { provide: FirebaseService, useValue: firebase },
         { provide: AuthService, useValue: authService },
+        { provide: MuralRepository, useValue: muralRepository },
+        { provide: WaitlistRepository, useValue: waitlistRepository },
       ],
     }).compile();
 
     service = module.get<ProfileService>(ProfileService);
+  });
+
+  describe('deleteAccount', () => {
+    const dto = { password: 'senha-certa' };
+    const comWaitlist = {
+      found: true,
+      entry: {
+        id: 'uid-1',
+        name: 'Fulano',
+        phone: '47999990000',
+        bio: 'bio',
+        grade: 3,
+        linkedin: null,
+        instagram: null,
+        completedAt: new Date('2026-01-01T00:00:00.000Z'),
+        waitlistEntryId: 'fulano@email.com',
+      },
+    };
+
+    it('teste-trava: o deleteUser do Auth e a ULTIMA chamada', async () => {
+      // Com o Auth primeiro, uma falha no meio deixa dado pessoal orfao no
+      // Firestore, sem conta, sem sessao e sem ninguem com direito de pedir a
+      // remocao -- o pior resultado possivel da operacao cujo proposito inteiro
+      // e remover dado pessoal.
+      repository.findById.mockResolvedValue(comWaitlist);
+
+      await service.deleteAccount('uid-1', 'fulano@email.com', null, dto);
+
+      expect(ordem).toEqual([
+        'anonymizeAuthor',
+        'removeVotesBy',
+        'profile.remove',
+        'waitlist.remove',
+        'deleteUser',
+      ]);
+    });
+
+    it('teste-trava: falha no Firestore IMPEDE a exclusao do usuario do Auth', async () => {
+      repository.findById.mockResolvedValue(comWaitlist);
+      muralRepository.removeVotesBy.mockRejectedValue(new Error('offline'));
+
+      await expect(
+        service.deleteAccount('uid-1', 'fulano@email.com', null, dto),
+      ).rejects.toThrow('offline');
+
+      expect(firebase.auth.deleteUser).not.toHaveBeenCalled();
+    });
+
+    it('nao ha waitlist para apagar quando o perfil nao tem inscricao', async () => {
+      repository.findById.mockResolvedValue({
+        found: true,
+        entry: { ...comWaitlist.entry, waitlistEntryId: null },
+      });
+
+      await service.deleteAccount('uid-1', 'fulano@email.com', null, dto);
+
+      expect(waitlistRepository.remove).not.toHaveBeenCalled();
+      expect(firebase.auth.deleteUser).toHaveBeenCalledWith('uid-1');
+    });
+
+    it('senha errada da 401 e nada e apagado', async () => {
+      repository.findById.mockResolvedValue(comWaitlist);
+      authService.reauthenticate.mockRejectedValue(
+        new UnauthorizedException('Senha incorreta.'),
+      );
+
+      await expect(
+        service.deleteAccount('uid-1', 'fulano@email.com', null, dto),
+      ).rejects.toThrow(UnauthorizedException);
+
+      expect(ordem).toEqual([]);
+    });
+
+    it('teste-trava: admin da 403 ANTES da reautenticacao', async () => {
+      // Para o admin nao gastar a senha descobrindo que nao podia.
+      await expect(
+        service.deleteAccount('uid-admin', 'admin@email.com', 'admin', dto),
+      ).rejects.toThrow(ForbiddenException);
+
+      expect(authService.reauthenticate).not.toHaveBeenCalled();
+      expect(repository.findById).not.toHaveBeenCalled();
+      expect(ordem).toEqual([]);
+    });
+
+    it('perfil inexistente da 404', async () => {
+      repository.findById.mockResolvedValue({ found: false, entry: null });
+
+      await expect(
+        service.deleteAccount('uid-1', 'fulano@email.com', null, dto),
+      ).rejects.toThrow(NotFoundException);
+    });
   });
 
   describe('changePassword', () => {

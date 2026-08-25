@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { MuralRepository } from './mural.repository';
 import { MuralService } from './mural.service';
 import { VoteService } from './vote.service';
@@ -8,7 +8,9 @@ import { ProfileModule } from '../profile/profile.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
-  imports: [ProfileModule, NotificationsModule],
+  // O ciclo com o ProfileModule nasceu na spec 013: excluir a conta anonimiza
+  // as perguntas e apaga os votos. Ver o comentario em profile.module.ts.
+  imports: [forwardRef(() => ProfileModule), NotificationsModule],
   controllers: [MuralController, AdminMuralController],
   providers: [MuralRepository, MuralService, VoteService],
   exports: [MuralRepository, MuralService],

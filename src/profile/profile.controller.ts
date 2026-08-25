@@ -1,5 +1,6 @@
 import {
   Controller,
+  Delete,
   Get,
   Patch,
   Post,
@@ -21,6 +22,7 @@ import { ProfileService } from './profile.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { ChangeEmailDto } from './dto/change-email.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { DeleteAccountDto } from './dto/delete-account.dto';
 import { CookieService } from '../auth/cookie.service';
 import { ProfileDto } from './dto/profile.dto';
 import { FirebaseAuthGuard } from '../auth/guards/firebase-auth.guard';
@@ -122,6 +124,45 @@ export class ProfileController {
 
     // Revogar mata a sessao no servidor; limpar o cookie e o que faz este
     // navegador parar de tentar renovar com um token que nao vale mais.
+    this.cookieService.clearRefreshToken(res);
+  }
+
+  @Throttle({ default: { limit: 3, ttl: 60000 } })
+  @Delete()
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({
+    summary: 'Excluir a própria conta',
+    description:
+      'IRREVERSÍVEL E IMEDIATO, sem período de carência e sem desfazer. ' +
+      'Somem: o usuário do Firebase Auth, o perfil, as leituras de notificação, ' +
+      'os votos dados e a inscrição na lista de espera. As perguntas do Mural ' +
+      'de autoria da pessoa NÃO somem — elas viram anônimas, porque carregam ' +
+      'votos de terceiros e podem ter virado vídeo na trilha. Contas de ' +
+      'administração são recusadas com 403.',
+  })
+  @ApiResponse({
+    status: 204,
+    description: 'Conta excluída e sessão encerrada.',
+  })
+  @ApiResponse({ status: 401, description: 'Senha incorreta.' })
+  @ApiResponse({
+    status: 403,
+    description: 'Contas de administração não podem ser excluídas por aqui.',
+  })
+  @ApiResponse({ status: 404, description: 'Perfil não encontrado.' })
+  @ApiResponse({ status: 429, description: 'Limite de requisições excedido.' })
+  async deleteAccount(
+    @CurrentUser() user: CurrentUserData,
+    @Body() dto: DeleteAccountDto,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<void> {
+    await this.profileService.deleteAccount(
+      user.id,
+      user.email,
+      user.role,
+      dto,
+    );
+
     this.cookieService.clearRefreshToken(res);
   }
 

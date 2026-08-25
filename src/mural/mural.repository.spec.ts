@@ -1,4 +1,5 @@
 import { MuralRepository } from './mural.repository';
+import { ANONYMOUS_AUTHOR_UID } from './entities/mural-question.entity';
 import { FirebaseService } from '../auth/firebase.service';
 
 describe('MuralRepository', () => {
@@ -11,9 +12,13 @@ describe('MuralRepository', () => {
   let batchUpdate: jest.Mock;
   let batchDelete: jest.Mock;
   let batchCommit: jest.Mock;
+  let getAll: jest.Mock;
+  let listDocuments: jest.Mock;
+  let queryGet: jest.Mock;
 
   beforeEach(() => {
-    const get = jest.fn().mockResolvedValue({ docs: [], empty: true });
+    queryGet = jest.fn().mockResolvedValue({ docs: [], empty: true, size: 0 });
+    const get = queryGet;
     const limit = jest.fn().mockReturnValue({ get });
     // Encadeamento: where().orderBy().orderBy().limit().get()
     orderBy = jest.fn();
@@ -38,9 +43,12 @@ describe('MuralRepository', () => {
     batchDelete = jest.fn();
     batchCommit = jest.fn().mockResolvedValue(undefined);
 
+    getAll = jest.fn().mockResolvedValue([]);
+    listDocuments = jest.fn().mockResolvedValue([]);
+
     const firestore = {
       collection: jest.fn().mockReturnValue({
-        withConverter: jest.fn().mockReturnValue({ doc, where }),
+        withConverter: jest.fn().mockReturnValue({ doc, where, listDocuments }),
       }),
       batch: jest.fn().mockReturnValue({
         create: batchCreate,
@@ -48,7 +56,7 @@ describe('MuralRepository', () => {
         delete: batchDelete,
         commit: batchCommit,
       }),
-      getAll: jest.fn().mockResolvedValue([]),
+      getAll,
     };
 
     repository = new MuralRepository({
@@ -136,6 +144,90 @@ describe('MuralRepository', () => {
 
     expect(batchDelete).toHaveBeenCalled();
     expect(batchCommit).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * A pergunta do Mural nao e so de quem perguntou: tem votos de outras pessoas
+   * e pode ter virado video na trilha. Entao o autor some e o texto fica.
+   */
+  it('anonimiza o autor sem tocar em texto, badgeId, voteCount nem answerVideoId', async () => {
+    const ref = { id: '2026-08-09__uid-1' };
+    queryGet.mockResolvedValue({ empty: false, size: 1, docs: [{ ref }] });
+
+    await expect(repository.anonymizeAuthor('uid-1')).resolves.toBe(1);
+
+    expect(where).toHaveBeenCalledWith('authorUid', '==', 'uid-1');
+    const [alvo, campos] = batchUpdate.mock.calls[0] as [
+      unknown,
+      Record<string, unknown>,
+    ];
+    expect(alvo).toBe(ref);
+    expect(campos.authorUid).toBe(ANONYMOUS_AUTHOR_UID);
+    expect(campos.authorName).toBe('Membro removido');
+    expect(Object.keys(campos).sort()).toEqual([
+      'authorName',
+      'authorUid',
+      'updatedAt',
+    ]);
+    expect(batchCommit).toHaveBeenCalledTimes(1);
+  });
+
+  it('nao abre lote quando a pessoa nunca perguntou', async () => {
+    await expect(repository.anonymizeAuthor('uid-sem-pergunta')).resolves.toBe(
+      0,
+    );
+
+    expect(batchCommit).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Contador que discorda da subcolecao e um numero que ninguem consegue
+   * conferir depois: o decremento vai no mesmo lote que a remocao do voto.
+   */
+  it('apaga os votos dados decrementando o contador no mesmo lote', async () => {
+    const perguntas = [{ id: 'q1' }, { id: 'q2' }];
+    listDocuments.mockResolvedValue(
+      perguntas.map((pergunta) => ({
+        ...pergunta,
+        collection: jest
+          .fn()
+          .mockReturnValue({ doc: jest.fn().mockReturnValue({}) }),
+      })),
+    );
+    getAll.mockResolvedValue([
+      { exists: true, ref: { id: 'voto-q1' } },
+      { exists: false, ref: { id: 'voto-q2' } },
+    ]);
+
+    await expect(repository.removeVotesBy('uid-1')).resolves.toBe(1);
+
+    // So a pergunta em que houve voto entra no lote: apagar e decrementar.
+    expect(batchDelete).toHaveBeenCalledTimes(1);
+    expect(batchUpdate).toHaveBeenCalledTimes(1);
+    expect(batchCommit).toHaveBeenCalledTimes(1);
+  });
+
+  it('nao abre lote quando a pessoa nunca votou', async () => {
+    listDocuments.mockResolvedValue([
+      {
+        id: 'q1',
+        collection: jest
+          .fn()
+          .mockReturnValue({ doc: jest.fn().mockReturnValue({}) }),
+      },
+    ]);
+    getAll.mockResolvedValue([{ exists: false, ref: {} }]);
+
+    await expect(repository.removeVotesBy('uid-1')).resolves.toBe(0);
+
+    expect(batchCommit).not.toHaveBeenCalled();
+  });
+
+  // getAll() sem documentos estoura no Firestore, e mural vazio e possivel.
+  it('nao consulta votos quando nao ha pergunta nenhuma no mural', async () => {
+    await expect(repository.removeVotesBy('uid-1')).resolves.toBe(0);
+
+    expect(getAll).not.toHaveBeenCalled();
   });
 
   it('devolve o contrato { found, entry } quando a pergunta nao existe', async () => {
