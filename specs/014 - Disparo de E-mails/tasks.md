@@ -207,7 +207,7 @@ Branch: `feat/014-email-limpo`
 > e-mail que uma pessoa escreveu para outra.** Não é sobre gosto — o Gmail classifica por estrutura, e
 > `<table>` de layout, fundo colorido no `<body>` e botão grande são a assinatura de campanha.
 
-- [ ] Task 01 (TDD): O teste que a simplificação quebrou. Arquivo: `src/emails/email-template.spec.ts`.
+- [x] Task 01 (TDD): O teste que a simplificação quebrou. Arquivo: `src/emails/email-template.spec.ts`.
   Objetivo: `npm test` está **vermelho no `dev`** — o teste dos parágrafos casa a string
   `<p style="margin:0 0 16px` e o HTML novo escreve `margin: 0 0 16px`, com espaço. Consertar **mudando o
   que ele afirma, e não a string**: ele deve contar `<p` e não CSS inline. Um teste que casa estilo quebra
@@ -242,3 +242,47 @@ Branch: `feat/014-email-limpo`
   automatizado responde esta pergunta — a classificação acontece do outro lado, e ela é o motivo desta
   fase existir. Se ainda cair em Promoções, o próximo suspeito **não é mais o HTML**: é reputação de
   domínio e volume (ver "Antes do primeiro envio real: o DNS", no README).
+
+---
+
+# Fase 09: Achar o que realmente decide a aba [ ]
+Branch: `fix/014-promocoes`
+
+> **O HTML foi simplificado e o e-mail continuou em Promoções.** Isso é informação, e ela custa caro de
+> ignorar: significa que o suspeito estava errado, ou que ele era só um entre vários. A suspeita nova é o
+> `List-Unsubscribe`, e ela é plausível — aquele cabeçalho é literalmente o que declara a mensagem como
+> correspondência de lista.
+>
+> **Mas nenhuma destas tasks é "mudar e torcer".** A aba do Gmail é decidida do outro lado, por sinais que
+> não se leem no código, e é personalizada por destinatário. A única forma de saber é **trocar uma coisa
+> por vez e mandar de verdade**, e é para isso que a Task 01 existe.
+>
+> Ordem dos suspeitos, do mais provável ao menos, e ela não é palpite: é o que sobra depois de o HTML ter
+> sido descartado como causa.
+
+- [x] Task 01: O interruptor. Arquivos: `src/emails/email-campaign.service.ts`, `.spec.ts`,
+  `.env.example`. Objetivo: `EMAIL_LIST_UNSUBSCRIBE=off` desliga os dois cabeçalhos, **ausente significa
+  ligado**, e só o `off` explícito desliga — erro de digitação na variável não pode virar envio sem
+  cabeçalho. O link do rodapé não depende dela, e tem teste-trava dizendo isso. **O objetivo é medir, e o
+  padrão continua sendo ligado.**
+- [ ] Task 02 (medição): O rastreamento do provedor. **Este é o primeiro lugar a olhar, e ele não está no
+  código.** No painel do Resend, por domínio, existem *Open Tracking* e *Click Tracking*. Com eles ligados,
+  o provedor **injeta um pixel de imagem 1×1** e **reescreve todo link** para passar por um domínio de
+  rastreamento — depois de o template ter saído daqui. Isso explica exatamente o sintoma: limpar o HTML no
+  código não mudou nada, porque o que o Gmail recebe não é mais o HTML que este código gerou. Pixel
+  invisível e link reescrito são dois dos sinais mais fortes de correio de marketing que existem.
+  **Conferir e, se estiverem ligados, desligar os dois.**
+- [ ] Task 03 (medição): O teste A/B do `List-Unsubscribe`. Objetivo: com o rastreamento já resolvido,
+  mandar `POST /admin/emails/teste` para **a mesma conta do Gmail**, uma vez com `EMAIL_LIST_UNSUBSCRIBE`
+  ausente e outra com `off`, e registrar em que aba cada um caiu. Uma variável por vez — mudar as duas
+  juntas responde "melhorou", que não é uma resposta.
+- [ ] Task 04: O remetente e o rodapé, se as duas primeiras não resolverem. Objetivo: `EMAIL_FROM` é
+  `Liga Dev <comunidade@lenoborges.com.br>` — **nome de marca mais endereço de função é a assinatura de
+  correio em massa**. E o rodapé diz "Você recebe este e-mail porque é membro da Liga Dev", que é a frase
+  de rodapé de newsletter mais reconhecível que existe. Trocar o nome por `Leno Borges` é uma variável de
+  ambiente; encurtar o rodapé é uma linha do template — **e o link de descadastro fica**, sempre.
+- [ ] Task 05: Aceitar o que não é código. Objetivo: registrar no `context.md` que, esgotadas as tasks
+  acima, o que resta **não se conserta com marcação**: domínio novo não tem reputação, e a aba do Gmail é
+  personalizada pelo comportamento de cada destinatário — quem nunca abriu, responde ou marca como
+  importante ensina o filtro a mandar para Promoções. O caminho aí é engajamento e tempo, e a frase que
+  fecha esta fase é: **"o e-mail está limpo; o que falta agora é histórico."**
