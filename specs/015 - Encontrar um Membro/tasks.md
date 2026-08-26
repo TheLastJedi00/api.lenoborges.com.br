@@ -93,7 +93,7 @@ Branch: `feat/015-detalhe`
   grave para a preferência do membro, e sem ordem definida o texto da tela muda entre requisições sem nada
   ter mudado.
 
-# Fase 04: O e-mail direto [ ]
+# Fase 04: O e-mail direto [x]
 Branch: `feat/015-email-direto`
 
 > Depende da spec 014 estar no código.
@@ -101,38 +101,38 @@ Branch: `feat/015-email-direto`
 A fase com a armadilha da spec inteira. A Task 02 é a que impede um recado para uma pessoa virar um disparo
 para a base.
 
-- [ ] Task 01: O terceiro `kind`. Arquivos: `src/emails/entities/email-campaign.entity.ts`, `.spec.ts`.
+- [x] Task 01: O terceiro `kind`. Arquivos: `src/emails/entities/email-campaign.entity.ts`, `.spec.ts`.
   Objetivo: `'direto'` no tipo, `recipientUid` e `recipientLabel` no documento e no converter.
   **Teste-trava: campanha antiga sem `recipientUid` é lida como `null`** — `undefined` ali faz uma campanha
   direta parecer campanha de base, e é a decisão 11 desligada em silêncio.
-- [ ] Task 02 (TDD + implementação): O curto-circuito. Arquivos: `src/emails/audience.service.ts`, `.spec.ts`.
+- [x] Task 02 (TDD + implementação): O curto-circuito. Arquivos: `src/emails/audience.service.ts`, `.spec.ts`.
   Objetivo: `buildAudience` **lê `recipientUid` primeiro** e, se ele existir, devolve aquele único
   destinatário — os filtros só são consultados quando ele é nulo (decisão 11). **Teste-trava, e é o mais
   importante desta spec: campanha `direto` com os três filtros nulos monta audiência de UM, e nunca da base
   inteira.** Comentário no código explicando o que o teste impede, senão a próxima refatoração "simplifica"
   a ordem das condições.
-- [ ] Task 03 (TDD + implementação): Os cortes valem. Objetivo: o destinatário do e-mail direto passa pelos
+- [x] Task 03 (TDD + implementação): Os cortes valem. Objetivo: o destinatário do e-mail direto passa pelos
   mesmos três cortes (decisão 12). Testes-trava, um por corte: descadastrado **não recebe**, e a resposta é
   `422` com `reason: 'descadastrado'` — e não um `400` de audiência zero, que não diria à tela o que
   escrever.
-- [ ] Task 04 (TDD + implementação): A rota. Arquivos: `admin-users.controller.ts`,
+- [x] Task 04 (TDD + implementação): A rota. Arquivos: `admin-users.controller.ts`,
   `src/admin/dto/send-direct-email.dto.ts`, `.spec.ts`. Objetivo: `POST /admin/users/:id/email` com
   `subject` e `body`, sob `FirebaseAuthGuard` + `AdminGuard`, criando campanha `kind: 'direto'` e chamando
   **o mesmo `EmailCampaignService.send`**. Teste-trava: **nenhum caminho de envio novo** — o teste verifica
   que o serviço de campanha foi chamado, e não que um `MailerService` foi chamado direto.
-- [ ] Task 05 (TDD + implementação): Sem botão e sem HTML. Objetivo: o DTO **não tem** `ctaLabel` nem
+- [x] Task 05 (TDD + implementação): Sem botão e sem HTML. Objetivo: o DTO **não tem** `ctaLabel` nem
   `ctaUrl`, e o corpo é texto puro. Teste-trava: `<b>` no corpo sai escapado no HTML final, pelo template da
   spec 014 — e o comentário diz que o escape é de lá, para ninguém reimplementar aqui.
-- [ ] Task 06 (TDD + implementação): O rodapé vai também. Objetivo: teste-trava de que o e-mail direto sai
+- [x] Task 06 (TDD + implementação): O rodapé vai também. Objetivo: teste-trava de que o e-mail direto sai
   com o link de descadastro e com os cabeçalhos `List-Unsubscribe` (decisão 13). É o teste que documenta a
   decisão: e-mail com remetente e template do produto é e-mail do produto, mesmo com um destinatário.
-- [ ] Task 07 (TDD + implementação): O trinco. Objetivo: com campanha `enviando`, a rota responde **409**
+- [x] Task 07 (TDD + implementação): O trinco. Objetivo: com campanha `enviando`, a rota responde **409**
   (decisão 14). Reusa `findSending()` do repositório da spec 014 — **não uma segunda verificação**.
-- [ ] Task 08: `recipientLabel` no instante do envio. Objetivo: gravar o nome, ou o e-mail quando não houver
+- [x] Task 08: `recipientLabel` no instante do envio. Objetivo: gravar o nome, ou o e-mail quando não houver
   nome. Comentário registrando que é denormalização deliberada, como o `authorName` do Mural (spec 010), e
   pela mesma razão: a linha do histórico precisa continuar legível depois de a conta mudar de nome ou deixar
   de existir.
-- [ ] Task 09: Swagger. Objetivo: `@ApiResponse` para `404`, `409` e `422`, com o `reason` documentado como
+- [x] Task 09: Swagger. Objetivo: `@ApiResponse` para `404`, `409` e `422`, com o `reason` documentado como
   enumeração — a tela decide o texto pelo código, e não pela prosa.
 
 # Fase 05: Histórico e verificação [ ]
