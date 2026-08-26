@@ -320,6 +320,76 @@ describe('EmailCampaignService', () => {
         /^<https:\/\/api\.exemplo\.com\/emails\/descadastro\?token=.+>$/,
       );
     });
+
+    describe('o interruptor dos cabecalhos (EMAIL_LIST_UNSUBSCRIBE)', () => {
+      async function dispararCom(
+        valor: string | undefined,
+      ): Promise<OutgoingEmail> {
+        if (valor === undefined) {
+          delete env.EMAIL_LIST_UNSUBSCRIBE;
+        } else {
+          env.EMAIL_LIST_UNSUBSCRIBE = valor;
+        }
+
+        const mocks = build();
+        mocks.audience.build.mockResolvedValue(membros(1));
+        mocks.repository.create.mockResolvedValue({
+          entry: campanha({ audienceCount: 1 }),
+        });
+        mocks.mailer.sendBatch.mockImplementation(loteOk());
+
+        await mocks.service.createAndSend({
+          kind: 'manual',
+          subject: 'Assunto',
+          body: 'Corpo com mais de dez caracteres.',
+          ctaLabel: null,
+          ctaUrl: null,
+          filters: { tiers: null, gradeMin: null, gradeMax: null },
+          createdBy: 'admin-1',
+        });
+
+        delete env.EMAIL_LIST_UNSUBSCRIBE;
+
+        return (
+          (
+            mocks.mailer.sendBatch.mock.calls[0] as unknown[]
+          )[0] as OutgoingEmail[]
+        )[0];
+      }
+
+      /**
+       * **Ausente significa ligado, e só o `off` explícito desliga.**
+       *
+       * Um erro de digitação na variável não pode virar um envio sem cabeçalho:
+       * o sintoma disso não aparece no dia seguinte, aparece semanas depois, na
+       * reputação do domínio — quando quem quis sair da lista já apertou "marcar
+       * como spam" por falta do botão nativo.
+       */
+      it('teste-trava: valor desconhecido nao desliga os cabecalhos', async () => {
+        for (const valor of [undefined, '', 'true', 'sim', 'ON', 'desligado']) {
+          const mensagem = await dispararCom(valor);
+          expect(mensagem.headers?.['List-Unsubscribe']).toBeDefined();
+        }
+      });
+
+      it('off desliga os dois cabecalhos', async () => {
+        const mensagem = await dispararCom('off');
+
+        expect(mensagem.headers).toBeUndefined();
+      });
+
+      /**
+       * **O rodapé não depende do interruptor** (decisão 8). Desligar o
+       * cabeçalho tira o botão nativo do cliente de e-mail; ele não pode tirar o
+       * caminho de sair da lista, que é absoluto.
+       */
+      it('teste-trava: com os cabecalhos desligados, o link do rodape continua la', async () => {
+        const mensagem = await dispararCom('off');
+
+        expect(mensagem.html).toContain('/emails/descadastro?token=');
+        expect(mensagem.text).toContain('/emails/descadastro?token=');
+      });
+    });
   });
 
   describe('resume', () => {

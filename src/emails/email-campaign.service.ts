@@ -69,6 +69,27 @@ export class EmailCampaignService {
   private readonly logger = new Logger(EmailCampaignService.name);
   private readonly unsubscribeSecret: string;
   private readonly apiUrl: string;
+  /**
+   * Se os cabeçalhos `List-Unsubscribe` acompanham o envio.
+   *
+   * **Existe para a pergunta ser medida, e não discutida.** A suspeita é que
+   * eles sejam o que joga o e-mail na aba Promoções do Gmail — e ela é
+   * plausível, porque `List-Unsubscribe` é literalmente o que declara a
+   * mensagem como correspondência de lista. Não dá para saber sem enviar dos
+   * dois jeitos para a mesma caixa e olhar, e um `git revert` entre um envio e
+   * outro não é medição: é uma variável a mais.
+   *
+   * **Ligado é o padrão, e o padrão é o certo.** Desligar tem preço conhecido:
+   * some o botão "Cancelar inscrição" que o Gmail desenha no topo da mensagem, e
+   * quem quer sair da lista aperta "marcar como spam" — que é muito pior do que
+   * a aba Promoções, e é irreversível para a reputação do domínio. Google e
+   * Yahoo exigem estes cabeçalhos de quem manda mais de 5.000 mensagens por dia;
+   * abaixo disso desligar não infringe regra nenhuma, mas continua sendo uma
+   * troca ruim fora de um teste.
+   *
+   * O link no rodapé **não depende disto** e nunca desaparece (decisão 8).
+   */
+  private readonly listUnsubscribeHeaders: boolean;
 
   constructor(
     private readonly repository: EmailCampaignRepository,
@@ -86,6 +107,23 @@ export class EmailCampaignService {
       this.configService.get<string>('API_PUBLIC_URL') ??
       `http://localhost:${this.configService.get<string>('PORT') ?? '3000'}`
     ).replace(/\/+$/, '');
+
+    // Ausente significa LIGADO. Só o `off` explícito desliga: um erro de
+    // digitação na variável não pode virar um envio sem cabeçalho, porque o
+    // sintoma disso aparece semanas depois, na reputação.
+    this.listUnsubscribeHeaders =
+      this.configService
+        .get<string>('EMAIL_LIST_UNSUBSCRIBE')
+        ?.toLowerCase() !== 'off';
+
+    if (!this.listUnsubscribeHeaders) {
+      this.logger.warn(
+        'EMAIL_LIST_UNSUBSCRIBE=off: os e-mails vao SEM os cabecalhos de ' +
+          'descadastro. Isto e para medir a aba do Gmail, e nao para ficar ' +
+          'assim: sem eles o Gmail nao desenha o botao de cancelar inscricao, e ' +
+          'quem quer sair aperta "marcar como spam".',
+      );
+    }
   }
 
   /**
@@ -393,10 +431,15 @@ export class EmailCampaignService {
       subject: content.subject,
       html,
       text,
-      headers: {
-        'List-Unsubscribe': `<${unsubscribeUrl}>`,
-        'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
-      },
+      headers: this.listUnsubscribeHeaders
+        ? {
+            'List-Unsubscribe': `<${unsubscribeUrl}>`,
+            'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+          }
+        : // Sem cabeçalho nenhum, e **o rodapé continua lá**: quem quer sair
+          // continua tendo um caminho de um clique, ele só deixa de ser o botão
+          // nativo do cliente de e-mail.
+          undefined,
     };
   }
 }

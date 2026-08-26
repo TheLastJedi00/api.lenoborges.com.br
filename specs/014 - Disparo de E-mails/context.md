@@ -175,6 +175,28 @@ favor do texto.
 Todo e-mail sai com as duas partes, **HTML e texto puro**, geradas da mesma fonte. Cliente que não
 renderiza HTML é minoria, mas e-mail sem alternativa em texto é sinal de spam para os filtros.
 
+### 11-B. O template é diagramado para **não parecer diagramado** (2026-08-25)
+
+Esta decisão nasceu de um incidente, e não do desenho: os e-mails começaram a cair na aba **Promoções** do
+Gmail. O diagnóstico está em `fix-email-styles.md`, e o conserto está na Fase 08.
+
+O template original fazia o que todo template de e-mail faz — `<table role="presentation">` para
+centralizar, fundo cinza no `<body>`, cartão branco com borda arredondada, sobrescrito "LIGA DEV" no topo
+e o CTA como botão sólido. Cada uma dessas peças é boa prática de e-mail **de marketing**, e juntas elas
+são a assinatura que o filtro procura: e-mail que uma pessoa escreve para outra não tem tabela de layout
+nem fundo colorido.
+
+**A regra passa a ser: o HTML existe para o texto ser legível, e para mais nada.** Um `<p>` por parágrafo,
+um `<hr>` antes do rodapé, e o link de descadastro. Sem imagem, sem logo, sem botão, sem segundo link.
+
+> Isto **não afrouxa a decisão 11** — ele continua valendo inteiro: o admin escreve texto, o template é do
+> código, e as duas partes saem da mesma fonte. O que muda é o que o template faz com o texto, e a direção
+> é sempre para menos.
+
+E há um limite conhecido: **se depois disto o e-mail continuar em Promoções, o problema não é mais o
+HTML.** É reputação de domínio e volume, que a seção do DNS no README já descreve — e nenhuma mudança de
+marcação conserta reputação.
+
 ### 12. Os filtros são tier e faixa de insígnia. **Status de pagamento não existe, e a spec não finge**
 `POST /admin/emails` aceita `tiers` (lista) e `gradeMin`/`gradeMax`. Ausência dos dois significa
 **todos os membros**.
