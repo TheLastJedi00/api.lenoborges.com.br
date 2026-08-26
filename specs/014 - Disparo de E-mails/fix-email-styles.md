@@ -128,3 +128,44 @@ some e o sintoma fica, o suspeito seguinte não é o mesmo de antes com outra ro
 foi medido isolado**.
 
 Ver Fase 10 em `tasks.md`, e a decisão 11-B em `context.md`, que deixa de estar revogada.
+
+## 6. Terceiro desfecho — 2026-08-26 (fim do dia): a configuração foi auditada, e o HTML voltou
+
+**Este documento já condenou o HTML duas vezes e o absolveu uma.** A seção 5 fechou com a marcação como
+segunda causa; o sintoma continuou se comportando de forma que aquela medição não explica, e a pergunta
+que nunca tinha sido feita direito foi feita: **existe configuração pendente, fora deste repositório?**
+
+As duas frentes foram conferidas por API, e não por memória:
+
+| Frente | Estado |
+|---|---|
+| Domínio `lenoborges.com.br` no Resend | `status: verified`, `sending: enabled` |
+| *Open Tracking* / *Click Tracking* | **desligados** nos dois |
+| DKIM `resend._domainkey` | `verified` |
+| Return-path `send.lenoborges.com.br` (TXT `include:amazonses.com` + MX `feedback-smtp.sa-east-1`) | `verified` |
+| DMARC `_dmarc.lenoborges.com.br` | publicado, `p=none;` |
+| Zona DNS | registro.br (`d/e.sec.dns.br`) — **a Vercel não gerencia zona deste domínio** |
+| Env de produção `api-lenoborges` | as seis variáveis de e-mail presentes |
+
+Duas coisas que a auditoria esclareceu:
+
+1. **O SPF da raiz não menciona o Resend, e isso está correto.** A raiz é
+   `v=spf1 include:_spf.firebasemail.com ~all`, do Firebase. O envelope MAIL FROM do Resend é
+   `send.lenoborges.com.br`, que tem SPF próprio — o SPF é conferido contra o subdomínio, e ele alinha
+   com o DMARC em modo relaxado. **Acrescentar `amazonses` à raiz não conserta nada e mexe no SPF do
+   Firebase.**
+2. **A única pendência real é inerte, e é perigosa por outro motivo:** há um registro de *Tracking*
+   `CNAME liga → links1.resend-dns.com` em `status: "failed"` no painel, sobra de quando o subdomínio de
+   rastreamento não era o `mail` de hoje. Com o rastreamento desligado ele não faz nada — mas
+   `liga.lenoborges.com.br` é o **domínio de produção do front na Vercel**, e um CNAME de tracking que
+   verificasse ali derrubaria o site. Remover no painel.
+
+**Nenhuma pendência de configuração explica a aba de Promoções.** Com o provedor e o DNS limpos e
+conferidos, o envio de teste foi refeito e a marcação **não** decidiu a aba. O HTML diagramado voltou, e
+as travas da seção 5 saíram, porque elas proibiam exatamente o que voltou.
+
+**A regra que sobra das três voltas** — e é a mais cara deste documento inteiro: *este template é o
+suspeito mais fácil de acusar e o mais caro de condenar.* Tirar estilo dele nunca quebra nada. A suíte
+fica verde, o envio continua funcionando, e o sintoma se move ou não por conta de outra coisa — o que
+torna a "correção" impossível de refutar e o e-mail permanentemente feio. **A ordem certa de
+investigação é: painel do provedor, DNS, plataforma, e só então o código.** Ver Fase 11 em `tasks.md`.

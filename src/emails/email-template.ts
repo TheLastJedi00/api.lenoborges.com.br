@@ -2,33 +2,42 @@
  * O template dos e-mails do produto (spec 014, decisões 11 e 11-B).
  *
  * **O admin escreve texto, e nunca HTML.** O corpo é texto simples com quebras
- * de linha, mais um link opcional; a estrutura e o rodapé são do código, e são
- * os mesmos nos dois disparos. Aceitar HTML do admin significa aceitar que um
- * erro de marcação quebre a renderização em cinco clientes de e-mail
- * diferentes, e significa sanitizar entrada que vira documento enviado para
- * fora.
+ * de linha, mais um botão opcional; o cabeçalho, a tipografia e o rodapé são do
+ * código, e são os mesmos nos dois disparos. Aceitar HTML do admin significa
+ * aceitar que um erro de marcação quebre a renderização em cinco clientes de
+ * e-mail diferentes, e significa sanitizar entrada que vira documento enviado
+ * para fora.
  *
  * **As duas partes saem da mesma fonte.** Cliente que não renderiza HTML é
  * minoria, mas e-mail sem alternativa em texto é sinal de spam para os filtros.
  *
- * **Não há CSS aqui, e isso é a decisão — não é descuido.** O HTML diagramado
- * (tabela de layout, fundo cinza, cartão branco, `<h1>` repetindo o assunto,
- * CTA como botão sólido) já esteve neste arquivo duas vezes, e nas duas o Gmail
- * classificou a mensagem na aba **Promoções**. Em 2026-08-26, com o *Open
- * Tracking* e o *Click Tracking* do Resend **já desligados** — a causa que se
- * acreditou única —, o envio de teste com o template diagramado caiu em
- * Promoções e o envio com o template limpo caiu na **Principal**. Isso é o
- * suspeito medido isolado, e ele é culpado: eram os dois, o rastreamento do
- * provedor **e** a marcação.
+ * **O HTML diagramado está aqui pela terceira vez, e desta vez os dois outros
+ * suspeitos foram eliminados por conferência, e não por hipótese.** A caça à
+ * aba **Promoções** do Gmail já acusou este arquivo duas vezes — `58c5bdb` e
+ * `f3be226` —, e nas duas o preço foi um e-mail feio. Em 2026-08-26 as outras
+ * duas frentes foram conferidas de ponta a ponta:
  *
- * A regra que fica: **o HTML existe para o texto ser legível, e para mais
- * nada.** Um `<p>` por parágrafo, um `<hr>` antes do rodapé, o link do CTA e o
- * link do descadastro. Sem `style`, sem `<table>`, sem imagem, sem logo, sem
- * botão. O pedido estético mais natural do mundo — "dá um destaque nesse link"
- * — é o que traz a aba de Promoções de volta, e existe teste-trava abaixo
- * dizendo isso em `email-template.spec.ts`.
+ * - **Provedor.** O domínio `lenoborges.com.br` está `verified` no Resend, com
+ *   `open_tracking: false` e `click_tracking: false`. O pixel 1×1 e a reescrita
+ *   de links — a causa medida no `9154943` — continuam desligados.
+ * - **DNS e plataforma.** DKIM (`resend._domainkey`) e o SPF do return-path
+ *   (`send.lenoborges.com.br`, TXT + MX) verificados; DMARC publicado; o
+ *   envelope alinha em modo relaxado. O DNS vive no registro.br, e a Vercel não
+ *   gerencia a zona deste domínio — não há registro pendente do lado dela.
+ *   Sobra só um `CNAME liga` de *Tracking* em `failed` no painel do Resend,
+ *   resíduo inerte de quando o subdomínio de rastreamento era outro (hoje é
+ *   `mail`, verificado).
  *
- * Ver Fase 08 e Fase 10 em `specs/014 - Disparo de E-mails/tasks.md`.
+ * Com o provedor e a configuração limpos, o envio de teste foi refeito e a
+ * marcação **não** decidiu a aba. Então o HTML volta.
+ *
+ * **A regra que sobra, e que custou três voltas:** este arquivo é o suspeito
+ * mais fácil de acusar e o mais caro de condenar, porque a "correção" nunca
+ * quebra nada — ela só deixa o e-mail feio, e o sintoma some ou não por conta
+ * de outra coisa. Antes de tirar estilo daqui outra vez, confira o painel do
+ * provedor e o DNS **primeiro**, e traga a medição junto.
+ *
+ * Ver Fases 08 a 11 em `specs/014 - Disparo de E-mails/tasks.md`.
  */
 
 export interface EmailContent {
@@ -87,34 +96,46 @@ export function renderEmail(content: EmailContent): RenderedEmail {
   const temCta = Boolean(content.ctaLabel && content.ctaUrl);
 
   const htmlParagrafos = blocos
-    .map((bloco) => `<p>${escapeHtml(bloco).replace(/\n/g, '<br />')}</p>`)
-    .join('\n    ');
+    .map(
+      (bloco) =>
+        `<p style="margin:0 0 16px;font-size:16px;line-height:1.6;color:#101828;">${escapeHtml(
+          bloco,
+        ).replace(/\n/g, '<br />')}</p>`,
+    )
+    .join('');
 
-  /**
-   * O CTA é um link dentro de um parágrafo, e nunca um botão. Botão é `padding`,
-   * `background` e `border-radius` — a assinatura de campanha que o filtro
-   * procura.
-   */
   const htmlCta = temCta
-    ? `\n    <p><a href="${escapeHtml(content.ctaUrl!)}">${escapeHtml(
+    ? `<p style="margin:24px 0 0;"><a href="${escapeHtml(
+        content.ctaUrl!,
+      )}" style="display:inline-block;padding:12px 22px;border-radius:8px;background:#101828;color:#ffffff;font-weight:700;text-decoration:none;">${escapeHtml(
         content.ctaLabel!,
       )}</a></p>`
     : '';
 
-  /**
-   * O assunto **não** se repete no corpo. Ele já está no cabeçalho da mensagem,
-   * que é onde ele é lido; e-mail que uma pessoa escreve para outra não começa
-   * com o próprio título em fonte grande — quem faz isso é newsletter.
-   */
   const html = `<!doctype html>
 <html lang="pt-BR">
-  <body>
-    ${htmlParagrafos}${htmlCta}
-    <hr />
-    <p>
-      Você recebe este e-mail porque é membro da Liga Dev.<br />
-      <a href="${escapeHtml(content.unsubscribeUrl)}">Cancelar inscrição</a>.
-    </p>
+  <body style="margin:0;padding:24px;background:#f4f5f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:12px;">
+      <tr>
+        <td style="padding:28px 28px 8px;">
+          <p style="margin:0 0 20px;font-size:13px;letter-spacing:0.08em;text-transform:uppercase;color:#6941c6;font-weight:700;">Liga Dev</p>
+          <h1 style="margin:0 0 20px;font-size:22px;line-height:1.3;color:#101828;">${escapeHtml(
+            content.subject,
+          )}</h1>
+          ${htmlParagrafos}${htmlCta}
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:24px 28px 28px;border-top:1px solid #eaecf0;">
+          <p style="margin:0;font-size:12px;line-height:1.6;color:#667085;">
+            Você recebe este e-mail porque é membro da Liga Dev.
+            <a href="${escapeHtml(
+              content.unsubscribeUrl,
+            )}" style="color:#6941c6;">Cancelar inscrição</a>.
+          </p>
+        </td>
+      </tr>
+    </table>
   </body>
 </html>`;
 

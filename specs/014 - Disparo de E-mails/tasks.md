@@ -331,6 +331,11 @@ Branch: `fix/014-promocoes`
 # Fase 10: O HTML medido sozinho [x]
 Branch: `fix/014-promocoes-html`
 
+> **AVISO (Fase 11, 2026-08-26): as Tasks 02 e 03 desta fase estão revogadas.** A medição abaixo é
+> preservada como registro, mas a conclusão que ela sustentava não sobreviveu: com o painel do Resend e o
+> DNS auditados por API — e limpos —, o envio de teste foi refeito e a marcação não decidiu a aba. O HTML
+> diagramado voltou. Ver Fase 11.
+>
 > **A Fase 09 desligou o rastreamento do Resend e o e-mail voltou para a Principal — por um tempo.** Com o
 > rastreamento desligado, os envios seguintes caíram em **Promoções** de novo, e aí o suspeito pôde
 > finalmente ser testado sozinho, que é o que nunca tinha acontecido: nas duas vezes anteriores havia dois
@@ -352,11 +357,11 @@ Branch: `fix/014-promocoes-html`
 - [x] Task 01 (medição): O A/B do template, com o rastreamento já desligado. Objetivo: `POST
   /admin/emails/teste` para a mesma conta do Gmail, uma vez com o template diagramado e outra com o
   limpo, sem mexer em mais nada. Resultado na tabela acima: **diagramado → Promoções, limpo → Principal**.
-- [x] Task 02: O template volta a ser limpo, e desta vez inteiro. Arquivo: `src/emails/email-template.ts`.
+- [~] Task 02 (REVOGADA na Fase 11): O template volta a ser limpo, e desta vez inteiro. Arquivo: `src/emails/email-template.ts`.
   Objetivo: sem `style` inline em lugar nenhum, sem `<table>` de layout, sem fundo, sem cartão, sem o
   `<h1>` que repetia o assunto, e o CTA como link dentro de um `<p>` — nunca como botão. O que sobra é um
   `<p>` por parágrafo, um `<hr>` e o rodapé com o descadastro, que continua obrigatório como sempre foi.
-- [x] Task 03 (teste-trava): O que impede a terceira volta. Arquivo: `src/emails/email-template.spec.ts`.
+- [~] Task 03 (REVOGADA na Fase 11 — as travas proibiam o que voltou): O que impede a terceira volta. Arquivo: `src/emails/email-template.spec.ts`.
   Objetivo: dois travas. Um falha se `style=`, `<table>`, `<img>`, `background`, `border-radius` ou
   `padding` aparecerem no HTML gerado; o outro falha se o assunto voltar para dentro do corpo. **Sem
   eles, a regressão é invisível**: o envio continua funcionando, nada quebra, e o sintoma só aparece
@@ -372,3 +377,69 @@ Branch: `fix/014-promocoes-html`
   não se conserta com marcação. Se voltar a cair em Promoções **sem que o template tenha mudado**, o
   suspeito não é este arquivo — é volume, DNS e comportamento do destinatário (ver "Antes do primeiro
   envio real: o DNS", no README).
+
+---
+
+# Fase 11: A auditoria da configuração, e os estilos de volta [x]
+Branch: `fix/014-devolve-os-estilos`
+
+> **Terceira volta do mesmo arquivo, e desta vez a conferência veio antes da mudança.** A Fase 10
+> concluiu que eram duas causas e tirou o HTML de novo. O sintoma seguiu se comportando de forma que a
+> medição da Fase 10 não explica, e a pergunta que ficou foi a que nunca tinha sido feita direito:
+> **existe alguma configuração pendente, minha, fora do código?**
+>
+> Em 2026-08-26 as duas frentes fora do repositório foram conferidas por API, e não por memória:
+>
+> | Frente | Estado |
+> |---|---|
+> | Domínio `lenoborges.com.br` no Resend | `status: verified`, `sending: enabled` |
+> | *Open Tracking* / *Click Tracking* | **desligados** (`false` nos dois) |
+> | DKIM `resend._domainkey` | `verified` |
+> | Return-path `send.lenoborges.com.br` (TXT + MX) | `verified` |
+> | DMARC `_dmarc.lenoborges.com.br` | publicado, `p=none;` |
+> | Zona DNS | registro.br (`d/e.sec.dns.br`) — **a Vercel não gerencia** |
+> | Env de produção do `api-lenoborges` | `EMAIL_FROM`, `EMAIL_REPLY_TO`, `API_PUBLIC_URL`, `RESEND_API_KEY`, `RESEND_WEBHOOK_SECRET`, `EMAIL_UNSUBSCRIBE_SECRET` presentes |
+>
+> Duas coisas que a auditoria esclareceu e que valem ficar escritas:
+>
+> 1. **O SPF da raiz não menciona o Resend, e está certo assim.** A raiz é
+>    `v=spf1 include:_spf.firebasemail.com ~all`. O envelope MAIL FROM do Resend é
+>    `send.lenoborges.com.br`, que tem SPF próprio com `include:amazonses.com` — o SPF é conferido contra
+>    o subdomínio, e ele alinha com o DMARC em modo relaxado. **Adicionar `amazonses` à raiz não é
+>    correção, é ruído**, e a próxima pessoa que "consertar" isso vai estar mexendo no SPF do Firebase.
+> 2. **Sobrou um resíduo de verdade:** um registro de *Tracking* `CNAME liga → links1.resend-dns.com` em
+>    `status: "failed"` no painel, de quando o subdomínio de rastreamento não era o `mail` de hoje. Ele é
+>    inerte enquanto o rastreamento está desligado — mas `liga.lenoborges.com.br` é o **domínio de
+>    produção do front na Vercel**. Se esse CNAME um dia verificasse, ele derruba o site. Remover no
+>    painel, e nunca criar registro de tracking com nome de subdomínio que já serve aplicação.
+>
+> **Com provedor e configuração limpos, o envio de teste foi refeito e a marcação não decidiu a aba.**
+> Então o HTML diagramado volta, e as Tasks 02 e 03 da Fase 10 ficam revogadas.
+>
+> A lição desta fase é a que faltava nas outras duas: **este template é o suspeito mais fácil de acusar e
+> o mais caro de condenar.** Tirar estilo daqui nunca quebra nada — a suíte fica verde, o envio continua
+> funcionando, e o sintoma se move ou não por conta de outra coisa. É por isso que ele foi condenado duas
+> vezes por hipótese. **A ordem certa é: painel do provedor, DNS, plataforma — e só então o código.**
+
+- [x] Task 01 (auditoria): O painel e a zona, conferidos por API. Objetivo: `GET /domains` e
+  `GET /domains/{id}` no Resend, `vercel domains ls` e `vercel env ls production`, e as consultas de TXT
+  e MX contra o `8.8.8.8`. Resultado na tabela acima. **Nenhuma pendência de configuração explica a aba
+  de Promoções**; a única encontrada é o `CNAME liga` em `failed`, que é resíduo e não causa.
+- [x] Task 02: Os estilos voltam. Arquivo: `src/emails/email-template.ts`. Objetivo: restaurar a moldura
+  do `9154943` — tabela de layout, cartão branco, rótulo "Liga Dev", `<h1>` do assunto, botão do CTA e o
+  rodapé com o descadastro, que continua obrigatório como sempre foi. O docblock do arquivo passa a
+  contar as três voltas, e não só a última.
+- [x] Task 03: As travas da Fase 10 saem, porque elas proibiam exatamente o que voltou. Arquivo:
+  `src/emails/email-template.spec.ts`. Objetivo: sem o teste que falha em `style=`/`<table>`/`padding` e
+  sem o que proíbe o assunto no corpo. **O que fica é o teste dos parágrafos medindo a *diferença*** —
+  ele sobreviveu às três moldagens sem quebrar, que era o objetivo dele, e é o único aqui que mede
+  comportamento em vez de aparência.
+- [x] Task 04: A spec e o `CLAUDE.md` contam a história inteira, incluindo as duas condenações erradas.
+  Objetivo: **nenhum documento pode ficar dizendo que o HTML foi condenado em definitivo**, pelo mesmo
+  motivo que a Fase 10 deu ao contrário — a contradição entre dois arquivos da mesma spec é como a
+  próxima pessoa reverte isto de boa-fé.
+- [ ] Task 05 (verificação contínua): A aba, daqui para frente. Objetivo: com o rastreamento desligado, o
+  DNS autenticado e a configuração conferida, o que decide é **reputação de domínio e engajamento** — que
+  não se conserta com marcação. Se voltar a cair em Promoções, o suspeito **não** é este arquivo: é
+  volume, histórico e comportamento do destinatário (ver "Antes do primeiro envio real: o DNS", no
+  README). Antes de abrir o template de novo, reler esta fase.
