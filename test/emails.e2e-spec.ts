@@ -312,6 +312,138 @@ describe('Disparo de e-mails (e2e)', () => {
     });
   });
 
+  /**
+   * O e-mail direto (spec 015), ponta a ponta.
+   *
+   * **É a prova das decisões 11, 12 e 13 juntas**: um destinatário e não a base,
+   * os três cortes valendo com o motivo nomeado, e o rodapé de descadastro indo
+   * junto num e-mail com um destinatário só.
+   */
+  describe('e-mail direto para um membro (spec 015)', () => {
+    const recado = {
+      subject: 'Sobre a sua dúvida no Mural',
+      body: 'Oi. Vi sua pergunta e queria responder por aqui.',
+    };
+
+    /**
+     * **O teste-trava da decisão 11, de ponta a ponta.** A campanha `direto`
+     * grava os três filtros nulos, e filtro nulo significa todos os membros: se
+     * o `recipientUid` deixar de ser lido antes deles, este teste vê a base
+     * inteira na lista de destinatários.
+     */
+    it('teste-trava: sai para EXATAMENTE um destinatario, e nao para a base', async () => {
+      const spy = jest.spyOn(mailer, 'sendBatch');
+
+      const resposta = await request(app.getHttpServer())
+        .post(`/admin/users/${membroUid}/email`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send(recado)
+        .expect(201);
+
+      const campanha = resposta.body as {
+        id: string;
+        status: string;
+        audienceCount: number;
+        sentCount: number;
+      };
+      createdCampaignIds.push(campanha.id);
+
+      expect(campanha).toMatchObject({
+        status: 'concluida',
+        audienceCount: 1,
+        sentCount: 1,
+      });
+
+      const enviados = destinatarios(spy);
+      expect(enviados).toEqual([membroEmail]);
+
+      spy.mockRestore();
+    });
+
+    it('o recado sai com o rodape de descadastro e o List-Unsubscribe', async () => {
+      const spy = jest.spyOn(mailer, 'sendBatch');
+
+      const resposta = await request(app.getHttpServer())
+        .post(`/admin/users/${membroUid}/email`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send(recado)
+        .expect(201);
+      createdCampaignIds.push((resposta.body as { id: string }).id);
+
+      const [lote] = spy.mock.calls.at(-1)!;
+      expect(lote[0].html).toContain('/emails/descadastro?token=');
+      expect(lote[0].headers?.['List-Unsubscribe']).toBeDefined();
+
+      spy.mockRestore();
+    });
+
+    /**
+     * **O descadastro é absoluto, e vale para o recado pessoal também**
+     * (decisão 13). O `422` traz o motivo nomeado, e não uma prosa que a tela
+     * teria que interpretar.
+     */
+    it('teste-trava: membro descadastrado responde 422 com reason=descadastrado', async () => {
+      const spy = jest.spyOn(mailer, 'sendBatch');
+
+      const resposta = await request(app.getHttpServer())
+        .post(`/admin/users/${descadastradoUid}/email`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send(recado)
+        .expect(422);
+
+      expect(resposta.body).toMatchObject({ reason: 'descadastrado' });
+      expect(spy).not.toHaveBeenCalled();
+
+      spy.mockRestore();
+    });
+
+    it('uid que nao existe responde 404', async () => {
+      await request(app.getHttpServer())
+        .post('/admin/users/uid-que-nunca-existiu/email')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send(recado)
+        .expect(404);
+    });
+
+    it('o recado aparece no MESMO historico, com kind direto e o rotulo', async () => {
+      const resposta = await request(app.getHttpServer())
+        .get('/admin/emails')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(200);
+
+      const linhas = resposta.body as {
+        kind: string;
+        recipientLabel: string | null;
+      }[];
+      const direto = linhas.find((linha) => linha.kind === 'direto');
+
+      expect(direto).toBeDefined();
+      expect(direto!.recipientLabel).toBeTruthy();
+    });
+
+    it('recusa corpo vazio e assunto curto, como a campanha', async () => {
+      await request(app.getHttpServer())
+        .post(`/admin/users/${membroUid}/email`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ subject: 'oi', body: 'curto' })
+        .expect(400);
+    });
+
+    it('recusa ctaUrl: um recado para uma pessoa nao tem para onde apontar', async () => {
+      // `forbidNonWhitelisted` transforma a ausencia do campo no DTO em 400, e e
+      // por isso que a decisao 12 nao precisa de guarda propria.
+      await request(app.getHttpServer())
+        .post(`/admin/users/${membroUid}/email`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          ...recado,
+          ctaLabel: 'Ver na trilha',
+          ctaUrl: 'https://edu.lenoborges.com.br/dashboard',
+        })
+        .expect(400);
+    });
+  });
+
   describe('webhook', () => {
     it('sem assinatura valida, 401 e nada e escrito', async () => {
       await request(app.getHttpServer())
