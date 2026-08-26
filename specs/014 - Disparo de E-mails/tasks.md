@@ -194,16 +194,20 @@ Branch: `feat/014-docs`
 
 ---
 
-# Fase 08: O e-mail limpo [~] — hipótese descartada
-Branch: `feat/014-email-limpo`
+# Fase 08: O e-mail limpo [x] — premissa descartada de manhã, confirmada à tarde
+Branch: `feat/014-email-limpo` · conclusão em `fix/014-promocoes-html`
 
-> **LEIA A FASE 09 ANTES DESTA.** A premissa inteira desta fase — "é o HTML que decide a aba" — foi
-> **medida e descartada**. A causa era o rastreamento do Resend (Fase 09, Task 02), e o HTML diagramado
-> voltou no `fix/014-promocoes`. As tasks 02, 03 e 05 abaixo ficam **canceladas**: elas pagariam um e-mail
-> feio por uma hipótese que já se sabe errada. As tasks 04 e 06 sobrevivem, porque não dependiam dela.
+> **LEIA A FASE 10 ANTES DESTA.** Esta fase foi dada como sem premissa em 2026-08-26 pela manhã (Fase 09,
+> Task 02: a causa era o rastreamento do Resend) e **voltou a valer na mesma tarde**: com o rastreamento
+> já desligado, o template diagramado continuou caindo em Promoções e o limpo caiu na Principal. Eram
+> **duas** causas, e o HTML é a segunda.
+>
+> As tasks 02, 03 e 05, que tinham sido canceladas, estão **feitas** — e agora com teste-trava, que é o
+> que faltava para elas não serem desfeitas outra vez pelo próximo pedido de "dá um destaque nesse link".
 >
 > Fica o registro do que a fase custou, que é o motivo de ela não ser apagada: um conserto entrou direto
-> no `dev` sem spec, deixou a suíte vermelha, piorou o e-mail e **não resolveu o problema**.
+> no `dev` sem spec e deixou a suíte vermelha; depois foi revertido inteiro com base numa conclusão que
+> ninguém tinha medido; e só na terceira vez o suspeito foi testado sozinho.
 
 > **De onde esta fase vem.** Os e-mails do produto estão caindo na aba **Promoções** do Gmail. O
 > diagnóstico está em `fix-email-styles.md` (aqui) e em `fix.md` (no front, que conclui: nada a fazer lá).
@@ -221,12 +225,12 @@ Branch: `feat/014-email-limpo`
   que ele afirma, e não a string**: ele deve contar `<p` e não CSS inline. Um teste que casa estilo quebra
   em toda mudança de estilo e não pega defeito nenhum — foi exatamente o que aconteceu aqui, e é por isso
   que a task é a primeira.
-- [~] Task 02 (CANCELADA — a causa não era o HTML): O `<h1>` que repete o assunto. Arquivo: `src/emails/email-template.ts`. Objetivo: **tirar o
+- [x] Task 02 (feita — a causa **era também** o HTML): O `<h1>` que repete o assunto. Arquivo: `src/emails/email-template.ts`. Objetivo: **tirar o
   título do corpo.** Nenhum e-mail escrito por uma pessoa começa repetindo o próprio assunto em fonte
   grande; quem faz isso é newsletter, e o filtro sabe disso. O assunto continua no cabeçalho da mensagem,
   que é onde ele já é lido. O `fix-email-styles.md` deixou isso como pergunta em aberto ("ou remover se
   quisermos deixar 100% estilo texto") — esta task é a resposta.
-- [~] Task 03 (CANCELADA — a causa não era o HTML): O CTA nunca mais vira botão. Objetivo: teste-trava de que o `htmlCta` sai como
+- [x] Task 03 (feita — e o teste-trava existe): O CTA nunca mais vira botão. Objetivo: teste-trava de que o `htmlCta` sai como
   **link sublinhado**, e não como `<a>` com `background` e `padding`. O botão foi removido no `58c5bdb` e
   vai voltar: é o pedido estético mais natural do mundo ("dá um destaque nesse link"), e ele custa a aba.
   O teste é o que faz a conversa acontecer antes do envio, e não depois.
@@ -235,8 +239,8 @@ Branch: `feat/014-email-limpo`
   e o par natural dele é o `EMAIL_REPLY_TO`, que já aponta para uma pessoa (`leno@`). Documentar o formato
   recomendado — `Leno Borges <comunidade@lenoborges.com.br>` — e por quê. **Não é troca de código**: é uma
   variável de ambiente e uma linha de README, e a decisão é de quem opera.
-- [~] Task 05 (CANCELADA — a causa não era o HTML; e o pixel que importava era o do provedor, não o
-  nosso): Nada de imagem, e nada de segundo link. Arquivo: `email-template.ts`. Objetivo: registrar em
+- [x] Task 05 (feita — o pixel do provedor era um dos dois culpados, e a marcação era o outro):
+  Nada de imagem, e nada de segundo link. Arquivo: `email-template.ts`. Objetivo: registrar em
   comentário que **o único link do template é o descadastro** (mais o CTA, quando existir), e que imagem
   nenhuma entra — proporção imagem/texto é um dos sinais mais fortes de Promoções, e um logo no topo é a
   próxima coisa que alguém vai querer adicionar. É comentário, e não código: o código já não tem imagem, e
@@ -257,8 +261,12 @@ Branch: `feat/014-email-limpo`
 # Fase 09: Achar o que realmente decide a aba [x] — resolvida na Task 02
 Branch: `fix/014-promocoes`
 
-> **RESPOSTA: era o rastreamento do Resend.** *Open Tracking* e *Click Tracking* estavam ligados no
-> domínio; desligados os dois, o e-mail passou a cair na aba Principal. A Task 02 tem o registro.
+> **RESPOSTA PARCIAL: era o rastreamento do Resend — e não só ele.** *Open Tracking* e *Click Tracking*
+> estavam ligados no domínio, e desligá-los era necessário. Não era suficiente: o e-mail voltou a cair em
+> Promoções depois, com o rastreamento já desligado, e a Fase 10 mostra que o HTML diagramado era a
+> segunda causa. **As duas consequências listadas abaixo estão desfeitas** — o HTML diagramado saiu de
+> novo, e a Fase 08 recuperou a premissa. A Task 02 fica como registro do que foi medido, e do que foi
+> concluído sem medir.
 >
 > Duas consequências, e as duas já estão no código:
 >
@@ -317,3 +325,50 @@ Branch: `fix/014-promocoes`
   personalizada pelo comportamento de cada destinatário — quem nunca abriu, responde ou marca como
   importante ensina o filtro a mandar para Promoções. O caminho aí é engajamento e tempo, e a frase que
   fecha esta fase é: **"o e-mail está limpo; o que falta agora é histórico."**
+
+---
+
+# Fase 10: O HTML medido sozinho [x]
+Branch: `fix/014-promocoes-html`
+
+> **A Fase 09 desligou o rastreamento do Resend e o e-mail voltou para a Principal — por um tempo.** Com o
+> rastreamento desligado, os envios seguintes caíram em **Promoções** de novo, e aí o suspeito pôde
+> finalmente ser testado sozinho, que é o que nunca tinha acontecido: nas duas vezes anteriores havia dois
+> sinais ligados ao mesmo tempo, e nenhuma medição com dois sinais ligados isola coisa alguma.
+>
+> | Envio de teste, mesma conta do Gmail, rastreamento **desligado** | Aba |
+> |---|---|
+> | Template diagramado (tabela, fundo cinza, cartão branco, `<h1>` do assunto, botão) | **Promoções** |
+> | Template limpo (só `<p>`, `<hr>`, links) | **Principal** |
+>
+> **Eram duas causas.** O pixel 1×1 e a reescrita de link do provedor, e a marcação de campanha do
+> template. Tirar uma só nunca ia resolver, e foi exatamente isso que aconteceu duas vezes seguidas.
+>
+> A lição que sobra desta fase é sobre conclusão, e não sobre e-mail: *"desligar o rastreamento
+> resolveu"* é uma medição; *"o HTML nunca foi a causa"* é uma inferência que ninguém mediu, e ela custou
+> uma reversão inteira. **Quando um suspeito cai e o sintoma fica, o próximo suspeito é o que ainda não
+> foi testado isolado** — não o mesmo de antes com outra roupa.
+
+- [x] Task 01 (medição): O A/B do template, com o rastreamento já desligado. Objetivo: `POST
+  /admin/emails/teste` para a mesma conta do Gmail, uma vez com o template diagramado e outra com o
+  limpo, sem mexer em mais nada. Resultado na tabela acima: **diagramado → Promoções, limpo → Principal**.
+- [x] Task 02: O template volta a ser limpo, e desta vez inteiro. Arquivo: `src/emails/email-template.ts`.
+  Objetivo: sem `style` inline em lugar nenhum, sem `<table>` de layout, sem fundo, sem cartão, sem o
+  `<h1>` que repetia o assunto, e o CTA como link dentro de um `<p>` — nunca como botão. O que sobra é um
+  `<p>` por parágrafo, um `<hr>` e o rodapé com o descadastro, que continua obrigatório como sempre foi.
+- [x] Task 03 (teste-trava): O que impede a terceira volta. Arquivo: `src/emails/email-template.spec.ts`.
+  Objetivo: dois travas. Um falha se `style=`, `<table>`, `<img>`, `background`, `border-radius` ou
+  `padding` aparecerem no HTML gerado; o outro falha se o assunto voltar para dentro do corpo. **Sem
+  eles, a regressão é invisível**: o envio continua funcionando, nada quebra, e o sintoma só aparece
+  semanas depois como queda de abertura. O teste dos parágrafos continua medindo a *diferença* e não um
+  total fixo — a moldura mudou de novo, e ele não quebrou, que era o objetivo dele.
+- [x] Task 04: A spec conta a história inteira. Arquivos: `context.md` (decisão 11-B deixa de estar
+  revogada, com as duas datas à vista), `fix-email-styles.md` (seção 5, o desfecho do desfecho),
+  `tasks.md` (Fases 08 e 09 reconciliadas), `CLAUDE.md`. Objetivo: **nenhum documento pode ficar dizendo
+  que o HTML foi inocentado** — a contradição entre dois arquivos da mesma spec é como a próxima pessoa
+  reverte isto de boa-fé.
+- [ ] Task 05 (verificação contínua): A aba, depois do histórico. Objetivo: o e-mail está limpo e o
+  rastreamento está desligado; o que decide daqui para frente é reputação de domínio e engajamento, que
+  não se conserta com marcação. Se voltar a cair em Promoções **sem que o template tenha mudado**, o
+  suspeito não é este arquivo — é volume, DNS e comportamento do destinatário (ver "Antes do primeiro
+  envio real: o DNS", no README).
