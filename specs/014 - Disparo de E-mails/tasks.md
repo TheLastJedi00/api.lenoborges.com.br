@@ -191,3 +191,54 @@ Branch: `feat/014-docs`
   apenas** — filtro que pega uma pessoa — e conferir no Gmail: remetente autenticado (sem "enviado via"),
   o link de descadastro funcionando, e o "cancelar inscrição" nativo do Gmail aparecendo no topo. Esse
   último é a prova de que os cabeçalhos da Fase 04 estão certos, e nenhum teste automatizado o alcança.
+
+---
+
+# Fase 08: O e-mail limpo [ ]
+Branch: `feat/014-email-limpo`
+
+> **De onde esta fase vem.** Os e-mails do produto estão caindo na aba **Promoções** do Gmail. O
+> diagnóstico está em `fix-email-styles.md` (aqui) e em `fix.md` (no front, que conclui: nada a fazer lá).
+> O commit `58c5bdb` já executou a parte mais óbvia — tirou a `<table>` de layout, o fundo cinza, o cartão
+> branco e o botão com `padding` de marketing. **Esta fase é o que ficou de fora dele**, e ela existe
+> porque aquele conserto entrou direto no `dev` sem passar por spec, e **deixou a suíte vermelha**.
+>
+> O princípio que decide todas as tasks abaixo: **um e-mail que quer a aba Principal precisa parecer um
+> e-mail que uma pessoa escreveu para outra.** Não é sobre gosto — o Gmail classifica por estrutura, e
+> `<table>` de layout, fundo colorido no `<body>` e botão grande são a assinatura de campanha.
+
+- [ ] Task 01 (TDD): O teste que a simplificação quebrou. Arquivo: `src/emails/email-template.spec.ts`.
+  Objetivo: `npm test` está **vermelho no `dev`** — o teste dos parágrafos casa a string
+  `<p style="margin:0 0 16px` e o HTML novo escreve `margin: 0 0 16px`, com espaço. Consertar **mudando o
+  que ele afirma, e não a string**: ele deve contar `<p` e não CSS inline. Um teste que casa estilo quebra
+  em toda mudança de estilo e não pega defeito nenhum — foi exatamente o que aconteceu aqui, e é por isso
+  que a task é a primeira.
+- [ ] Task 02: O `<h1>` que repete o assunto. Arquivo: `src/emails/email-template.ts`. Objetivo: **tirar o
+  título do corpo.** Nenhum e-mail escrito por uma pessoa começa repetindo o próprio assunto em fonte
+  grande; quem faz isso é newsletter, e o filtro sabe disso. O assunto continua no cabeçalho da mensagem,
+  que é onde ele já é lido. O `fix-email-styles.md` deixou isso como pergunta em aberto ("ou remover se
+  quisermos deixar 100% estilo texto") — esta task é a resposta.
+- [ ] Task 03 (TDD): O CTA nunca mais vira botão. Objetivo: teste-trava de que o `htmlCta` sai como
+  **link sublinhado**, e não como `<a>` com `background` e `padding`. O botão foi removido no `58c5bdb` e
+  vai voltar: é o pedido estético mais natural do mundo ("dá um destaque nesse link"), e ele custa a aba.
+  O teste é o que faz a conversa acontecer antes do envio, e não depois.
+- [ ] Task 04: O remetente diz um nome de gente. Arquivos: `.env.example`, `README.md`. Objetivo: hoje o
+  `EMAIL_FROM` é `Liga Dev <comunidade@lenoborges.com.br>`. **Nome de marca no remetente é sinal de massa**,
+  e o par natural dele é o `EMAIL_REPLY_TO`, que já aponta para uma pessoa (`leno@`). Documentar o formato
+  recomendado — `Leno Borges <comunidade@lenoborges.com.br>` — e por quê. **Não é troca de código**: é uma
+  variável de ambiente e uma linha de README, e a decisão é de quem opera.
+- [ ] Task 05: Nada de imagem, e nada de segundo link. Arquivo: `email-template.ts`. Objetivo: registrar em
+  comentário que **o único link do template é o descadastro** (mais o CTA, quando existir), e que imagem
+  nenhuma entra — proporção imagem/texto é um dos sinais mais fortes de Promoções, e um logo no topo é a
+  próxima coisa que alguém vai querer adicionar. É comentário, e não código: o código já não tem imagem, e
+  o que falta é o motivo escrito onde a mudança aconteceria.
+- [ ] Task 06: Os dois `fix*.md` entram na spec. Arquivos: `specs/014 - Disparo de E-mails/context.md`,
+  `fix-email-styles.md`. Objetivo: o diagnóstico vira uma **decisão numerada** no `context.md` — hoje ele é
+  um documento solto ao lado do `context.md` e do `tasks.md`, e uma terceira fonte de verdade é como as
+  três divergem. O `fix-email-styles.md` fica como registro datado do incidente, com um link para a
+  decisão nova.
+- [ ] Task 07 (verificação): A única prova que vale. Objetivo: mandar o e-mail de teste
+  (`POST /admin/emails/teste`) para uma conta **do Gmail** e conferir em qual aba ele caiu. Nenhum teste
+  automatizado responde esta pergunta — a classificação acontece do outro lado, e ela é o motivo desta
+  fase existir. Se ainda cair em Promoções, o próximo suspeito **não é mais o HTML**: é reputação de
+  domínio e volume (ver "Antes do primeiro envio real: o DNS", no README).
