@@ -4,6 +4,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  UnprocessableEntityException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AudienceMember, AudienceService } from './audience.service';
@@ -11,6 +12,7 @@ import { EmailCampaignRepository } from './email-campaign.repository';
 import { MailerService, OutgoingEmail } from './mailer.service';
 import { renderEmail } from './email-template';
 import { signUnsubscribeToken } from './unsubscribe-token';
+import type { CannotReceiveEmailReason } from './email-eligibility';
 import { ALREADY_EXISTS } from '../waitlist/waitlist.repository';
 import type { CreateCampaignData } from './email-campaign.repository';
 import {
@@ -25,6 +27,20 @@ import {
  * gravado a cada 100 pessoas.
  */
 export const BATCH_SIZE = 100;
+
+/**
+ * O texto que acompanha o `422`, por motivo.
+ *
+ * **A tela não lê isto.** Ela escolhe a frase pelo `reason` que vem no corpo
+ * (spec 015, decisão 12), e esta prosa existe para quem chama a API por fora —
+ * `curl`, log, Swagger. Um `includes('descadastr')` do outro lado quebraria na
+ * primeira revisão de copy daqui, e é exatamente por isso que o código vai junto.
+ */
+const MOTIVO_EM_PROSA: Record<CannotReceiveEmailReason, string> = {
+  desativado: 'A conta desse membro está desativada.',
+  'email-nao-verificado': 'O e-mail desse membro ainda não foi confirmado.',
+  descadastrado: 'Esse membro pediu para não receber e-mails.',
+};
 
 export interface CampaignResult {
   id: string;
@@ -133,6 +149,82 @@ export class EmailCampaignService {
     }
 
     return this.dispatch(entry, membros);
+  }
+
+  /**
+   * Um recado para uma pessoa (spec 015, decisão 10).
+   *
+   * **Não é um caminho de envio novo.** Ele monta um `email_campaigns` com
+   * `kind: 'direto'` e cai no mesmo `dispatch` da campanha — é a decisão 3 da
+   * spec 014 aplicada pela terceira vez: *o envio, o lote, o descadastro, o
+   * cabeçalho e o registro são um código só*. O que muda entre a campanha de
+   * vídeo, a manual e este é quem escreve o documento, nunca o caminho.
+   *
+   * **O rodapé de descadastro vai neste e-mail também** (decisão 13), e não há
+   * caminho no template que gere e-mail sem ele. Parece severo — "é uma mensagem
+   * pessoal" — e é a leitura errada do que esta rota é: ela manda um e-mail com
+   * o remetente, o template e o rodapé do produto. A conversa pessoal de
+   * verdade existe e tem outro caminho, que é o cliente de e-mail do Leno.
+   *
+   * Os três cortes valem, e o motivo volta nomeado num `422` — e não no `400`
+   * de audiência zero, que não diria à tela o que escrever.
+   */
+  async sendDirect(data: {
+    recipientUid: string;
+    subject: string;
+    body: string;
+    createdBy: string;
+  }): Promise<CampaignResult> {
+    // O trinco vem antes de tudo, como na campanha (decisao 14). E um incomodo
+    // real e aceito: quem dispara para a base e lembra de escrever para uma
+    // pessoa espera os poucos segundos do envio. Abrir excecao significaria uma
+    // segunda porta para o provedor no mesmo instante.
+    const emAndamento = await this.repository.findSending();
+    if (emAndamento.found) {
+      throw new ConflictException(
+        'Tem um disparo acontecendo agora. Espere ele terminar para escrever para este membro.',
+      );
+    }
+
+    const { member, reason, label } = await this.audience.buildOne(
+      data.recipientUid,
+    );
+
+    if (!member) {
+      if (reason === null) {
+        throw new NotFoundException('Esse membro não existe.');
+      }
+
+      // 422 com o motivo NOMEADO: a tela escolhe o texto pelo codigo, e nunca
+      // por leitura da mensagem — texto de erro nao e contrato.
+      throw new UnprocessableEntityException({
+        statusCode: 422,
+        reason,
+        message: MOTIVO_EM_PROSA[reason],
+      });
+    }
+
+    const { entry } = await this.repository.create({
+      kind: 'direto',
+      subject: data.subject,
+      body: data.body,
+      // Sem botao de acao (decisao 12): um recado para uma pessoa nao tem para
+      // onde apontar, e o unico botao que existiria seria "clique aqui".
+      ctaLabel: null,
+      ctaUrl: null,
+      // Os filtros ficam nulos, e e por isso que `recipientUid` e lido ANTES
+      // deles em `buildAudience`: filtro nulo significa todos os membros.
+      filters: { tiers: null, gradeMin: null, gradeMax: null },
+      recipientUid: member.uid,
+      // O rotulo e o nome no instante do envio (decisao 15): a conta pode mudar
+      // de nome ou deixar de existir, e a linha do historico precisa continuar
+      // legivel. E a mesma denormalizacao do `authorName` do Mural.
+      recipientLabel: label,
+      audienceCount: 1,
+      createdBy: data.createdBy,
+    });
+
+    return this.dispatch(entry, [member]);
   }
 
   /**

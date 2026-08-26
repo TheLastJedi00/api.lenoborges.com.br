@@ -3,8 +3,10 @@ import {
   Controller,
   Get,
   HttpCode,
+  HttpStatus,
   Param,
   Patch,
+  Post,
   Query,
   UseGuards,
 } from '@nestjs/common';
@@ -26,15 +28,23 @@ import {
   ONBOARDING_FILTERS,
 } from './dto/list-users-query.dto';
 import { TIER_IDS } from '../billing/billing.tiers';
+import { SendDirectEmailDto } from './dto/send-direct-email.dto';
+import { EmailCampaignService } from '../emails/email-campaign.service';
+import { CampaignResultDto } from '../emails/dto/campaign.dto';
 import { FirebaseAuthGuard } from '../auth/guards/firebase-auth.guard';
 import { AdminGuard } from '../auth/guards/admin.guard';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import type { CurrentUserData } from '../auth/decorators/current-user.decorator';
 
 @ApiTags('admin')
 @ApiBearerAuth()
 @Controller('admin/users')
 @UseGuards(FirebaseAuthGuard, AdminGuard)
 export class AdminUsersController {
-  constructor(private readonly users: AdminUsersService) {}
+  constructor(
+    private readonly users: AdminUsersService,
+    private readonly campaigns: EmailCampaignService,
+  ) {}
 
   @Get()
   @ApiOperation({
@@ -131,6 +141,71 @@ export class AdminUsersController {
   @ApiResponse({ status: 404, description: 'Esse uid não existe no Auth.' })
   async detail(@Param('id') id: string): Promise<AdminUserDetailDto> {
     return this.users.getUser(id);
+  }
+
+  /**
+   * Escreve um e-mail para aquele membro (spec 015, decisão 10).
+   *
+   * **A rota é do usuário, e não da campanha**, porque é sobre ele que a ação
+   * fala: quem a chama está olhando para uma pessoa, e não montando uma
+   * audiência. Por dentro, ela cria um `email_campaigns` com `kind: 'direto'` e
+   * chama o **mesmo** `EmailCampaignService` — nenhum caminho de envio novo.
+   */
+  @Post(':id/email')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({
+    summary: 'Escrever um e-mail para um membro',
+    description:
+      'Cria uma campanha `direto` e envia pelo MESMO caminho da campanha: o ' +
+      'mesmo template, o mesmo lote, o mesmo rodapé de descadastro.\n\n' +
+      'O DESCADASTRO VALE AQUI TAMBÉM. Não existe "e-mail que ignora o ' +
+      'descadastro" neste código — nem o de vídeo, nem a campanha, nem este. ' +
+      'Parece severo para uma mensagem a uma pessoa, e é a leitura errada do que ' +
+      'esta rota é: ela manda um e-mail com o remetente, o template e o rodapé ' +
+      'do produto. A conversa pessoal tem outro caminho, que é o cliente de ' +
+      'e-mail de quem escreve.\n\n' +
+      'Sem `ctaLabel` e sem `ctaUrl`: um recado para uma pessoa não tem para ' +
+      'onde apontar.',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Enviado.',
+    type: CampaignResultDto,
+  })
+  @ApiResponse({ status: 404, description: 'Esse uid não existe no Auth.' })
+  @ApiResponse({
+    status: 409,
+    description:
+      'Já existe um disparo em andamento. O trinco de um disparo por vez vale ' +
+      'aqui também: abrir exceção significaria uma segunda porta para o ' +
+      'provedor no mesmo instante.',
+  })
+  @ApiResponse({
+    status: 422,
+    description:
+      'O membro não pode receber. O corpo traz `reason` com um dos três ' +
+      'valores: `desativado`, `email-nao-verificado`, `descadastrado`. A TELA ' +
+      'ESCOLHE O TEXTO PELO CÓDIGO, e nunca por leitura da mensagem — texto de ' +
+      'erro não é contrato.',
+    schema: {
+      example: {
+        statusCode: 422,
+        reason: 'descadastrado',
+        message: 'Esse membro pediu para não receber e-mails.',
+      },
+    },
+  })
+  async sendEmail(
+    @CurrentUser() admin: CurrentUserData,
+    @Param('id') id: string,
+    @Body() dto: SendDirectEmailDto,
+  ): Promise<CampaignResultDto> {
+    return this.campaigns.sendDirect({
+      recipientUid: id,
+      subject: dto.subject,
+      body: dto.body,
+      createdBy: admin.id,
+    });
   }
 
   @Patch(':id')
