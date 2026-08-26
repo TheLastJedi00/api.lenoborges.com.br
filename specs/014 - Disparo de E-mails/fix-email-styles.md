@@ -65,3 +65,28 @@ Os botões (`htmlCta`) devem perder paddings exagerados, priorizando texto ancor
 | # | Ação | Arquivo | Prioridade |
 |---|---|---|---|
 | 1 | Simplificar HTML (remover tabela, body background, etc.) | `src/emails/email-template.ts` | Alta — Recupera engajamento |
+
+---
+
+## 4. Desfecho — 2026-08-26: o diagnóstico acima estava errado
+
+**A simplificação foi feita (commit `58c5bdb`) e o e-mail continuou caindo em Promoções.**
+
+A causa real não estava no HTML e não estava neste repositório: no painel do **Resend**, o *Open Tracking*
+e o *Click Tracking* estavam ligados no domínio. Com eles ligados, o provedor injeta um **pixel de imagem
+1×1** e **reescreve todo link** para passar por um domínio de rastreamento — tudo isso *depois* de o
+template sair do `renderEmail`. O que o Gmail recebia não era mais o HTML que este código gerava, e é por
+isso que limpar o HTML não mudou nada. Pixel invisível e link reescrito são dois dos sinais mais fortes de
+correio de marketing que existem.
+
+Desligados os dois, o e-mail passou a cair na aba **Principal**.
+
+**Consequência:** o HTML diagramado foi **restaurado** — tabela de layout, cartão branco, botão do CTA. Ele
+nunca foi a causa, e a única coisa que a simplificação produziu foi um e-mail mais feio, uma suíte de
+testes vermelha no `dev` e uma fase inteira de spec (Fase 08) construída sobre uma premissa falsa.
+
+**O que fica como regra:** o template não é a última coisa que acontece com o e-mail. Entre o `renderEmail`
+e a caixa de entrada existe um provedor que pode reescrever o documento. Quando o sintoma for de
+classificação, **o painel do provedor se confere antes do código**.
+
+Ver Fase 09 em `tasks.md`.

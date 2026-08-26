@@ -191,3 +191,129 @@ Branch: `feat/014-docs`
   apenas** — filtro que pega uma pessoa — e conferir no Gmail: remetente autenticado (sem "enviado via"),
   o link de descadastro funcionando, e o "cancelar inscrição" nativo do Gmail aparecendo no topo. Esse
   último é a prova de que os cabeçalhos da Fase 04 estão certos, e nenhum teste automatizado o alcança.
+
+---
+
+# Fase 08: O e-mail limpo [~] — hipótese descartada
+Branch: `feat/014-email-limpo`
+
+> **LEIA A FASE 09 ANTES DESTA.** A premissa inteira desta fase — "é o HTML que decide a aba" — foi
+> **medida e descartada**. A causa era o rastreamento do Resend (Fase 09, Task 02), e o HTML diagramado
+> voltou no `fix/014-promocoes`. As tasks 02, 03 e 05 abaixo ficam **canceladas**: elas pagariam um e-mail
+> feio por uma hipótese que já se sabe errada. As tasks 04 e 06 sobrevivem, porque não dependiam dela.
+>
+> Fica o registro do que a fase custou, que é o motivo de ela não ser apagada: um conserto entrou direto
+> no `dev` sem spec, deixou a suíte vermelha, piorou o e-mail e **não resolveu o problema**.
+
+> **De onde esta fase vem.** Os e-mails do produto estão caindo na aba **Promoções** do Gmail. O
+> diagnóstico está em `fix-email-styles.md` (aqui) e em `fix.md` (no front, que conclui: nada a fazer lá).
+> O commit `58c5bdb` já executou a parte mais óbvia — tirou a `<table>` de layout, o fundo cinza, o cartão
+> branco e o botão com `padding` de marketing. **Esta fase é o que ficou de fora dele**, e ela existe
+> porque aquele conserto entrou direto no `dev` sem passar por spec, e **deixou a suíte vermelha**.
+>
+> O princípio que decide todas as tasks abaixo: **um e-mail que quer a aba Principal precisa parecer um
+> e-mail que uma pessoa escreveu para outra.** Não é sobre gosto — o Gmail classifica por estrutura, e
+> `<table>` de layout, fundo colorido no `<body>` e botão grande são a assinatura de campanha.
+
+- [x] Task 01 (TDD): O teste que a simplificação quebrou. Arquivo: `src/emails/email-template.spec.ts`.
+  Objetivo: `npm test` está **vermelho no `dev`** — o teste dos parágrafos casa a string
+  `<p style="margin:0 0 16px` e o HTML novo escreve `margin: 0 0 16px`, com espaço. Consertar **mudando o
+  que ele afirma, e não a string**: ele deve contar `<p` e não CSS inline. Um teste que casa estilo quebra
+  em toda mudança de estilo e não pega defeito nenhum — foi exatamente o que aconteceu aqui, e é por isso
+  que a task é a primeira.
+- [~] Task 02 (CANCELADA — a causa não era o HTML): O `<h1>` que repete o assunto. Arquivo: `src/emails/email-template.ts`. Objetivo: **tirar o
+  título do corpo.** Nenhum e-mail escrito por uma pessoa começa repetindo o próprio assunto em fonte
+  grande; quem faz isso é newsletter, e o filtro sabe disso. O assunto continua no cabeçalho da mensagem,
+  que é onde ele já é lido. O `fix-email-styles.md` deixou isso como pergunta em aberto ("ou remover se
+  quisermos deixar 100% estilo texto") — esta task é a resposta.
+- [~] Task 03 (CANCELADA — a causa não era o HTML): O CTA nunca mais vira botão. Objetivo: teste-trava de que o `htmlCta` sai como
+  **link sublinhado**, e não como `<a>` com `background` e `padding`. O botão foi removido no `58c5bdb` e
+  vai voltar: é o pedido estético mais natural do mundo ("dá um destaque nesse link"), e ele custa a aba.
+  O teste é o que faz a conversa acontecer antes do envio, e não depois.
+- [ ] Task 04: O remetente diz um nome de gente. Arquivos: `.env.example`, `README.md`. Objetivo: hoje o
+  `EMAIL_FROM` é `Liga Dev <comunidade@lenoborges.com.br>`. **Nome de marca no remetente é sinal de massa**,
+  e o par natural dele é o `EMAIL_REPLY_TO`, que já aponta para uma pessoa (`leno@`). Documentar o formato
+  recomendado — `Leno Borges <comunidade@lenoborges.com.br>` — e por quê. **Não é troca de código**: é uma
+  variável de ambiente e uma linha de README, e a decisão é de quem opera.
+- [~] Task 05 (CANCELADA — a causa não era o HTML; e o pixel que importava era o do provedor, não o
+  nosso): Nada de imagem, e nada de segundo link. Arquivo: `email-template.ts`. Objetivo: registrar em
+  comentário que **o único link do template é o descadastro** (mais o CTA, quando existir), e que imagem
+  nenhuma entra — proporção imagem/texto é um dos sinais mais fortes de Promoções, e um logo no topo é a
+  próxima coisa que alguém vai querer adicionar. É comentário, e não código: o código já não tem imagem, e
+  o que falta é o motivo escrito onde a mudança aconteceria.
+- [ ] Task 06: Os dois `fix*.md` entram na spec. Arquivos: `specs/014 - Disparo de E-mails/context.md`,
+  `fix-email-styles.md`. Objetivo: o diagnóstico vira uma **decisão numerada** no `context.md` — hoje ele é
+  um documento solto ao lado do `context.md` e do `tasks.md`, e uma terceira fonte de verdade é como as
+  três divergem. O `fix-email-styles.md` fica como registro datado do incidente, com um link para a
+  decisão nova.
+- [ ] Task 07 (verificação): A única prova que vale. Objetivo: mandar o e-mail de teste
+  (`POST /admin/emails/teste`) para uma conta **do Gmail** e conferir em qual aba ele caiu. Nenhum teste
+  automatizado responde esta pergunta — a classificação acontece do outro lado, e ela é o motivo desta
+  fase existir. Se ainda cair em Promoções, o próximo suspeito **não é mais o HTML**: é reputação de
+  domínio e volume (ver "Antes do primeiro envio real: o DNS", no README).
+
+---
+
+# Fase 09: Achar o que realmente decide a aba [x] — resolvida na Task 02
+Branch: `fix/014-promocoes`
+
+> **RESPOSTA: era o rastreamento do Resend.** *Open Tracking* e *Click Tracking* estavam ligados no
+> domínio; desligados os dois, o e-mail passou a cair na aba Principal. A Task 02 tem o registro.
+>
+> Duas consequências, e as duas já estão no código:
+>
+> 1. **O HTML diagramado voltou** (a tabela, o cartão, o botão). Ele nunca foi a causa, e um e-mail feio
+>    não é preço que se pague por hipótese descartada.
+> 2. **A Fase 08 inteira perdeu a premissa.** Ver o cabeçalho dela.
+>
+> A lição, que é o que sobra de mais caro aqui: **o template não é a última coisa que acontece com o
+> e-mail.** Entre o `renderEmail` e a caixa de entrada existe um provedor que reescreve o HTML, e nenhuma
+> quantidade de limpeza deste lado alcança o que ele injeta do outro. Da próxima vez, o painel vem antes
+> do código.
+>
+> O enunciado original da fase, como registro:
+
+> **O HTML foi simplificado e o e-mail continuou em Promoções.** Isso é informação, e ela custa caro de
+> ignorar: significa que o suspeito estava errado, ou que ele era só um entre vários. A suspeita nova é o
+> `List-Unsubscribe`, e ela é plausível — aquele cabeçalho é literalmente o que declara a mensagem como
+> correspondência de lista.
+>
+> **Mas nenhuma destas tasks é "mudar e torcer".** A aba do Gmail é decidida do outro lado, por sinais que
+> não se leem no código, e é personalizada por destinatário. A única forma de saber é **trocar uma coisa
+> por vez e mandar de verdade**, e é para isso que a Task 01 existe.
+>
+> Ordem dos suspeitos, do mais provável ao menos, e ela não é palpite: é o que sobra depois de o HTML ter
+> sido descartado como causa.
+
+- [x] Task 01: O interruptor. Arquivos: `src/emails/email-campaign.service.ts`, `.spec.ts`,
+  `.env.example`. Objetivo: `EMAIL_LIST_UNSUBSCRIBE=off` desliga os dois cabeçalhos, **ausente significa
+  ligado**, e só o `off` explícito desliga — erro de digitação na variável não pode virar envio sem
+  cabeçalho. O link do rodapé não depende dela, e tem teste-trava dizendo isso. **O objetivo é medir, e o
+  padrão continua sendo ligado.**
+- [x] Task 02 (medição): O rastreamento do provedor. **ERA ISTO.** Conferido no painel do Resend: *Open
+  Tracking* e *Click Tracking* estavam ligados no domínio, e foram desligados. O e-mail passou a cair na
+  aba **Principal**. As tasks 03, 04 e 05 abaixo ficam **sem motivo** — elas eram a fila de suspeitos para
+  o caso deste aqui não ser a causa, e ele era. O `List-Unsubscribe` continua ligado, que é o padrão certo,
+  e o interruptor da Task 01 fica como instrumento de medição, não como conserto pendente.
+
+  O enunciado original, que continua valendo como raciocínio: **Este é o primeiro lugar a olhar, e ele não está no
+  código.** No painel do Resend, por domínio, existem *Open Tracking* e *Click Tracking*. Com eles ligados,
+  o provedor **injeta um pixel de imagem 1×1** e **reescreve todo link** para passar por um domínio de
+  rastreamento — depois de o template ter saído daqui. Isso explica exatamente o sintoma: limpar o HTML no
+  código não mudou nada, porque o que o Gmail recebe não é mais o HTML que este código gerou. Pixel
+  invisível e link reescrito são dois dos sinais mais fortes de correio de marketing que existem.
+  **Conferir e, se estiverem ligados, desligar os dois.**
+- [ ] Task 03 (medição): O teste A/B do `List-Unsubscribe`. Objetivo: com o rastreamento já resolvido,
+  mandar `POST /admin/emails/teste` para **a mesma conta do Gmail**, uma vez com `EMAIL_LIST_UNSUBSCRIBE`
+  ausente e outra com `off`, e registrar em que aba cada um caiu. Uma variável por vez — mudar as duas
+  juntas responde "melhorou", que não é uma resposta.
+- [ ] Task 04: O remetente e o rodapé, se as duas primeiras não resolverem. Objetivo: `EMAIL_FROM` é
+  `Liga Dev <comunidade@lenoborges.com.br>` — **nome de marca mais endereço de função é a assinatura de
+  correio em massa**. E o rodapé diz "Você recebe este e-mail porque é membro da Liga Dev", que é a frase
+  de rodapé de newsletter mais reconhecível que existe. Trocar o nome por `Leno Borges` é uma variável de
+  ambiente; encurtar o rodapé é uma linha do template — **e o link de descadastro fica**, sempre.
+- [ ] Task 05: Aceitar o que não é código. Objetivo: registrar no `context.md` que, esgotadas as tasks
+  acima, o que resta **não se conserta com marcação**: domínio novo não tem reputação, e a aba do Gmail é
+  personalizada pelo comportamento de cada destinatário — quem nunca abriu, responde ou marca como
+  importante ensina o filtro a mandar para Promoções. O caminho aí é engajamento e tempo, e a frase que
+  fecha esta fase é: **"o e-mail está limpo; o que falta agora é histórico."**

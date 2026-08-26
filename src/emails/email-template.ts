@@ -10,6 +10,17 @@
  *
  * **As duas partes saem da mesma fonte.** Cliente que não renderiza HTML é
  * minoria, mas e-mail sem alternativa em texto é sinal de spam para os filtros.
+ *
+ * **O HTML diagramado voltou, e o motivo é uma medição.** O commit `58c5bdb`
+ * tirou daqui a tabela de layout, o fundo cinza, o cartão branco e o botão, sob
+ * a suspeita de que o excesso de marcação fosse o que jogava a mensagem na aba
+ * **Promoções** do Gmail. O e-mail continuou caindo lá. A causa real estava
+ * fora deste código, no painel do Resend: o *Open Tracking* e o *Click
+ * Tracking* injetavam um pixel 1×1 e reescreviam todo link para um domínio de
+ * rastreamento **depois** de o template sair daqui — o que o Gmail recebia não
+ * era mais o HTML gerado aqui. Desligados os dois, o problema acabou. O HTML
+ * nunca foi a causa, e não se paga um e-mail feio por hipótese já descartada.
+ * Ver Fase 09 em `specs/014 - Disparo de E-mails/tasks.md`.
  */
 
 export interface EmailContent {
@@ -70,24 +81,44 @@ export function renderEmail(content: EmailContent): RenderedEmail {
   const htmlParagrafos = blocos
     .map(
       (bloco) =>
-        `<p style="margin: 0 0 16px;">${escapeHtml(bloco).replace(/\n/g, '<br />')}</p>`,
+        `<p style="margin:0 0 16px;font-size:16px;line-height:1.6;color:#101828;">${escapeHtml(
+          bloco,
+        ).replace(/\n/g, '<br />')}</p>`,
     )
     .join('');
 
   const htmlCta = temCta
-    ? `<p style="margin: 24px 0 0;"><a href="${escapeHtml(content.ctaUrl!)}" style="color: #6941c6; font-weight: 700; text-decoration: underline;">${escapeHtml(content.ctaLabel!)}</a></p>`
+    ? `<p style="margin:24px 0 0;"><a href="${escapeHtml(
+        content.ctaUrl!,
+      )}" style="display:inline-block;padding:12px 22px;border-radius:8px;background:#101828;color:#ffffff;font-weight:700;text-decoration:none;">${escapeHtml(
+        content.ctaLabel!,
+      )}</a></p>`
     : '';
 
   const html = `<!doctype html>
 <html lang="pt-BR">
-  <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #101828; line-height: 1.6; max-width: 600px; margin: 0 auto; padding: 24px;">
-    <h1 style="font-size: 20px; margin: 0 0 24px;">${escapeHtml(content.subject)}</h1>
-    ${htmlParagrafos}${htmlCta}
-    <hr style="border: none; border-top: 1px solid #eaecf0; margin: 32px 0 24px;">
-    <p style="font-size: 12px; color: #667085; margin: 0;">
-      Você recebe este e-mail porque é membro da Liga Dev.<br>
-      <a href="${escapeHtml(content.unsubscribeUrl)}" style="color: #6941c6;">Cancelar inscrição</a>.
-    </p>
+  <body style="margin:0;padding:24px;background:#f4f5f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:12px;">
+      <tr>
+        <td style="padding:28px 28px 8px;">
+          <p style="margin:0 0 20px;font-size:13px;letter-spacing:0.08em;text-transform:uppercase;color:#6941c6;font-weight:700;">Liga Dev</p>
+          <h1 style="margin:0 0 20px;font-size:22px;line-height:1.3;color:#101828;">${escapeHtml(
+            content.subject,
+          )}</h1>
+          ${htmlParagrafos}${htmlCta}
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:24px 28px 28px;border-top:1px solid #eaecf0;">
+          <p style="margin:0;font-size:12px;line-height:1.6;color:#667085;">
+            Você recebe este e-mail porque é membro da Liga Dev.
+            <a href="${escapeHtml(
+              content.unsubscribeUrl,
+            )}" style="color:#6941c6;">Cancelar inscrição</a>.
+          </p>
+        </td>
+      </tr>
+    </table>
   </body>
 </html>`;
 

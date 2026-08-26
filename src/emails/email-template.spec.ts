@@ -16,10 +16,41 @@ describe('renderEmail', () => {
     expect(text).toContain('Saiu um vídeo novo.');
   });
 
+  /**
+   * **Conta parágrafos, e não CSS.**
+   *
+   * Este teste casava a string `<p style="margin:0 0 16px` e quebrou no dia em
+   * que o HTML foi simplificado para escapar da aba de Promoções — a mudança
+   * trocou `margin:0` por `margin: 0`, com espaço, e nada mais. Um teste que
+   * casa estilo inline não pega defeito nenhum e quebra em toda mudança de
+   * estilo, que é o pior dos dois mundos: ele custa manutenção e não protege.
+   *
+   * O que importa aqui é o comportamento — cada bloco separado por linha em
+   * branco vira um parágrafo — e é isso que ele passa a afirmar.
+   *
+   * Ele também não pode contar um número fixo de `<p>`: o template tem
+   * parágrafos próprios (o rótulo do topo, o rodapé) que não vêm do corpo, e
+   * fixar o total faz o teste quebrar de novo em toda mudança de moldura. Por
+   * isso ele mede a **diferença**: um bloco a mais no corpo é um parágrafo a
+   * mais no HTML, valha o que valer o resto.
+   */
   it('cada bloco separado por linha em branco vira um paragrafo no html', () => {
-    const { html } = renderEmail(base);
+    const contaParagrafos = (html: string) =>
+      (html.match(/<p[\s>]/g) ?? []).length;
 
-    expect((html.match(/<p style="margin:0 0 16px/g) ?? []).length).toBe(2);
+    const doisBlocos = renderEmail(base);
+    const tresBlocos = renderEmail({
+      ...base,
+      body: `${base.body}\n\nE ainda tem um terceiro bloco.`,
+    });
+
+    expect(
+      contaParagrafos(tresBlocos.html) - contaParagrafos(doisBlocos.html),
+    ).toBe(1);
+    expect(doisBlocos.html).toContain('Saiu um vídeo novo.</p>');
+    expect(doisBlocos.html).toContain(
+      'Ele responde a pergunta mais votada da semana.</p>',
+    );
   });
 
   it('teste-trava: o corpo e escapado, e marcacao digitada sai como texto', () => {
