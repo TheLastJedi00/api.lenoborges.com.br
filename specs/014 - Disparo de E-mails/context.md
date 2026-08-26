@@ -175,7 +175,24 @@ favor do texto.
 Todo e-mail sai com as duas partes, **HTML e texto puro**, geradas da mesma fonte. Cliente que não
 renderiza HTML é minoria, mas e-mail sem alternativa em texto é sinal de spam para os filtros.
 
-### 11-B. O template é diagramado para **não parecer diagramado** (2026-08-25)
+### 11-B. ~~O template é diagramado para **não parecer diagramado**~~ — **REVOGADA em 2026-08-26**
+
+> **A causa era outra, e esta decisão nunca teve fundamento.** No painel do Resend, o *Open Tracking* e o
+> *Click Tracking* estavam ligados no domínio: o provedor injetava um **pixel de imagem 1×1** e
+> **reescrevia todo link** para um domínio de rastreamento, *depois* de o template sair do `renderEmail`.
+> O que o Gmail recebia não era mais o HTML que este código gera — e é exatamente por isso que limpar o
+> HTML não mudou nada. Desligados os dois, o e-mail passou a cair na aba **Principal**.
+>
+> **O HTML diagramado voltou** (tabela, cartão, botão do CTA). Ele nunca foi a causa, e um e-mail feio não
+> é preço que se pague por hipótese refutada. A Fase 08 inteira perdeu a premissa; ver o cabeçalho dela e
+> a Fase 09 em `tasks.md`, e o desfecho no `fix-email-styles.md`.
+>
+> **O que fica no lugar dela:** o template não é a última coisa que acontece com o e-mail. Entre o
+> `renderEmail` e a caixa de entrada existe um provedor que pode reescrever o documento inteiro. Quando o
+> sintoma for de classificação — aba, spam, entrega — **o painel do provedor se confere antes do código**.
+>
+> O texto original fica abaixo, e não é apagado: uma decisão revogada com o motivo à vista é o que impede
+> que alguém a redescubra do zero daqui a seis meses.
 
 Esta decisão nasceu de um incidente, e não do desenho: os e-mails começaram a cair na aba **Promoções** do
 Gmail. O diagnóstico está em `fix-email-styles.md`, e o conserto está na Fase 08.
@@ -196,6 +213,11 @@ um `<hr>` antes do rodapé, e o link de descadastro. Sem imagem, sem logo, sem b
 E há um limite conhecido: **se depois disto o e-mail continuar em Promoções, o problema não é mais o
 HTML.** É reputação de domínio e volume, que a seção do DNS no README já descreve — e nenhuma mudança de
 marcação conserta reputação.
+
+> **Nota de 2026-08-26.** O parágrafo acima acertou a pergunta e errou a resposta: o e-mail *continuou* em
+> Promoções, e o problema de fato não era mais o HTML — mas também não era reputação. Era o rastreamento
+> do provedor. A lição não é "desconfie de reputação"; é que a lista de suspeitos parou dentro do
+> repositório quando a causa estava a um clique de distância, no painel.
 
 ### 12. Os filtros são tier e faixa de insígnia. **Status de pagamento não existe, e a spec não finge**
 `POST /admin/emails` aceita `tiers` (lista) e `gradeMin`/`gradeMax`. Ausência dos dois significa
