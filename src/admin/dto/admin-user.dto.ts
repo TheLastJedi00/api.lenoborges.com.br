@@ -1,4 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { TIER_IDS } from '../../billing/billing.tiers';
+import type { TierId } from '../../billing/billing.tiers';
 
 /**
  * Uma linha da lista de usuários.
@@ -38,8 +40,12 @@ export class AdminUserDto {
   @ApiProperty({ nullable: true, example: 'Leno Borges' })
   name: string | null;
 
-  @ApiProperty({ nullable: true, example: '47999990000' })
-  phone: string | null;
+  // **`phone` nao esta aqui, e a ausencia e decisao** (spec 015, decisao 8).
+  // Ele vive so em `GET /admin/users/:id`. Uma listagem que carrega o telefone
+  // e a bio de 200 pessoas para desenhar 200 linhas trafega dado pessoal que
+  // ninguem pediu, guarda-o no estado do navegador e o entrega ao primeiro
+  // `console.log` de depuracao. O detalhe e uma requisicao a mais no clique, e
+  // o clique e raro.
 
   @ApiProperty({
     nullable: true,
@@ -47,6 +53,19 @@ export class AdminUserDto {
     description: 'Nulo quando o usuário ainda não tem documento de perfil',
   })
   grade: number | null;
+
+  @ApiProperty({
+    nullable: true,
+    example: 'great-dev-tier',
+    enum: TIER_IDS as unknown as string[],
+    description:
+      'Tier de acesso, nulo para quem não tem perfil. A spec 010 fez o PATCH ' +
+      'aceitar o campo e esqueceu de o GET devolvê-lo: o seletor do editor abre ' +
+      'vazio desde então. O conserto entra na spec 015 porque é ela que torna o ' +
+      'campo filtrável, e filtrar por um campo que a linha não mostra é uma ' +
+      'tela que mente',
+  })
+  tier: TierId | null;
 
   @ApiProperty({
     example: false,

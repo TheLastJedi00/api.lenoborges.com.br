@@ -1,4 +1,8 @@
-import { BadRequestException, ConflictException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { BATCH_SIZE, EmailCampaignService } from './email-campaign.service';
 import { EmailCampaignRepository } from './email-campaign.repository';
@@ -23,6 +27,8 @@ function campanha(overrides: Partial<EmailCampaign> = {}): EmailCampaign {
     ctaLabel: null,
     ctaUrl: null,
     filters: { tiers: null, gradeMin: null, gradeMax: null },
+    recipientUid: null,
+    recipientLabel: null,
     status: 'enviando',
     audienceCount: 0,
     sentCount: 0,
@@ -54,7 +60,7 @@ interface Mocks {
     finish: jest.Mock;
     listRecent: jest.Mock;
   };
-  audience: { build: jest.Mock; count: jest.Mock };
+  audience: { build: jest.Mock; buildOne: jest.Mock; count: jest.Mock };
   mailer: { send: jest.Mock; sendBatch: jest.Mock };
 }
 
@@ -68,7 +74,11 @@ function build(): Mocks {
     listRecent: jest.fn().mockResolvedValue([]),
   };
 
-  const audience = { build: jest.fn().mockResolvedValue([]), count: jest.fn() };
+  const audience = {
+    build: jest.fn().mockResolvedValue([]),
+    buildOne: jest.fn(),
+    count: jest.fn(),
+  };
 
   const mailer = {
     send: jest.fn().mockResolvedValue({ sent: 1, failed: 0, error: null }),
@@ -400,6 +410,178 @@ describe('EmailCampaignService', () => {
           body: 'Corpo com mais de dez caracteres.',
         }),
       ).rejects.toThrow(/domain not verified/);
+    });
+  });
+
+  describe('sendDirect — o e-mail direto (spec 015)', () => {
+    const recado = {
+      recipientUid: 'uid-membro',
+      subject: 'Sobre a sua dúvida no Mural',
+      body: 'Oi, Leno.\n\nVi sua pergunta e queria responder por aqui.',
+      createdBy: 'admin-1',
+    };
+
+    function comDestinatario(mocks: Mocks) {
+      mocks.audience.buildOne.mockResolvedValue({
+        member: { uid: 'uid-membro', email: 'membro@exemplo.com' },
+        reason: null,
+        label: 'Leno Borges',
+      });
+      mocks.repository.create.mockImplementation(
+        (data: Record<string, unknown>) =>
+          Promise.resolve({ entry: campanha({ ...data, id: 'camp-direto' }) }),
+      );
+      mocks.mailer.sendBatch.mockImplementation(loteOk());
+    }
+
+    /**
+     * **Nenhum caminho de envio novo** (decisão 10). O recado cai no mesmo
+     * `dispatch` da campanha: o mesmo lote, o mesmo template, o mesmo rodapé.
+     */
+    it('teste-trava: escreve campanha `direto` e envia para UMA pessoa', async () => {
+      const mocks = build();
+      comDestinatario(mocks);
+
+      const resultado = await mocks.service.sendDirect(recado);
+
+      expect(mocks.repository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          kind: 'direto',
+          recipientUid: 'uid-membro',
+          recipientLabel: 'Leno Borges',
+          audienceCount: 1,
+          // Sem botao de acao: um recado para uma pessoa nao tem para onde
+          // apontar (decisao 12).
+          ctaLabel: null,
+          ctaUrl: null,
+        }),
+      );
+
+      const [lote] = mocks.mailer.sendBatch.mock.calls[0] as [OutgoingEmail[]];
+      expect(lote).toHaveLength(1);
+      expect(lote[0].to).toBe('membro@exemplo.com');
+      expect(resultado).toMatchObject({ status: 'concluida', sentCount: 1 });
+    });
+
+    /**
+     * **O rodapé de descadastro vai neste e-mail também** (decisão 13). É o
+     * teste que documenta a decisão: e-mail com o remetente e o template do
+     * produto é e-mail do produto, mesmo com um destinatário só.
+     */
+    it('teste-trava: o recado sai com rodapé de descadastro e List-Unsubscribe', async () => {
+      const mocks = build();
+      comDestinatario(mocks);
+
+      await mocks.service.sendDirect(recado);
+
+      const [lote] = mocks.mailer.sendBatch.mock.calls[0] as [OutgoingEmail[]];
+      expect(lote[0].html).toContain('/emails/descadastro?token=');
+      expect(lote[0].text).toContain('/emails/descadastro?token=');
+      expect(lote[0].headers!['List-Unsubscribe']).toMatch(
+        /^<https:\/\/api\.exemplo\.com\/emails\/descadastro\?token=.+>$/,
+      );
+      expect(lote[0].headers!['List-Unsubscribe-Post']).toBe(
+        'List-Unsubscribe=One-Click',
+      );
+    });
+
+    /**
+     * O escape é do `renderEmail`, e é de lá (spec 014). Ninguém reimplementa
+     * sanitização neste caminho: o corpo é texto puro, e marcação digitada sai
+     * como texto.
+     */
+    it('teste-trava: marcação no corpo sai escapada, pelo template da spec 014', async () => {
+      const mocks = build();
+      comDestinatario(mocks);
+
+      await mocks.service.sendDirect({
+        ...recado,
+        body: 'Olha isto: <b>negrito</b> e <script>alert(1)</script>.',
+      });
+
+      const [lote] = mocks.mailer.sendBatch.mock.calls[0] as [OutgoingEmail[]];
+      expect(lote[0].html).toContain('&lt;b&gt;negrito&lt;/b&gt;');
+      expect(lote[0].html).not.toContain('<script>');
+    });
+
+    describe('os três cortes valem, e o motivo volta nomeado', () => {
+      const casos = [
+        'desativado',
+        'email-nao-verificado',
+        'descadastrado',
+      ] as const;
+
+      // Um teste por corte. Nao ha excecao para "e so uma pessoa": o 422 e a
+      // resposta, e nao o 400 de audiencia zero — que nao diria a tela o que
+      // escrever.
+      it.each(casos)('%s responde 422 com o reason', async (reason) => {
+        const mocks = build();
+        mocks.audience.buildOne.mockResolvedValue({
+          member: null,
+          reason,
+          label: 'Leno Borges',
+        });
+
+        await expect(mocks.service.sendDirect(recado)).rejects.toMatchObject({
+          status: 422,
+          response: expect.objectContaining({ reason }) as unknown,
+        });
+
+        expect(mocks.repository.create).not.toHaveBeenCalled();
+        expect(mocks.mailer.sendBatch).not.toHaveBeenCalled();
+      });
+    });
+
+    it('uid que o Auth não conhece responde 404, e não 422', async () => {
+      const mocks = build();
+      mocks.audience.buildOne.mockResolvedValue({
+        member: null,
+        reason: null,
+        label: null,
+      });
+
+      await expect(mocks.service.sendDirect(recado)).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+    });
+
+    /**
+     * **O trinco de um disparo por vez vale aqui também** (decisão 14). É um
+     * incômodo real e aceito: abrir exceção significaria uma segunda porta para
+     * o provedor no mesmo instante, e o trinco existe para não haver duas.
+     */
+    it('teste-trava: campanha enviando responde 409, e reusa o findSending', async () => {
+      const mocks = build();
+      comDestinatario(mocks);
+      mocks.repository.findSending.mockResolvedValue({
+        found: true,
+        entry: campanha({ status: 'enviando' }),
+      });
+
+      await expect(mocks.service.sendDirect(recado)).rejects.toBeInstanceOf(
+        ConflictException,
+      );
+
+      expect(mocks.repository.findSending).toHaveBeenCalled();
+      expect(mocks.repository.create).not.toHaveBeenCalled();
+    });
+
+    it('o rótulo gravado é o que veio no instante do envio', async () => {
+      const mocks = build();
+      comDestinatario(mocks);
+      mocks.audience.buildOne.mockResolvedValue({
+        member: { uid: 'uid-membro', email: 'membro@exemplo.com' },
+        reason: null,
+        // Sem nome no perfil, o rotulo e o e-mail: a linha do historico precisa
+        // continuar legivel de qualquer forma.
+        label: 'membro@exemplo.com',
+      });
+
+      await mocks.service.sendDirect(recado);
+
+      expect(mocks.repository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ recipientLabel: 'membro@exemplo.com' }),
+      );
     });
   });
 });

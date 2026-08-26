@@ -25,6 +25,16 @@ export type CreateCampaignData = Pick<
 > & {
   /** Só a campanha de vídeo traz o próprio: o caminho é a unicidade dela. */
   id?: string;
+  /**
+   * Só a campanha `direto` os traz (spec 015, decisões 11 e 15).
+   *
+   * Ausentes viram `null`, e o default vive aqui — e não no chamador — pelo
+   * mesmo motivo do `tier` do `ProfileRepository`: para não existir caminho de
+   * criação que esqueça de definir o campo e grave `undefined` no documento.
+   * `undefined` neste campo em particular é a decisão 11 desligada em silêncio.
+   */
+  recipientUid?: string | null;
+  recipientLabel?: string | null;
 };
 
 @Injectable()
@@ -49,6 +59,8 @@ export class EmailCampaignRepository {
     const ref = data.id ? this.collection.doc(data.id) : this.collection.doc();
 
     const entry: EmailCampaign = {
+      recipientUid: null,
+      recipientLabel: null,
       ...data,
       id: ref.id,
       status: 'enviando',
