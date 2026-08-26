@@ -1,26 +1,34 @@
 /**
- * O template dos e-mails do produto (spec 014, decisão 11).
+ * O template dos e-mails do produto (spec 014, decisões 11 e 11-B).
  *
  * **O admin escreve texto, e nunca HTML.** O corpo é texto simples com quebras
- * de linha, mais um botão opcional; o cabeçalho, a tipografia e o rodapé são do
- * código, e são os mesmos nos dois disparos. Aceitar HTML do admin significa
- * aceitar que um erro de marcação quebre a renderização em cinco clientes de
- * e-mail diferentes, e significa sanitizar entrada que vira documento enviado
- * para fora.
+ * de linha, mais um link opcional; a estrutura e o rodapé são do código, e são
+ * os mesmos nos dois disparos. Aceitar HTML do admin significa aceitar que um
+ * erro de marcação quebre a renderização em cinco clientes de e-mail
+ * diferentes, e significa sanitizar entrada que vira documento enviado para
+ * fora.
  *
  * **As duas partes saem da mesma fonte.** Cliente que não renderiza HTML é
  * minoria, mas e-mail sem alternativa em texto é sinal de spam para os filtros.
  *
- * **O HTML diagramado voltou, e o motivo é uma medição.** O commit `58c5bdb`
- * tirou daqui a tabela de layout, o fundo cinza, o cartão branco e o botão, sob
- * a suspeita de que o excesso de marcação fosse o que jogava a mensagem na aba
- * **Promoções** do Gmail. O e-mail continuou caindo lá. A causa real estava
- * fora deste código, no painel do Resend: o *Open Tracking* e o *Click
- * Tracking* injetavam um pixel 1×1 e reescreviam todo link para um domínio de
- * rastreamento **depois** de o template sair daqui — o que o Gmail recebia não
- * era mais o HTML gerado aqui. Desligados os dois, o problema acabou. O HTML
- * nunca foi a causa, e não se paga um e-mail feio por hipótese já descartada.
- * Ver Fase 09 em `specs/014 - Disparo de E-mails/tasks.md`.
+ * **Não há CSS aqui, e isso é a decisão — não é descuido.** O HTML diagramado
+ * (tabela de layout, fundo cinza, cartão branco, `<h1>` repetindo o assunto,
+ * CTA como botão sólido) já esteve neste arquivo duas vezes, e nas duas o Gmail
+ * classificou a mensagem na aba **Promoções**. Em 2026-08-26, com o *Open
+ * Tracking* e o *Click Tracking* do Resend **já desligados** — a causa que se
+ * acreditou única —, o envio de teste com o template diagramado caiu em
+ * Promoções e o envio com o template limpo caiu na **Principal**. Isso é o
+ * suspeito medido isolado, e ele é culpado: eram os dois, o rastreamento do
+ * provedor **e** a marcação.
+ *
+ * A regra que fica: **o HTML existe para o texto ser legível, e para mais
+ * nada.** Um `<p>` por parágrafo, um `<hr>` antes do rodapé, o link do CTA e o
+ * link do descadastro. Sem `style`, sem `<table>`, sem imagem, sem logo, sem
+ * botão. O pedido estético mais natural do mundo — "dá um destaque nesse link"
+ * — é o que traz a aba de Promoções de volta, e existe teste-trava abaixo
+ * dizendo isso em `email-template.spec.ts`.
+ *
+ * Ver Fase 08 e Fase 10 em `specs/014 - Disparo de E-mails/tasks.md`.
  */
 
 export interface EmailContent {
@@ -79,46 +87,34 @@ export function renderEmail(content: EmailContent): RenderedEmail {
   const temCta = Boolean(content.ctaLabel && content.ctaUrl);
 
   const htmlParagrafos = blocos
-    .map(
-      (bloco) =>
-        `<p style="margin:0 0 16px;font-size:16px;line-height:1.6;color:#101828;">${escapeHtml(
-          bloco,
-        ).replace(/\n/g, '<br />')}</p>`,
-    )
-    .join('');
+    .map((bloco) => `<p>${escapeHtml(bloco).replace(/\n/g, '<br />')}</p>`)
+    .join('\n    ');
 
+  /**
+   * O CTA é um link dentro de um parágrafo, e nunca um botão. Botão é `padding`,
+   * `background` e `border-radius` — a assinatura de campanha que o filtro
+   * procura.
+   */
   const htmlCta = temCta
-    ? `<p style="margin:24px 0 0;"><a href="${escapeHtml(
-        content.ctaUrl!,
-      )}" style="display:inline-block;padding:12px 22px;border-radius:8px;background:#101828;color:#ffffff;font-weight:700;text-decoration:none;">${escapeHtml(
+    ? `\n    <p><a href="${escapeHtml(content.ctaUrl!)}">${escapeHtml(
         content.ctaLabel!,
       )}</a></p>`
     : '';
 
+  /**
+   * O assunto **não** se repete no corpo. Ele já está no cabeçalho da mensagem,
+   * que é onde ele é lido; e-mail que uma pessoa escreve para outra não começa
+   * com o próprio título em fonte grande — quem faz isso é newsletter.
+   */
   const html = `<!doctype html>
 <html lang="pt-BR">
-  <body style="margin:0;padding:24px;background:#f4f5f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:12px;">
-      <tr>
-        <td style="padding:28px 28px 8px;">
-          <p style="margin:0 0 20px;font-size:13px;letter-spacing:0.08em;text-transform:uppercase;color:#6941c6;font-weight:700;">Liga Dev</p>
-          <h1 style="margin:0 0 20px;font-size:22px;line-height:1.3;color:#101828;">${escapeHtml(
-            content.subject,
-          )}</h1>
-          ${htmlParagrafos}${htmlCta}
-        </td>
-      </tr>
-      <tr>
-        <td style="padding:24px 28px 28px;border-top:1px solid #eaecf0;">
-          <p style="margin:0;font-size:12px;line-height:1.6;color:#667085;">
-            Você recebe este e-mail porque é membro da Liga Dev.
-            <a href="${escapeHtml(
-              content.unsubscribeUrl,
-            )}" style="color:#6941c6;">Cancelar inscrição</a>.
-          </p>
-        </td>
-      </tr>
-    </table>
+  <body>
+    ${htmlParagrafos}${htmlCta}
+    <hr />
+    <p>
+      Você recebe este e-mail porque é membro da Liga Dev.<br />
+      <a href="${escapeHtml(content.unsubscribeUrl)}">Cancelar inscrição</a>.
+    </p>
   </body>
 </html>`;
 
