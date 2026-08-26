@@ -135,28 +135,28 @@ para a base.
 - [x] Task 09: Swagger. Objetivo: `@ApiResponse` para `404`, `409` e `422`, com o `reason` documentado como
   enumeração — a tela decide o texto pelo código, e não pela prosa.
 
-# Fase 05: Histórico e verificação [ ]
+# Fase 05: Histórico e verificação [x]
 Branch: `feat/015-historico-e-docs`
 
-- [ ] Task 01 (TDD + implementação): O direto no histórico. Arquivos:
+- [x] Task 01 (TDD + implementação): O direto no histórico. Arquivos:
   `src/emails/dto/email-campaign.dto.ts`, `.spec.ts`. Objetivo: `GET /admin/emails` passa a devolver `kind`
   com `'direto'` e `recipientLabel`. **Nenhum `where` novo, nenhuma segunda listagem** (decisão 15), e o
   comentário registra que filtrar por `kind` custaria um índice composto — que é a decisão 13 da spec 014
   ainda de pé.
-- [ ] Task 02: `CLAUDE.md`. Objetivo: duas linhas novas na lista de garantias que vivem em código — **a
+- [x] Task 02: `CLAUDE.md`. Objetivo: duas linhas novas na lista de garantias que vivem em código — **a
   lista do admin é uma varredura completa do Auth recortada em memória, e não uma página, porque quem o
   filtro de onboarding procura é quem não tem documento no Firestore**; e **`recipientUid` é lido antes dos
   filtros da campanha, e essa ordem é o que impede um recado para uma pessoa virar um disparo para a base**.
-- [ ] Task 03: `README.md`. Objetivo: as duas rotas novas na tabela, o contrato novo de `GET /admin/users`
+- [x] Task 03: `README.md`. Objetivo: as duas rotas novas na tabela, o contrato novo de `GET /admin/users`
   (`total`/`offset`, sem `pageToken`, sem `phone`), e os dois campos novos de `email_campaigns`. **A tabela
   de índices compostos não muda** — e dizer isso explicitamente no commit, porque "spec nova, índice novo" é
   a suposição padrão e aqui ela é falsa nas três rotas (decisão 16).
-- [ ] Task 04 (e2e): O recorte contra o emulador. Arquivo: `test/admin-users.e2e-spec.ts`. Objetivo: semear
+- [x] Task 04 (e2e): O recorte contra o emulador. Arquivo: `test/admin-users.e2e-spec.ts`. Objetivo: semear
   usuários com e sem perfil, em tiers e grades diferentes, e provar quatro coisas: (a) a busca acha pelo
   meio da string; (b) "onboarding pendente" traz **quem não tem documento**; (c) `total` é do recorte e não
   da base; (d) `offset` devolve a segunda página do recorte, e não da base. É o único lugar onde a decisão 1
   é verificável de ponta a ponta.
-- [ ] Task 05 (e2e): O e-mail direto contra o emulador. Arquivo: `test/emails.e2e-spec.ts`. Objetivo: com o
+- [x] Task 05 (e2e): O e-mail direto contra o emulador. Arquivo: `test/emails.e2e-spec.ts`. Objetivo: com o
   mailer em modo log, mandar um e-mail direto e conferir que **exatamente um destinatário** foi registrado,
   que ele é o `uid` pedido, e que a campanha ficou `concluida` com `sentCount: 1`. Depois, descadastrar
   aquele membro e conferir o **422**. É a prova das decisões 11, 12 e 13 juntas.
