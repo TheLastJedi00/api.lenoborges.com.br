@@ -1,4 +1,5 @@
 import { AudienceService } from './audience.service';
+import { MemberDirectoryService } from '../admin/member-directory.service';
 import { FirebaseService } from '../auth/firebase.service';
 import { ProfileRepository } from '../profile/profile.repository';
 import { Profile } from '../profile/entities/profile.entity';
@@ -53,7 +54,9 @@ function build(
     });
   }
 
-  const service = new AudienceService(
+  // A varredura tem um dono só desde a spec 015: o AudienceService não junta
+  // mais Auth com perfis, ele só recorta o que o diretório devolve.
+  const directory = new MemberDirectoryService(
     { auth: { listUsers } } as unknown as FirebaseService,
     {
       findManyByIds: (uids: string[]) =>
@@ -66,6 +69,8 @@ function build(
         ),
     } as unknown as ProfileRepository,
   );
+
+  const service = new AudienceService(directory);
 
   return { service, listUsers };
 }
@@ -206,6 +211,143 @@ describe('AudienceService', () => {
 
     expect(listUsers).toHaveBeenCalledTimes(2);
     expect(membros.map((m) => m.uid)).toEqual(['a', 'b']);
+  });
+
+  describe('o curto-circuito do e-mail direto', () => {
+    function comGetUser(
+      usuarios: UsuarioFake[],
+      perfis: Record<string, Profile>,
+    ) {
+      const listUsers = jest.fn().mockResolvedValue({
+        users: usuarios.map(completar),
+        pageToken: undefined,
+      });
+      const getUser = jest.fn((uid: string) => {
+        const encontrado = usuarios.find((u) => u.uid === uid);
+        return encontrado
+          ? Promise.resolve(completar(encontrado))
+          : Promise.reject(new Error('auth/user-not-found'));
+      });
+
+      const repositorio = {
+        findManyByIds: (uids: string[]) =>
+          Promise.resolve(
+            new Map(
+              uids
+                .filter((uid) => perfis[uid])
+                .map((uid) => [uid, { ...perfis[uid], id: uid }]),
+            ),
+          ),
+        findById: (uid: string) =>
+          Promise.resolve({
+            found: !!perfis[uid],
+            entry: perfis[uid] ? { ...perfis[uid], id: uid } : null,
+          }),
+      };
+
+      const directory = new MemberDirectoryService(
+        { auth: { listUsers, getUser } } as unknown as FirebaseService,
+        repositorio as unknown as ProfileRepository,
+      );
+
+      return { service: new AudienceService(directory), listUsers };
+    }
+
+    /**
+     * **O TESTE MAIS IMPORTANTE DESTA SPEC.**
+     *
+     * Uma campanha `direto` grava `filters` com os três campos nulos, e filtro
+     * nulo significa TODOS OS MEMBROS. Se o `recipientUid` deixar de ser lido
+     * antes dos filtros — uma retomada, um reprocessamento, uma refatoração que
+     * "simplifica" a ordem das condições —, o recado escrito para uma pessoa sai
+     * para a base inteira.
+     *
+     * Se este teste quebrar, **não conserte o teste**.
+     */
+    it('teste-trava: campanha direto com os tres filtros nulos monta audiencia de UM', async () => {
+      const { service, listUsers } = comGetUser(
+        [{ uid: 'alvo' }, { uid: 'outro-1' }, { uid: 'outro-2' }],
+        { alvo: perfil(), 'outro-1': perfil(), 'outro-2': perfil() },
+      );
+
+      const membros = await service.build({
+        recipientUid: 'alvo',
+        tiers: null,
+        gradeMin: null,
+        gradeMax: null,
+      });
+
+      expect(membros).toEqual([{ uid: 'alvo', email: 'alvo@exemplo.com' }]);
+      // E a varredura nem chega a acontecer: o curto-circuito e antes dela.
+      expect(listUsers).not.toHaveBeenCalled();
+    });
+
+    it('os tres cortes valem para o destinatario unico, com o motivo nomeado', async () => {
+      const { service } = comGetUser(
+        [
+          { uid: 'desativado', disabled: true },
+          { uid: 'nao-verificado', emailVerified: false },
+          { uid: 'descadastrado' },
+        ],
+        {
+          desativado: perfil(),
+          'nao-verificado': perfil(),
+          descadastrado: perfil({ emailOptOut: true }),
+        },
+      );
+
+      await expect(service.buildOne('desativado')).resolves.toMatchObject({
+        member: null,
+        reason: 'desativado',
+      });
+      await expect(service.buildOne('nao-verificado')).resolves.toMatchObject({
+        member: null,
+        reason: 'email-nao-verificado',
+      });
+      await expect(service.buildOne('descadastrado')).resolves.toMatchObject({
+        member: null,
+        reason: 'descadastrado',
+      });
+    });
+
+    it('uid que o Auth nao conhece volta sem membro e sem motivo', async () => {
+      const { service } = comGetUser([{ uid: 'a' }], { a: perfil() });
+
+      await expect(service.buildOne('ninguem')).resolves.toEqual({
+        member: null,
+        reason: null,
+        label: null,
+      });
+    });
+
+    it('o rotulo e o nome, e o e-mail quando nao ha nome', async () => {
+      const { service } = comGetUser([{ uid: 'a' }, { uid: 'b' }], {
+        a: perfil({ name: 'Leno Borges' }),
+        b: perfil({ name: null }),
+      });
+
+      await expect(service.buildOne('a')).resolves.toMatchObject({
+        label: 'Leno Borges',
+      });
+      await expect(service.buildOne('b')).resolves.toMatchObject({
+        label: 'b@exemplo.com',
+      });
+    });
+
+    /**
+     * Quem nunca terminou o onboarding não tem documento de perfil, e não é
+     * audiência de campanha — mas continua sendo alguém a quem o admin pode
+     * escrever. É a diferença entre "não está na lista" e "pediu para sair".
+     */
+    it('membro sem perfil recebe e-mail direto, mesmo fora da audiencia de campanha', async () => {
+      const { service } = comGetUser([{ uid: 'sem-perfil' }], {});
+
+      await expect(service.buildOne('sem-perfil')).resolves.toMatchObject({
+        member: { uid: 'sem-perfil', email: 'sem-perfil@exemplo.com' },
+        reason: null,
+      });
+      await expect(service.build()).resolves.toEqual([]);
+    });
   });
 
   it('count devolve so o numero', async () => {

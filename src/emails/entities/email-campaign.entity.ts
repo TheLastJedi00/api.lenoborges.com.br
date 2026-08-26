@@ -6,7 +6,15 @@ import {
 } from 'firebase-admin/firestore';
 import type { TierId } from '../../billing/billing.tiers';
 
-export type CampaignKind = 'video' | 'manual';
+/**
+ * Quem escreveu o documento: o gatilho de vídeo, o admin na tela de campanha, ou
+ * o admin escrevendo para uma pessoa só (spec 015, decisão 10).
+ *
+ * **`direto` é um terceiro produtor de campanha, e não um caminho de envio
+ * novo.** O envio, o lote, o descadastro, o cabeçalho e o registro continuam
+ * sendo um código só — é a decisão 3 da spec 014 aplicada pela terceira vez.
+ */
+export type CampaignKind = 'video' | 'manual' | 'direto';
 export type CampaignStatus = 'enviando' | 'concluida' | 'interrompida';
 
 export interface CampaignFilters {
@@ -35,6 +43,28 @@ export interface EmailCampaign {
   ctaLabel: string | null;
   ctaUrl: string | null;
   filters: CampaignFilters;
+  /**
+   * O destinatário único de uma campanha `direto` (spec 015, decisão 11).
+   *
+   * **É lido ANTES dos filtros na montagem da audiência, e essa ordem é a
+   * proteção.** Uma campanha `direto` grava `filters` com os três campos nulos,
+   * e filtro nulo significa **todos os membros**: se alguma coisa passasse um
+   * documento destes pelo caminho normal — uma retomada, um reprocessamento, uma
+   * refatoração distraída —, o recado para uma pessoa viraria um disparo para a
+   * base inteira.
+   *
+   * `null` em campanha de vídeo e em campanha manual.
+   */
+  recipientUid: string | null;
+  /**
+   * Nome, ou e-mail quando não houver nome, **no instante do envio** (decisão
+   * 15).
+   *
+   * Denormalização deliberada, como o `authorName` do Mural: a conta pode mudar
+   * de nome ou deixar de existir, e a linha do histórico precisa continuar
+   * legível.
+   */
+  recipientLabel: string | null;
   status: CampaignStatus;
   audienceCount: number;
   sentCount: number;
@@ -62,6 +92,8 @@ interface EmailCampaignDocument extends DocumentData {
   ctaLabel: string | null;
   ctaUrl: string | null;
   filters: CampaignFilters;
+  recipientUid: string | null;
+  recipientLabel: string | null;
   status: CampaignStatus;
   audienceCount: number;
   sentCount: number;
@@ -95,6 +127,8 @@ export const emailCampaignConverter: FirestoreDataConverter<EmailCampaign> = {
       ctaLabel: campaign.ctaLabel,
       ctaUrl: campaign.ctaUrl,
       filters: campaign.filters,
+      recipientUid: campaign.recipientUid,
+      recipientLabel: campaign.recipientLabel,
       status: campaign.status,
       audienceCount: campaign.audienceCount,
       sentCount: campaign.sentCount,
@@ -120,6 +154,15 @@ export const emailCampaignConverter: FirestoreDataConverter<EmailCampaign> = {
       ctaLabel: data.ctaLabel ?? null,
       ctaUrl: data.ctaUrl ?? null,
       filters: data.filters ?? { tiers: null, gradeMin: null, gradeMax: null },
+      // **O `?? null` mais perigoso dos tres deste converter.** Documento antigo
+      // nao tem o campo — e sao todos, no dia em que a spec 015 sobe.
+      // `undefined` em `recipientUid` faz uma campanha direta parecer campanha
+      // de base, e o curto-circuito da decisao 11 deixa de proteger exatamente o
+      // caso que ele existe para proteger: retomar uma delas montaria a
+      // audiencia inteira e mandaria para todo mundo o e-mail que era para uma
+      // pessoa.
+      recipientUid: data.recipientUid ?? null,
+      recipientLabel: data.recipientLabel ?? null,
       status: data.status,
       // Contador ausente viraria NaN na primeira soma da tela do histórico.
       audienceCount: data.audienceCount ?? 0,

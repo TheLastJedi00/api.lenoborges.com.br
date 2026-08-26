@@ -3,6 +3,7 @@ import {
   normalizePhone,
   normalizeName,
   normalizeBio,
+  normalizeSearchText,
 } from './normalize';
 
 describe('Normalize Utils', () => {
@@ -32,6 +33,34 @@ describe('Normalize Utils', () => {
       expect(normalizeBio('  Estudando back-end.  ')).toBe(
         'Estudando back-end.',
       );
+    });
+  });
+
+  describe('normalizeSearchText', () => {
+    it('teste-trava: acento nao separa quem procura de quem e procurado', () => {
+      // Os dois lados da comparacao passam por aqui, entao "jose" tem que
+      // encontrar "José" e o contrario tambem.
+      expect(normalizeSearchText('José')).toBe(normalizeSearchText('jose'));
+      expect(normalizeSearchText('FRANÇA')).toBe(normalizeSearchText('franca'));
+      expect(normalizeSearchText('Antônio')).toBe(
+        normalizeSearchText('antonio'),
+      );
+    });
+
+    it('derruba a caixa e apara as pontas', () => {
+      expect(normalizeSearchText('  Leno BORGES ')).toBe('leno borges');
+    });
+
+    /**
+     * **Nome nulo e o estado normal de metade da base que esta busca varre.**
+     * Quem criou conta e parou antes do onboarding nao tem nome nenhum, e um
+     * throw aqui derrubaria a listagem inteira por causa da pessoa que o
+     * recurso existe para achar.
+     */
+    it('teste-trava: nulo e indefinido viram string vazia, e nao excecao', () => {
+      expect(normalizeSearchText(null)).toBe('');
+      expect(normalizeSearchText(undefined)).toBe('');
+      expect(normalizeSearchText('')).toBe('');
     });
   });
 });

@@ -272,13 +272,57 @@ Todas passam por `FirebaseAuthGuard` e depois `AdminGuard`, nessa ordem. Membro 
 
 | Método | Rota | O que faz |
 |---|---|---|
-| `GET` | `/admin/users?limit&pageToken` | Lista os cadastrados, paginado pelo Auth |
-| `PATCH` | `/admin/users/:id` | Altera `grade`, e só |
+| `GET` | `/admin/users?q&onboarding&tiers&gradeMin&gradeMax&limit&offset` | Encontra um membro na base inteira. Ver abaixo |
+| `GET` | `/admin/users/:id` | Um membro inteiro: perfil, acesso, estado de e-mail e datas |
+| `POST` | `/admin/users/:id/email` | Escreve e envia um e-mail para aquele membro (campanha `direto`) |
+| `PATCH` | `/admin/users/:id` | Altera `grade` e `tier`, em requisições separadas |
 | `GET` | `/admin/badges/:badgeId/videos` | Vídeos da insígnia |
 | `POST` | `/admin/badges/:badgeId/videos` | Publica; recebe URL, grava o ID; entra no fim da ordem |
 | `PATCH` | `/admin/badges/:badgeId/videos/order` | Reordena em lote atômico |
 | `PATCH` | `/admin/badges/:badgeId/videos/:videoId` | Edita título e descrição |
 | `DELETE` | `/admin/badges/:badgeId/videos/:videoId` | Remove e renormaliza a ordem |
+
+#### `GET /admin/users` — encontrar um membro (spec 015)
+
+**A busca e os filtros são aplicados sobre a base inteira, antes da paginação.** Isso é o desenho, e
+não um detalhe: filtrar uma página é filtrar errado. Com 213 membros e um filtro de "onboarding
+pendente", uma página de 50 devolveria os pendentes que por acaso caíram nos primeiros 50 `uid`s, a
+tela diria "3 membros" com toda a confiança do mundo, e nada denunciaria.
+
+Cada chamada percorre o `listUsers` do Auth até o fim (páginas de 1000) e cruza com `profiles` por
+`getAll` de caminho — `N/1000` chamadas ao Auth mais `N` leituras, **por busca digitada**. Não há
+cache, e a recusa é deliberada: a API roda em função serverless, o cache seria por instância, e o
+primeiro sintoma seria o admin trocar um tier, recarregar e ver o valor antigo em algumas requisições
+e não em outras. A única contenção é o atraso de digitação do front.
+
+| Query | Padrão | O que é |
+|---|---|---|
+| `q` | — | Trecho de **nome ou e-mail**, sem acento e sem caixa. É `contains`, e não prefixo. Telefone não é buscável |
+| `onboarding` | — | `pendente` ou `concluido`. `pendente` inclui **quem não tem documento de perfil nenhum**. Ausente traz os dois |
+| `tiers` | — | Lista de `TierId`. Ausente significa **todos**, e nunca nenhum |
+| `gradeMin` / `gradeMax` | — | Faixa de etapas concluídas, 0 a 13, inclusiva. Mínima maior que máxima responde `400` |
+| `limit` | 50 | Teto de 200. Acima disso é fixado no teto, sem erro: é paginação, não pedido de dados |
+| `offset` | 0 | Deslocamento **dentro do recorte** |
+
+A resposta traz `users`, `total`, `offset` e `limit`. **`total` é o tamanho do recorte, e não da
+base** — com filtro ligado os dois números são diferentes, e a tela precisa escrever a diferença.
+
+Ordem: **os mais recentes primeiro** (`createdAt` decrescente). Não é a ordem da audiência de e-mail,
+que é por `uid` porque o cursor de retomada depende de uma ordem estável entre execuções.
+
+`phone`, `bio`, `linkedin`, `instagram`, o motivo do descadastro e as datas do perfil **não saem na
+listagem**: eles vivem só em `GET /admin/users/:id`, e a regra é da API e não do CSS. Uma listagem que
+carrega isso de 200 pessoas trafega dado pessoal que ninguém pediu.
+
+`GET /admin/users/:id` responde `200` com os campos de perfil nulos para quem não terminou o
+onboarding — **nunca `404`**, que diria "não existe" sobre quem a lista acabou de mostrar. Ele
+devolve também `canReceiveEmail` e `cannotReceiveReason` (`desativado`, `email-nao-verificado`,
+`descadastrado`), derivados da mesma função que corta a audiência de e-mail.
+
+`POST /admin/users/:id/email` recebe `subject` e `body`, cria uma campanha `kind: 'direto'` e envia
+pelo **mesmo** caminho da campanha — mesmo template, mesmo lote, **mesmo rodapé de descadastro**.
+Responde `404` para `uid` inexistente, `409` se houver disparo em andamento, e `422` com o `reason`
+nomeado quando o membro não pode receber.
 
 ### Coleção `badge_videos` (spec 009)
 
@@ -750,12 +794,25 @@ cron, em spec própria**, não um `timeout` maior.
 unicidade de novo: com `create()`, um `POST` repetido por retry de rede não consegue anunciar o mesmo
 vídeo duas vezes para a base inteira.
 
-- `kind` (`video` | `manual`), `subject`, `body` (texto puro), `ctaLabel`, `ctaUrl`
+- `kind` (`video` | `manual` | `direto`), `subject`, `body` (texto puro), `ctaLabel`, `ctaUrl`
 - `filters` (`tiers`, `gradeMin`, `gradeMax` — `null` significa **todos**)
+- `recipientUid`, `recipientLabel` (spec 015) — preenchidos **só** em `direto`
 - `status` (`enviando` | `concluida` | `interrompida`), `audienceCount`, `sentCount`, `failedCount`
 - `cursorUid`, `createdBy`, `createdAt`, `finishedAt`, `error`
 
 **Não é log: é o registro.** É o único lugar onde fica escrito o que foi enviado, para quantos e quando.
+
+**`recipientUid` é lido antes dos filtros na montagem da audiência, e essa ordem é a proteção** (spec
+015). Uma campanha `direto` grava `filters` com os três campos nulos, e filtro nulo significa *todos os
+membros*: se ela passasse pelo caminho normal de montagem, um recado escrito para uma pessoa sairia para
+a base inteira. **`recipientUid` ausente é lido como `null`** no converter, e é o fallback mais perigoso
+desta coleção — `undefined` ali faz uma campanha direta antiga parecer campanha de base.
+
+`recipientLabel` é o nome, ou o e-mail quando não houver nome, **no instante do envio**: denormalização
+deliberada, como o `authorName` do Mural, porque a conta pode mudar de nome ou deixar de existir e a
+linha do histórico precisa continuar legível. Os e-mails diretos aparecem no **mesmo** `GET
+/admin/emails` das campanhas — separá-los exigiria `where('kind', ...)` com ordenação, que é índice
+composto novo.
 
 `profiles` ganha `emailOptOut`, `emailOptOutReason` e `emailOptOutAt`. **`emailOptOut` ausente é lido
 como `false`** no converter — e é o fallback mais caro de perder: `undefined` numa comparação booleana faz
@@ -765,6 +822,11 @@ a base inteira parecer descadastrada, e o primeiro disparo sai para zero pessoa 
 Auth cruzado com `getAll` por caminho, e os filtros acontecem em memória. O histórico é
 `orderBy('createdAt','desc').limit(20)`, de campo único; o trinco é `where('status','==','enviando')`,
 também de campo único. "Spec nova, índice novo" é a suposição padrão, e aqui ela é falsa.
+
+**A spec 015 também não acrescenta nenhuma linha**, e vale escrever rota por rota por quê:
+`GET /admin/users` não é consulta (é `listUsers` mais `getAll`, com todo o recorte em memória);
+`GET /admin/users/:id` é leitura por caminho; e `POST /admin/users/:id/email` escreve uma campanha e lê
+o trinco, que já existia.
 
 ### Antes do primeiro envio real: o DNS
 
