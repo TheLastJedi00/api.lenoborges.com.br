@@ -16,10 +16,24 @@ describe('renderEmail', () => {
     expect(text).toContain('Saiu um vídeo novo.');
   });
 
+  /**
+   * **Conta parágrafos, e não CSS.**
+   *
+   * Este teste casava a string `<p style="margin:0 0 16px` e quebrou no dia em
+   * que o HTML foi simplificado para escapar da aba de Promoções — a mudança
+   * trocou `margin:0` por `margin: 0`, com espaço, e nada mais. Um teste que
+   * casa estilo inline não pega defeito nenhum e quebra em toda mudança de
+   * estilo, que é o pior dos dois mundos: ele custa manutenção e não protege.
+   *
+   * O que importa aqui é o comportamento — cada bloco separado por linha em
+   * branco vira um parágrafo — e é isso que ele passa a afirmar.
+   */
   it('cada bloco separado por linha em branco vira um paragrafo no html', () => {
     const { html } = renderEmail(base);
 
-    expect((html.match(/<p style="margin:0 0 16px/g) ?? []).length).toBe(2);
+    expect((html.match(/<p[\s>]/g) ?? []).length).toBe(3);
+    expect(html).toContain('Saiu um vídeo novo.');
+    expect(html).toContain('Ele responde a pergunta mais votada da semana.');
   });
 
   it('teste-trava: o corpo e escapado, e marcacao digitada sai como texto', () => {
