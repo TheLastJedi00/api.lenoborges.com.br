@@ -191,6 +191,10 @@ export class AdminEmailsController {
     return campanhas.map((campanha) => ({
       id: campanha.id,
       kind: campanha.kind,
+      // O e-mail direto entra no MESMO historico, sem `where` novo e sem
+      // segunda listagem (spec 015, decisao 15): filtrar por `kind` custaria um
+      // indice composto, que e a decisao 13 da spec 014 ainda de pe.
+      recipientLabel: campanha.recipientLabel,
       subject: campanha.subject,
       status: campanha.status,
       audienceCount: campanha.audienceCount,

@@ -218,5 +218,43 @@ describe('AdminEmailsController', () => {
       expect(linha.error).toBe('rate limit');
       expect(linha.finishedAt).toBeNull();
     });
+
+    /**
+     * **O e-mail direto entra no mesmo histórico** (spec 015, decisão 15). Sem
+     * `where` novo e sem segunda listagem: filtrar por `kind` custaria um índice
+     * composto em produção, que é a decisão 13 da spec 014 ainda de pé.
+     */
+    it('o e-mail direto aparece na mesma lista, com o rotulo do destinatario', async () => {
+      campaigns.listRecent.mockResolvedValue([
+        {
+          id: 'camp-direto',
+          kind: 'direto',
+          subject: 'Sobre a sua dúvida',
+          body: 'corpo',
+          ctaLabel: null,
+          ctaUrl: null,
+          filters: { tiers: null, gradeMin: null, gradeMax: null },
+          recipientUid: 'uid-membro',
+          recipientLabel: 'Leno Borges',
+          status: 'concluida',
+          audienceCount: 1,
+          sentCount: 1,
+          failedCount: 0,
+          cursorUid: 'uid-membro',
+          createdBy: 'admin-1',
+          createdAt: new Date('2026-08-25T12:00:00.000Z'),
+          finishedAt: new Date('2026-08-25T12:00:01.000Z'),
+          error: null,
+        },
+      ]);
+
+      const [linha] = await controller.listCampaigns();
+
+      expect(linha.kind).toBe('direto');
+      expect(linha.recipientLabel).toBe('Leno Borges');
+      // O uid nao sai na lista: o que a linha precisa e ser legivel, e o rotulo
+      // ja resolve isso sem expor o identificador.
+      expect('recipientUid' in linha).toBe(false);
+    });
   });
 });
