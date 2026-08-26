@@ -10,10 +10,49 @@ describe('renderEmail', () => {
   it('devolve html e texto gerados da mesma fonte', () => {
     const { html, text } = renderEmail(base);
 
-    expect(html).toContain('Vídeo novo na insígnia Lógica');
-    expect(text).toContain('Vídeo novo na insígnia Lógica');
     expect(html).toContain('Saiu um vídeo novo.');
     expect(text).toContain('Saiu um vídeo novo.');
+    expect(text).toContain('Vídeo novo na insígnia Lógica');
+  });
+
+  /**
+   * **Teste-trava: o assunto não se repete dentro do corpo.**
+   *
+   * Ele já está no cabeçalho da mensagem, que é onde é lido. Um `<h1>` com o
+   * próprio assunto é a abertura de newsletter, e o filtro sabe disso — ver a
+   * decisão 11-B.
+   */
+  it('teste-trava: o assunto nao se repete no corpo do html', () => {
+    const { html } = renderEmail(base);
+
+    expect(html).not.toContain('Vídeo novo na insígnia Lógica');
+    expect(html).not.toContain('<h1');
+  });
+
+  /**
+   * **Teste-trava: o HTML não tem estilo, e não tem moldura.**
+   *
+   * Este é o teste que a spec 014 comprou caro. O template diagramado — tabela
+   * de layout, fundo cinza, cartão branco, botão sólido — já voltou uma vez, e
+   * na medição de 2026-08-26, com o rastreamento do Resend já desligado, foi
+   * ele que decidiu a aba: diagramado caiu em Promoções, limpo caiu na
+   * Principal.
+   *
+   * Um `style` inline, um `<table>` ou uma `<img>` aqui não é questão de
+   * gosto; é a mudança que devolve o e-mail à aba de Promoções sem que ninguém
+   * perceba, porque nada quebra e o envio continua funcionando.
+   */
+  it('teste-trava: o html nao tem style, table nem imagem', () => {
+    const { html } = renderEmail({
+      ...base,
+      ctaLabel: 'Ver na trilha',
+      ctaUrl: 'https://exemplo.com/dashboard/trilha/logica',
+    });
+
+    expect(html).not.toMatch(/style=/);
+    expect(html).not.toMatch(/<table/i);
+    expect(html).not.toMatch(/<img/i);
+    expect(html).not.toMatch(/background|border-radius|padding/i);
   });
 
   /**
@@ -67,21 +106,20 @@ describe('renderEmail', () => {
     expect(text).toContain('<b>isto</b>');
   });
 
-  it('escapa tambem o assunto e o rotulo do botao', () => {
+  it('escapa o rotulo do botao', () => {
     const { html } = renderEmail({
       ...base,
-      subject: 'Promoção <b>imperdível</b>',
       ctaLabel: '<i>Ver</i>',
       ctaUrl: 'https://exemplo.com/trilha',
     });
 
-    expect(html).not.toContain('<b>imperdível</b>');
     expect(html).not.toContain('<i>Ver</i>');
+    expect(html).toContain('&lt;i&gt;Ver&lt;/i&gt;');
   });
 
   it('o botao e opcional, e sai nas duas partes quando existe', () => {
     const sem = renderEmail(base);
-    expect(sem.html).not.toContain('border-radius:8px;background:#101828');
+    expect(sem.html).not.toContain('<a href="https://exemplo.com');
 
     const com = renderEmail({
       ...base,

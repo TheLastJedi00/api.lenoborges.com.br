@@ -175,24 +175,31 @@ favor do texto.
 Todo e-mail sai com as duas partes, **HTML e texto puro**, geradas da mesma fonte. Cliente que não
 renderiza HTML é minoria, mas e-mail sem alternativa em texto é sinal de spam para os filtros.
 
-### 11-B. ~~O template é diagramado para **não parecer diagramado**~~ — **REVOGADA em 2026-08-26**
+### 11-B. O template é diagramado para **não parecer diagramado** — **EM VIGOR (revogada e restabelecida em 2026-08-26)**
 
-> **A causa era outra, e esta decisão nunca teve fundamento.** No painel do Resend, o *Open Tracking* e o
-> *Click Tracking* estavam ligados no domínio: o provedor injetava um **pixel de imagem 1×1** e
-> **reescrevia todo link** para um domínio de rastreamento, *depois* de o template sair do `renderEmail`.
-> O que o Gmail recebia não era mais o HTML que este código gera — e é exatamente por isso que limpar o
-> HTML não mudou nada. Desligados os dois, o e-mail passou a cair na aba **Principal**.
+> **Ela foi revogada de manhã e restabelecida à tarde, e as duas datas ficam.** A revogação dizia que a
+> causa da aba de Promoções era só o rastreamento do Resend (*Open Tracking* e *Click Tracking*, que
+> injetam um pixel 1×1 e reescrevem todo link *depois* de o template sair do `renderEmail`). Aquilo era
+> verdade e não era tudo: **com o rastreamento já desligado, o e-mail voltou a cair em Promoções**, e o
+> teste com um suspeito por vez fechou a conta —
 >
-> **O HTML diagramado voltou** (tabela, cartão, botão do CTA). Ele nunca foi a causa, e um e-mail feio não
-> é preço que se pague por hipótese refutada. A Fase 08 inteira perdeu a premissa; ver o cabeçalho dela e
-> a Fase 09 em `tasks.md`, e o desfecho no `fix-email-styles.md`.
+> | Envio de teste, mesma conta do Gmail, rastreamento desligado | Aba |
+> |---|---|
+> | Template diagramado (tabela, fundo, cartão, `<h1>`, botão) | **Promoções** |
+> | Template limpo (só `<p>`, `<hr>`, links) | **Principal** |
 >
-> **O que fica no lugar dela:** o template não é a última coisa que acontece com o e-mail. Entre o
-> `renderEmail` e a caixa de entrada existe um provedor que pode reescrever o documento inteiro. Quando o
-> sintoma for de classificação — aba, spam, entrega — **o painel do provedor se confere antes do código**.
+> **Eram duas causas, e esta é a segunda.** O erro da revogação não foi a medição, foi a conclusão tirada
+> dela: *"desligar o rastreamento resolveu"* virou *"o HTML nunca foi a causa"*, e essa segunda frase
+> ninguém tinha medido. O template está limpo outra vez, agora **com teste-trava** em
+> `email-template.spec.ts` — `style=`, `<table>`, `<img>`, `background`, `border-radius` e `padding`
+> fazem a suíte falhar, e o `<h1>` com o assunto também.
 >
-> O texto original fica abaixo, e não é apagado: uma decisão revogada com o motivo à vista é o que impede
-> que alguém a redescubra do zero daqui a seis meses.
+> **As duas regras valem juntas:** o template não é a última coisa que acontece com o e-mail — entre o
+> `renderEmail` e a caixa de entrada existe um provedor que pode reescrever o documento, e o painel dele
+> se confere antes do código — **e** quando um suspeito cai e o sintoma fica, o próximo suspeito é o que
+> ainda não foi medido isolado. Ver Fase 10 em `tasks.md` e a seção 5 do `fix-email-styles.md`.
+>
+> O texto original da decisão segue abaixo, e ele continua sendo o que vale.
 
 Esta decisão nasceu de um incidente, e não do desenho: os e-mails começaram a cair na aba **Promoções** do
 Gmail. O diagnóstico está em `fix-email-styles.md`, e o conserto está na Fase 08.
@@ -214,10 +221,14 @@ E há um limite conhecido: **se depois disto o e-mail continuar em Promoções, 
 HTML.** É reputação de domínio e volume, que a seção do DNS no README já descreve — e nenhuma mudança de
 marcação conserta reputação.
 
-> **Nota de 2026-08-26.** O parágrafo acima acertou a pergunta e errou a resposta: o e-mail *continuou* em
-> Promoções, e o problema de fato não era mais o HTML — mas também não era reputação. Era o rastreamento
-> do provedor. A lição não é "desconfie de reputação"; é que a lista de suspeitos parou dentro do
-> repositório quando a causa estava a um clique de distância, no painel.
+> **Nota de 2026-08-26.** O parágrafo acima acertou a pergunta e errou a resposta — duas vezes, em
+> direções opostas. O e-mail *continuou* em Promoções depois da primeira limpeza, e o problema ali não
+> era reputação: era o rastreamento do provedor, que a lista de suspeitos não alcançou porque parou
+> dentro do repositório. Mas desligar o rastreamento também não fechou o caso: **com ele desligado, o
+> template diagramado ainda ia para Promoções e o limpo não ia**. O limite descrito acima ("se depois
+> disto continuar em Promoções, o problema não é mais o HTML") só se cobra quando o HTML já está limpo
+> *e* o painel já está conferido — e não antes, porque enquanto houver dois sinais ligados nenhuma
+> medição isola nada.
 
 ### 12. Os filtros são tier e faixa de insígnia. **Status de pagamento não existe, e a spec não finge**
 `POST /admin/emails` aceita `tiers` (lista) e `gradeMin`/`gradeMax`. Ausência dos dois significa

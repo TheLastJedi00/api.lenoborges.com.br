@@ -90,3 +90,41 @@ e a caixa de entrada existe um provedor que pode reescrever o documento. Quando 
 classificação, **o painel do provedor se confere antes do código**.
 
 Ver Fase 09 em `tasks.md`.
+
+---
+
+## 5. Desfecho do desfecho — 2026-08-26 (tarde): eram os dois, e o HTML é um deles
+
+**A seção 4 acertou o rastreamento e errou ao declarar o HTML inocente.** Com o *Open Tracking* e o
+*Click Tracking* **já desligados** no painel do Resend, os e-mails voltaram a cair em **Promoções** — e
+desta vez o suspeito foi medido sozinho, que é o que faltava antes:
+
+| Envio de teste (`POST /admin/emails/teste`), mesma conta do Gmail, rastreamento desligado | Aba |
+|---|---|
+| Template diagramado (tabela, fundo cinza, cartão branco, `<h1>` do assunto, botão) | **Promoções** |
+| Template limpo (só `<p>`, `<hr>`, links) | **Principal** |
+
+Uma variável por vez, e a resposta veio inteira: **o rastreamento do provedor e a marcação eram duas
+causas, não uma.** Desligar o rastreamento tirou o pixel 1×1 e a reescrita de link; enquanto o HTML
+continuou com cara de campanha, isso não bastou. O erro da seção 4 não foi a medição — foi a conclusão
+tirada dela: *"desligar o rastreamento resolveu"* virou *"o HTML nunca foi a causa"*, e a segunda frase
+não estava medida.
+
+**O que mudou no código.** O `email-template.ts` volta a ser limpo, e agora com trava:
+
+- Sem `style` inline em lugar nenhum — nem no `<body>`, nem nos parágrafos, nem nos links.
+- Sem `<table>` de layout, sem fundo colorido, sem cartão branco.
+- **Sem o `<h1>` que repetia o assunto** (a Task 02 da Fase 08, que estava cancelada e voltou): o assunto
+  já está no cabeçalho da mensagem, e repeti-lo em fonte grande é abertura de newsletter.
+- O CTA é um **link dentro de um parágrafo**, e nunca um botão com `padding` e `background`.
+- `email-template.spec.ts` ganhou um **teste-trava** que falha se `style=`, `<table>`, `<img>`,
+  `background`, `border-radius` ou `padding` reaparecerem no HTML gerado, e outro que falha se o assunto
+  voltar para dentro do corpo. Sem eles, o pedido estético mais natural do mundo — "dá um destaque nesse
+  link" — devolve a aba de Promoções em silêncio, porque nada quebra e o envio continua funcionando.
+
+**A regra da seção 4 continua valendo, e ganha uma segunda metade:** o template não é a última coisa que
+acontece com o e-mail, *e* o painel do provedor não é a única coisa que decide a aba. Quando um suspeito
+some e o sintoma fica, o suspeito seguinte não é o mesmo de antes com outra roupa — **é o que ainda não
+foi medido isolado**.
+
+Ver Fase 10 em `tasks.md`, e a decisão 11-B em `context.md`, que deixa de estar revogada.
