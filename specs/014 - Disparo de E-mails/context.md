@@ -175,7 +175,32 @@ favor do texto.
 Todo e-mail sai com as duas partes, **HTML e texto puro**, geradas da mesma fonte. Cliente que não
 renderiza HTML é minoria, mas e-mail sem alternativa em texto é sinal de spam para os filtros.
 
-### 11-B. O template é diagramado para **não parecer diagramado** — **EM VIGOR (revogada e restabelecida em 2026-08-26)**
+### 11-B. O template é diagramado para **não parecer diagramado** — **REVOGADA (2026-08-26, depois da auditoria de configuração)**
+
+> **Esta decisão foi revogada, restabelecida e revogada de novo no mesmo dia, e as três datas ficam.** O
+> que fecha a conta não é mais uma medição de template: é uma **auditoria da configuração**, que era a
+> frente que nunca tinha sido conferida de ponta a ponta.
+>
+> | Frente | Estado em 2026-08-26 |
+> |---|---|
+> | Domínio no Resend | `verified`, `sending: enabled` |
+> | *Open Tracking* / *Click Tracking* | desligados |
+> | DKIM, SPF do return-path, DMARC | verificados e alinhados |
+> | Zona DNS | registro.br — a Vercel não gerencia |
+> | Pendência encontrada | só um `CNAME liga` de tracking em `failed`, inerte |
+>
+> **Nenhuma pendência de configuração explica a aba.** Com provedor e DNS limpos, o envio de teste foi
+> refeito e a marcação não decidiu a aba — então o HTML diagramado voltou, e as travas de
+> `email-template.spec.ts` que proibiam `style=`, `<table>` e `padding` saíram com ela.
+>
+> **A regra que sobra das três voltas** substitui esta decisão: *o template é o suspeito mais fácil de
+> acusar e o mais caro de condenar*, porque tirar estilo dele nunca quebra nada — a suíte fica verde, o
+> envio funciona, e o e-mail só fica feio. A ordem de investigação é **painel do provedor, DNS,
+> plataforma, e só então o código**, e a medição vem junto. Ver Fase 11 em `tasks.md` e a seção 6 do
+> `fix-email-styles.md`.
+>
+> As duas notas anteriores e o texto original seguem abaixo, como registro do caminho — **e nenhum dos
+> dois vale mais.**
 
 > **Ela foi revogada de manhã e restabelecida à tarde, e as duas datas ficam.** A revogação dizia que a
 > causa da aba de Promoções era só o rastreamento do Resend (*Open Tracking* e *Click Tracking*, que
