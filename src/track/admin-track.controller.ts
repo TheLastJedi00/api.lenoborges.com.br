@@ -43,21 +43,48 @@ export class AdminTrackController {
   constructor(private readonly videos: BadgeVideoService) {}
 
   @Get(':badgeId/videos')
-  @ApiOperation({ summary: 'Vídeos da insígnia, para administrar' })
+  @ApiOperation({
+    summary: 'Vídeos da insígnia, para administrar',
+    description:
+      'Sem `kind`, as duas abas juntas. **O painel precisa pedir uma aba por ' +
+      'vez**: a reordenação valida a lista contra os vídeos daquela aba, e uma ' +
+      'lista misturada responde 400 em toda seta clicada.',
+  })
+  @ApiQuery({
+    name: 'kind',
+    required: false,
+    enum: ['aula', 'resposta'],
+    description: 'A aba a listar. Sem o parâmetro, as duas',
+  })
   @ApiResponse({ status: 200, type: BadgeVideoListDto })
-  async list(@Param('badgeId') badgeId: string): Promise<BadgeVideoListDto> {
-    return this.videos.listByBadge(badgeId);
+  async list(
+    @Param('badgeId') badgeId: string,
+    @Query('kind') kind?: string,
+  ): Promise<BadgeVideoListDto> {
+    return this.videos.listByBadge(
+      badgeId,
+      kind === 'aula' || kind === 'resposta' ? kind : undefined,
+    );
   }
 
   @Post(':badgeId/videos')
   @ApiOperation({
     summary: 'Publicar um vídeo na insígnia',
     description:
-      'Recebe a URL do YouTube em qualquer forma e grava só o ID. Entra no fim ' +
-      'da ordem. O título é da plataforma e é obrigatório.',
+      'Recebe a URL do YouTube em qualquer uma das seis formas — **link de ' +
+      'Shorts incluído** — e grava só o ID. Entra no fim da ordem **da aba**. O ' +
+      'título é da plataforma e é obrigatório.\n\n' +
+      'Com `kind: resposta`, o `questionId` é **obrigatório** e a pergunta é ' +
+      'lida e fotografada: o vídeo passa a carregar título, autor e data dela, e ' +
+      'a pergunta passa a apontar de volta para o vídeo.',
   })
   @ApiResponse({ status: 201, type: BadgeVideoDto })
-  @ApiResponse({ status: 400, description: 'Link do YouTube irreconhecível.' })
+  @ApiResponse({
+    status: 400,
+    description:
+      'Link do YouTube irreconhecível, resposta sem pergunta, ou aula com pergunta.',
+  })
+  @ApiResponse({ status: 404, description: 'A pergunta informada não existe.' })
   @ApiResponse({ status: 409, description: 'Vídeo já está nesta insígnia.' })
   async create(
     @Param('badgeId') badgeId: string,

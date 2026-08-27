@@ -14,7 +14,12 @@ import { CreateBadgeVideoDto } from './dto/create-badge-video.dto';
 import { UpdateBadgeVideoDto } from './dto/update-badge-video.dto';
 import { ReorderVideosDto } from './dto/reorder-videos.dto';
 import { BadgeVideoDto, BadgeVideoListDto } from './dto/badge-video.dto';
-import { BadgeVideo, BadgeVideoKind } from './entities/badge-video.entity';
+import {
+  AnsweredQuestion,
+  BadgeVideo,
+  BadgeVideoKind,
+} from './entities/badge-video.entity';
+import { MuralRepository } from '../mural/mural.repository';
 import { NotificationsService } from '../notifications/notifications.service';
 import { EmailCampaignService } from '../emails/email-campaign.service';
 import { videoCampaignId } from '../emails/entities/email-campaign.entity';
@@ -28,9 +33,35 @@ function toDto(video: BadgeVideo): BadgeVideoDto {
     youtubeId: video.youtubeId,
     kind: video.kind,
     questionId: video.questionId,
+    question: video.question
+      ? {
+          id: video.question.id,
+          title: video.question.title,
+          authorName: video.question.authorName,
+          askedAt: video.question.askedAt.toISOString(),
+        }
+      : null,
+    orientation: orientationOf(video),
     devTierFree: video.devTierFree,
     order: video.order,
   };
+}
+
+/**
+ * A proporcao do player, **derivada e nunca gravada** (decisao 2 da spec 017).
+ *
+ * Resposta e Short e Short e 9:16; aula e paisagem. Hoje isso e uma linha, e o
+ * ponto de ela morar aqui e o dia em que deixar de ser: uma resposta longa
+ * gravada em paisagem, um campo novo, uma escolha do admin -- **o que quer que
+ * substitua esta regra, substitui aqui e nenhum front muda.**
+ *
+ * E a mesma forma da `phase` da spec 010: um valor que a API afirma e que o
+ * cliente consome sem recalcular. Derivar de `kind` do lado da tela custaria uma
+ * linha tambem, mas em tres arquivos -- template, folha de estilo e teste -- e
+ * cada um deles envelheceria por conta propria.
+ */
+function orientationOf(video: BadgeVideo): 'paisagem' | 'retrato' {
+  return video.kind === 'resposta' ? 'retrato' : 'paisagem';
 }
 
 @Injectable()
@@ -42,6 +73,8 @@ export class BadgeVideoService {
     private readonly notifications: NotificationsService,
     private readonly campaigns: EmailCampaignService,
     private readonly configService: ConfigService,
+    /** Lido na publicacao de uma resposta, e em nenhum outro lugar (spec 017). */
+    private readonly mural: MuralRepository,
   ) {}
 
   /**
@@ -84,11 +117,23 @@ export class BadgeVideoService {
     // `questionId` so faz sentido em resposta. Aula com pergunta e resposta sem
     // pergunta sao os dois estados incoerentes, e o 400 e mais barato que um
     // dado torto que ninguem sabe interpretar depois.
+    //
+    // A segunda metade so passou a ser cobrada na spec 017, quando ela ganhou
+    // consequencia visivel: resposta sem pergunta e um video que a trilha
+    // desenha com um balao vazio em cima.
     if (kind === 'aula' && dto.questionId) {
       throw new BadRequestException(
         'Só vídeo de resposta se vincula a uma pergunta do Mural.',
       );
     }
+
+    if (kind === 'resposta' && !dto.questionId) {
+      throw new BadRequestException(
+        'Todo vídeo de resposta responde a uma pergunta do Mural. Informe qual.',
+      );
+    }
+
+    const question = await this.snapshotQuestion(dto.questionId);
 
     // A ordem e por (badgeId, kind): o novo video entra no fim da ABA dele, e
     // nao no fim da insignia. Contar a insignia inteira faria a primeira
@@ -105,6 +150,7 @@ export class BadgeVideoService {
         youtubeId: youtube.id,
         kind,
         questionId: dto.questionId ?? null,
+        question,
         devTierFree: dto.devTierFree ?? false,
         // Entra no fim: quem cadastra esta acrescentando, e reordenar depois e
         // uma operacao propria.
@@ -150,7 +196,79 @@ export class BadgeVideoService {
 
     await this.emailVideo(created.entry, actorUid);
 
+    await this.linkAnswer(created.entry);
+
     return toDto(created.entry);
+  }
+
+  /**
+   * Le a pergunta **uma vez, na publicacao**, e devolve a foto dela.
+   *
+   * Esta leitura e o preco inteiro da decisao 3 da spec 017. A alternativa era
+   * um `getAll` sobre os `questionId` dentro do `listByBadge` -- e listagem
+   * acontece toda vez que alguem abre a aba, enquanto isto acontece uma vez por
+   * video. **Nao mover esta leitura para a listagem**: e a "simplificacao" que
+   * troca uma leitura por video por N leituras por visita, e de quebra faz o
+   * balao sumir quando o admin apagar a pergunta do mural.
+   *
+   * A leitura e por caminho direto (`mural_questions/{id}`): sem consulta, sem
+   * indice. E ela e o que torna o 404 possivel -- sem ela, um `questionId`
+   * digitado errado viraria um video de resposta com balao vazio, e o defeito so
+   * apareceria na tela do aluno.
+   */
+  private async snapshotQuestion(
+    questionId: string | undefined,
+  ): Promise<AnsweredQuestion | null> {
+    if (!questionId) {
+      return null;
+    }
+
+    const found = await this.mural.findById(questionId);
+    if (!found.found || !found.entry) {
+      throw new NotFoundException(
+        `A pergunta "${questionId}" não existe no Mural.`,
+      );
+    }
+
+    return {
+      id: found.entry.id,
+      title: found.entry.title,
+      authorName: found.entry.authorName,
+      // A data da PERGUNTA. O balao diz "isto foi perguntado em tal dia", e a
+      // data em que o video foi gravado nao e informacao de ninguem.
+      askedAt: found.entry.createdAt,
+    };
+  }
+
+  /**
+   * Fecha o vinculo do lado do mural: a pergunta passa a apontar para o video.
+   *
+   * O campo `answerVideoId` existe na `MuralQuestion` desde a spec 010, sai no
+   * DTO, o repositorio aceita grava-lo -- e ate a 017 nada nunca o escreveu.
+   *
+   * **Vem por ultimo, e falha em silencio**, pela mesma razao da decisao 7 da
+   * spec 012: quando isto roda, o video ja esta gravado, ja foi notificado e ja
+   * foi anunciado por e-mail, e um 500 aqui perderia o trabalho do admin por
+   * causa de um vinculo.
+   *
+   * O que se perde quando falha: a pauta continua mostrando uma pergunta ja
+   * respondida. Nada do lado do aluno quebra, porque **o balao vem da foto do
+   * video, e nao deste vinculo** -- e e exatamente por isso que este e o lado
+   * barato de falhar, e o ultimo a ser escrito.
+   */
+  private async linkAnswer(video: BadgeVideo): Promise<void> {
+    if (video.kind !== 'resposta' || !video.questionId) {
+      return;
+    }
+
+    try {
+      await this.mural.update(video.questionId, { answerVideoId: video.id });
+    } catch (error: unknown) {
+      this.logger.error(
+        `Falha ao vincular o video ${video.id} a pergunta ${video.questionId}: ` +
+          `${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
 
   /**
