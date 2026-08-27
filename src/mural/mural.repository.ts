@@ -17,6 +17,32 @@ import { muralVoteConverter } from './entities/mural-vote.entity';
 export const MURAL_COLLECTION = 'mural_questions';
 export const VOTE_SUBCOLLECTION = 'votes';
 
+/**
+ * Quem venceu uma semana, entre as perguntas dela.
+ *
+ * Pura e exportada porque tem **um dono só**: a pauta escolhe a vencedora sobre
+ * o array que já carregou, e uma segunda implementação do desempate divergiria
+ * na primeira semana com empate.
+ *
+ * O corte de `promotedTo` é aqui, em memória, e nunca numa cláusula `where`.
+ * Ver o comentário de `findWinner`.
+ */
+export function winnerOf(questions: MuralQuestion[]): MuralQuestion | null {
+  return questions
+    .filter((question) => question.promotedTo === null)
+    .reduce<MuralQuestion | null>((melhor, atual) => {
+      if (!melhor) {
+        return atual;
+      }
+
+      if (atual.voteCount !== melhor.voteCount) {
+        return atual.voteCount > melhor.voteCount ? atual : melhor;
+      }
+
+      return atual.createdAt < melhor.createdAt ? atual : melhor;
+    }, null);
+}
+
 export type CreateQuestionData = Pick<
   MuralQuestion,
   'weekId' | 'badgeId' | 'authorUid' | 'authorName' | 'title' | 'body'
@@ -70,28 +96,40 @@ export class MuralRepository {
   }
 
   /**
-   * A vencedora de uma semana: maior `voteCount`, desempate pela mais antiga.
+   * A vencedora de uma semana: maior `voteCount`, desempate pela mais antiga,
+   * **entre as que não foram adiantadas** (spec 016, decisão 3).
    *
-   * **Derivada, nunca gravada.** Ninguém promove a vencedora — é uma consulta
-   * ordenada com `limit(1)`, e por isso não tem como ficar errada nem precisar
-   * ser mantida em dia. O desempate precisa ser determinístico, ou duas telas
-   * mostram vencedoras diferentes para o mesmo estado.
+   * **Derivada, nunca gravada.** Ninguém promove a vencedora, e por isso ela
+   * não tem como ficar errada nem precisar ser mantida em dia. O desempate
+   * precisa ser determinístico, ou duas telas mostram vencedoras diferentes
+   * para o mesmo estado.
+   *
+   * A pergunta adiantada fica fora da conta porque a exposição dela é outra:
+   * promovida a `votacao` na semana N, ela recebe voto durante a semana N pelo
+   * piso e durante a N+1 pela conta natural — até 14 dias contra 7 de todas as
+   * outras. Deixá-la competir transformaria "a mais votada" em "a que o admin
+   * adiantou".
+   *
+   * **O corte é em memória, e não um `where('promotedTo', '==', null)`.** Essa
+   * consulta quebraria em silêncio: no Firestore, `== null` casa com o
+   * documento em que o campo existe e vale null, e **não** com o documento que
+   * não tem o campo — e toda pergunta escrita antes da spec 016 não tem. O
+   * histórico de vencedoras apareceria vazio para todas as semanas anteriores,
+   * sem erro nenhum, com a resposta 200.
+   *
+   * Custo real zero: uma semana tem dezenas de perguntas, não milhares. E a
+   * semana inteira volta junto, para a pauta tirar as adiantadas dela **sem uma
+   * consulta nova e sem um índice novo** (decisão 5).
    */
-  async findWinner(
-    weekId: string,
-  ): Promise<{ found: boolean; entry: MuralQuestion | null }> {
-    const snapshot = await this.collection
-      .where('weekId', '==', weekId)
-      .orderBy('voteCount', 'desc')
-      .orderBy('createdAt', 'asc')
-      .limit(1)
-      .get();
+  async findWinner(weekId: string): Promise<{
+    found: boolean;
+    entry: MuralQuestion | null;
+    questions: MuralQuestion[];
+  }> {
+    const questions = await this.listByWeek(weekId, true);
+    const winner = winnerOf(questions);
 
-    if (snapshot.empty) {
-      return { found: false, entry: null };
-    }
-
-    return { found: true, entry: snapshot.docs[0].data() };
+    return { found: winner !== null, entry: winner, questions };
   }
 
   async findById(
@@ -140,7 +178,9 @@ export class MuralRepository {
 
   async update(
     id: string,
-    data: Partial<Pick<MuralQuestion, 'title' | 'body' | 'answerVideoId'>>,
+    data: Partial<
+      Pick<MuralQuestion, 'title' | 'body' | 'answerVideoId' | 'promotedTo'>
+    >,
   ): Promise<{ entry: MuralQuestion }> {
     const ref = this.collection.doc(id);
     await ref.update({ ...data, updatedAt: Timestamp.now() });

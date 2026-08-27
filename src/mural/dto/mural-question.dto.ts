@@ -11,8 +11,30 @@ export class MuralQuestionDto {
   })
   weekId: string;
 
-  @ApiProperty({ example: 'coleta', enum: ['coleta', 'votacao', 'encerrada'] })
+  @ApiProperty({
+    example: 'coleta',
+    enum: ['coleta', 'votacao', 'encerrada'],
+    description:
+      'Onde a pergunta está. Derivada na leitura, e **pode ter sido adiantada ' +
+      'pelo admin**: é o maior entre a conta do relógio e o piso da promoção. ' +
+      'Uma pergunta com o `weekId` da semana corrente pode legitimamente estar ' +
+      'em votação',
+  })
   phase: MuralPhase;
+
+  @ApiProperty({
+    nullable: true,
+    example: null,
+    enum: ['votacao', 'encerrada'],
+    description:
+      'O adiantamento do admin, quando houve. **Não é redundante com `phase` e ' +
+      'não se deriva dela**: `phase` diz onde a pergunta está, `promotedTo` diz ' +
+      'se ela chegou lá pelo relógio ou pela mão do admin. Sem o segundo, a ' +
+      'tela não tem como escrever "adiantada" nem como saber qual botão de ' +
+      'promoção ainda faz sentido — e derivar isso no front seria reimplementar ' +
+      'a regra do lado errado',
+  })
+  promotedTo: 'votacao' | 'encerrada' | null;
 
   @ApiProperty({ example: 'poo' })
   badgeId: string;

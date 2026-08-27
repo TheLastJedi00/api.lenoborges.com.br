@@ -414,18 +414,48 @@ atrasada em uma semana, todas as perguntas ficam expostas exatamente o mesmo tem
 aparece em `GET /mural/vencedoras`: apagar destruiria o registro de qual venceu e o vínculo com o
 vídeo que a respondeu.
 
+### O adiantamento é um piso, e nunca um estado (spec 016)
+
+**A fase de uma pergunta é o maior entre a conta do relógio e o piso da promoção**, na escala
+`coleta < votacao < encerrada`:
+
+```
+fase(pergunta, agora) = max( fase natural da semana, promotedTo ?? 'coleta' )
+```
+
+O admin adianta **uma** pergunta pelo `PATCH /admin/mural/perguntas/:id/fase`: `votacao` abre o voto
+agora, sem esperar domingo, e `encerrada` tira do mural e põe na pauta, para gravar o vídeo hoje.
+
+O relógio continua sendo a autoridade quando está à frente, e é por isso que isto é um piso e não um
+`status`: uma pergunta promovida a `votacao` em agosto não fica presa em votação para sempre —
+quando a semana dela virar, a conta devolve `encerrada` sozinha. **Nenhum valor gravado pode ficar
+velho, porque nenhum valor gravado decide sozinho.**
+
+**A promoção é de mão única** — promover para uma fase igual ou anterior responde 409. Despromover
+deixaria a pergunta editável de novo com votos em cima dela, e quem votou votou naquele texto; o
+caminho de arrependimento é o `DELETE`, que apaga os votos junto.
+
+**Adiantar custa zero para quem não foi adiantado.** A votação das demais continua como estava, o
+ciclo da semana não se move, e a semana continua elegendo a vencedora dela entre as que sobraram — a
+adiantada é que fica fora dessa conta, porque ela receberia voto por até 14 dias contra 7 de todas as
+outras. A consequência aceita é que a semana com adiantamento pode render dois vídeos.
+
+**Adiantar não abre vaga para uma pergunta nova.** O ID continua sendo `{weekId}__{uid}` e a promoção
+não o toca: `canAsk` segue falso para quem já perguntou.
+
 ### Endpoints
 
 | Método | Rota | Guards | O que faz |
 |---|---|---|---|
-| `GET` | `/mural` | auth | Estado do ciclo: semanas, virada, `canAsk`, `myQuestionId` |
-| `GET` | `/mural/perguntas?fase=` | auth | `coleta` ou `votacao`. Ordena por votos na votação |
+| `GET` | `/mural` | auth | Estado do ciclo: semanas, virada, `canAsk`, `myQuestionId` e **`myQuestion` inteira** |
+| `GET` | `/mural/perguntas?fase=` | auth | `coleta` ou `votacao`. **A aba sai da fase derivada**, e não do `weekId` |
 | `POST` | `/mural/perguntas` | auth + **tier pago** | Cria. 403 para Dev Tier, 409 se já perguntou |
 | `PUT` | `/mural/perguntas/:id` | auth + dono | Reescreve, só na semana em coleta |
 | `POST` | `/mural/perguntas/:id/voto` | auth | Vota. Só na semana em votação |
 | `DELETE` | `/mural/perguntas/:id/voto` | auth | Desfaz. Idempotente |
-| `GET` | `/mural/vencedoras` | auth | Histórico, com as semanas em branco incluídas |
+| `GET` | `/mural/vencedoras` | auth | A pauta: vencedoras **e adiantadas**, cada linha com `origem` |
 | `DELETE` | `/admin/mural/perguntas/:id` | auth + admin | Modera. Apaga os votos junto |
+| `PATCH` | `/admin/mural/perguntas/:id/fase` | auth + admin | Adianta. Corpo `{ fase }`, `votacao` ou `encerrada`. 409 se não avançar |
 
 ### Coleção `mural_questions`
 
@@ -438,6 +468,9 @@ vídeo que a respondeu.
 - `title` (10 a 140), `body` (string ou null, até 1000) — **texto puro**, sem markdown e sem HTML
 - `voteCount` (number) — contador denormalizado, mantido por `FieldValue.increment` em lote
 - `answerVideoId` (string ou null)
+- `promotedTo` (`votacao`, `encerrada` ou null) — o adiantamento do admin (spec 016). **É piso, e
+  nunca estado**: levanta o chão da fase e nunca a segura. Documento anterior à spec 016 não tem o
+  campo e lê como `null`
 - `createdAt`, `updatedAt` (Timestamp)
 
 O caminho garante **uma pergunta por membro por semana**. O limite é de produto, não técnico: um
@@ -560,6 +593,16 @@ em memória no service e não em `where`: cada `where` aqui viraria uma linha no
 `ordem=recentes` do Mural também não pede índice — inverter **todas** as direções de uma consulta
 ordenada usa o mesmo índice `weekId` + `createdAt` da segunda linha. Criar um "por precaução" é pagar
 escrita para sempre por uma consulta que não existe.
+
+**A spec 016 também não acrescenta nenhuma linha, e vale dizê-lo em voz alta** porque "spec nova,
+índice novo" é a suposição padrão e aqui ela é falsa. A listagem passou a carregar as duas semanas
+vivas e a particionar pela fase **em memória**, e a vencedora saiu do `limit(1)` para uma escolha
+também em memória — as consultas por semana que pedem índice continuam exatamente as mesmas, com o
+mesmo `orderBy`. O caminho oposto — emendar cada aba com um `where` por `promotedTo` — pediria dois
+índices novos e ainda cairia na armadilha do `== null`: no Firestore, `where('campo', '==', null)`
+**não enxerga documento que não tem o campo**, e todo documento anterior à spec 016 não tem
+`promotedTo`. O histórico de vencedoras apareceria vazio para todas as semanas anteriores, sem erro,
+com a resposta 200.
 
 A terceira linha é fácil de perder de vista, e ela já tinha sido perdida uma vez: `kind` é opcional em
 `listByBadge`, então **`badgeId` + `order` é uma consulta de verdade**, não um prefixo da de baixo. O

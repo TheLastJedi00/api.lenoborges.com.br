@@ -9,7 +9,7 @@ import { MuralRepository } from './mural.repository';
 import { ProfileRepository } from '../profile/profile.repository';
 import { ALREADY_EXISTS } from '../waitlist/waitlist.repository';
 import { previousWeekId, weekEndsAt, weekIdOf } from './week-id';
-import { phaseOf } from './mural-phase';
+import { MuralPhase, phaseOf } from './mural-phase';
 import { isBadgeId } from '../track/track.constants';
 import { MuralQuestion } from './entities/mural-question.entity';
 import { MuralQuestionDto } from './dto/mural-question.dto';
@@ -18,6 +18,20 @@ import { WinnerDto } from './dto/winner.dto';
 import { CreateQuestionDto } from './dto/create-question.dto';
 import { UpdateQuestionDto } from './dto/update-question.dto';
 import { NotificationsService } from '../notifications/notifications.service';
+
+/**
+ * A escala das fases, para a promocao saber o que e "avancar".
+ *
+ * Ela vive aqui e nao no `mural-phase.ts` de proposito: la a comparacao e entre
+ * relogio e piso, e aqui e entre a fase atual e a pedida. Sao a mesma ordem por
+ * uma razao so -- e a mesma escala -- e emprestar uma constante entre os dois
+ * juntaria duas perguntas diferentes numa linha so.
+ */
+const PHASE_ORDER: Readonly<Record<MuralPhase, number>> = {
+  coleta: 0,
+  votacao: 1,
+  encerrada: 2,
+};
 
 @Injectable()
 export class MuralService {
@@ -46,6 +60,11 @@ export class MuralService {
       // abrir um formulário que vai receber 409.
       canAsk: paid && !mine.found,
       myQuestionId: mine.entry?.id ?? null,
+      // A pergunta inteira, montada do que já está na mão: o `findMine` acima
+      // lia o documento e jogava fora todo o resto. É o que faz o formulário de
+      // edição abrir preenchido **sem endpoint novo e sem leitura a mais** —
+      // sem isto, editar é reescrever (spec 016, decisão 9).
+      myQuestion: mine.entry ? this.toDto(mine.entry, uid, false, now) : null,
     };
   }
 
@@ -63,17 +82,37 @@ export class MuralService {
     newestFirst = false,
   ): Promise<MuralQuestionDto[]> {
     const currentWeekId = weekIdOf(now);
-    const weekId =
-      fase === 'coleta' ? currentWeekId : previousWeekId(currentWeekId);
+    const votingWeekId = previousWeekId(currentWeekId);
 
-    const questions = await this.repository.listByWeek(
-      weekId,
-      fase === 'votacao',
+    // As DUAS semanas vivas, e não a semana da aba (spec 016, decisão 6). Uma
+    // pergunta da semana em coleta, adiantada para votação, pertence à aba de
+    // votação e continua tendo o `weekId` da coleta — então traduzir a aba em
+    // um `weekId` para de funcionar no primeiro adiantamento.
+    //
+    // As duas consultas são as mesmas de antes, com o mesmo `orderBy`: o que
+    // passou para a memória foi a partição e a ordenação. **Nenhuma linha da
+    // tabela de índices compostos do README muda.** Emendar cada aba com um
+    // `where` extra por `promotedTo` seria o caminho oposto — dois índices
+    // novos e a armadilha do `== null` de volta, em dois lugares.
+    const [naColeta, emVotacao] = await Promise.all([
+      this.repository.listByWeek(currentWeekId, false),
+      this.repository.listByWeek(votingWeekId, true),
+    ]);
+
+    const questions = sortForPhase(
+      [...naColeta, ...emVotacao].filter(
+        (question) => phaseOf(question, now) === fase,
+      ),
+      fase,
       newestFirst,
     );
 
     // Um `getAll` por caminho para a página inteira, e nunca N leituras em laço
     // nem uma consulta por autor. Sem isto o front não sabe qual coração pintar.
+    //
+    // Ele vem **depois** da partição, sobre os ids da aba pedida: o custo é
+    // linear nos ids passados, e ler antes dobraria a leitura de todo mundo
+    // para atender uma aba só.
     const myVotes = await this.repository.findMyVotes(
       questions.map((question) => question.id),
       uid,
@@ -85,38 +124,91 @@ export class MuralService {
   }
 
   /**
-   * As vencedoras das semanas encerradas.
+   * A pauta: **o que está esperando vídeo**, com duas origens.
+   *
+   * As vencedoras das semanas encerradas — escolha da comunidade — e as
+   * perguntas que o admin adiantou para `encerrada`. Cada linha diz de onde
+   * veio, porque as duas pedem vídeos de peso diferente (spec 016, decisão 5).
    *
    * Semana em branco entra na lista com `question: null`. Ela é informação
    * honesta — nenhum vídeo é devido — e esconder a semana faria o histórico
    * parecer ter buracos.
+   *
+   * **Não custa nenhuma consulta por `promotedTo`, e nenhum índice novo.** As
+   * adiantadas de cada semana encerrada saem do array que o `findWinner` já
+   * carregou para escolher a vencedora em memória; as das duas semanas vivas
+   * saem das mesmas duas leituras por semana que a listagem já faz. Um
+   * `where('promotedTo', '==', 'encerrada')` seria o caminho óbvio, pediria um
+   * índice composto novo — e ainda cairia na armadilha do `== null`.
+   *
+   * A ordem é da mais recente para a mais antiga, com as adiantadas de cada
+   * semana antes da vencedora dela: separar em duas listas faria a tela
+   * perguntar ao leitor uma coisa que ele não precisa decidir.
    */
   async listWinners(
     uid: string,
     semanas = 8,
     now: Date = new Date(),
   ): Promise<WinnerDto[]> {
+    const currentWeekId = weekIdOf(now);
+    const votingWeekId = previousWeekId(currentWeekId);
+
     const encerradas: string[] = [];
-    let weekId = previousWeekId(previousWeekId(weekIdOf(now)));
+    let weekId = previousWeekId(votingWeekId);
 
     for (let i = 0; i < semanas; i += 1) {
       encerradas.push(weekId);
       weekId = previousWeekId(weekId);
     }
 
-    const winners = await Promise.all(
-      encerradas.map(async (semana) => {
-        const winner = await this.repository.findWinner(semana);
-        return {
-          weekId: semana,
-          question: winner.entry
-            ? this.toDto(winner.entry, uid, false, now)
-            : null,
-        };
-      }),
-    );
+    const [vivas, fechadas] = await Promise.all([
+      Promise.all(
+        [currentWeekId, votingWeekId].map((semana) =>
+          this.repository.listByWeek(semana, true),
+        ),
+      ),
+      Promise.all(
+        encerradas.map((semana) => this.repository.findWinner(semana)),
+      ),
+    ]);
 
-    return winners;
+    const pauta: WinnerDto[] = [];
+
+    for (const perguntas of vivas) {
+      pauta.push(...this.adiantadas(perguntas, uid, now));
+    }
+
+    fechadas.forEach((winner, indice) => {
+      pauta.push(...this.adiantadas(winner.questions, uid, now));
+      pauta.push({
+        weekId: encerradas[indice],
+        question: winner.entry
+          ? this.toDto(winner.entry, uid, false, now)
+          : null,
+        origem: 'voto',
+      });
+    });
+
+    return pauta;
+  }
+
+  /**
+   * As adiantadas de um array de perguntas já carregado, da mais recente para a
+   * mais antiga. Nenhuma leitura acontece aqui, e é esse o ponto.
+   */
+  private adiantadas(
+    questions: MuralQuestion[],
+    uid: string,
+    now: Date,
+  ): WinnerDto[] {
+    return questions
+      .filter((question) => question.promotedTo === 'encerrada')
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .map((question) => ({
+        weekId: question.weekId,
+        question: this.toDto(question, uid, false, now),
+        origem: 'adiantada' as const,
+      }));
   }
 
   async createQuestion(
@@ -214,9 +306,17 @@ export class MuralService {
       throw new ForbiddenException('Essa pergunta não é sua.');
     }
 
+    // A trava é a fase, e por isso o adiantamento já tranca a edição sem uma
+    // linha de regra nova: `phaseOf` conhece o piso desde a spec 016.
+    //
+    // A mensagem fala do **estado** e não da causa, de propósito. Chegar aqui
+    // tem dois caminhos — a semana virou enquanto a pessoa escrevia, ou o admin
+    // adiantou a pergunta — e o resultado é o mesmo nos dois. Dizer "a semana
+    // virou" mentiria no segundo, e distinguir os dois não muda nada para quem
+    // está lendo.
     if (phaseOf(found.entry, now) !== 'coleta') {
       throw new ConflictException(
-        'A semana virou e a sua pergunta já está em votação — o texto não muda mais.',
+        'A sua pergunta já está em votação — o texto não muda mais, porque quem votou votou nele.',
       );
     }
 
@@ -228,6 +328,51 @@ export class MuralService {
     });
 
     return this.toDto(updated.entry, uid, false, now);
+  }
+
+  /**
+   * Adianta uma pergunta (spec 016).
+   *
+   * **A promocao e um piso, e nunca um estado gravado.** O que se grava aqui
+   * levanta o chao da fase; o relogio continua sendo a autoridade quando esta a
+   * frente, e e por isso que nenhum valor gravado pode ficar velho.
+   *
+   * **E de mao unica**: `coleta -> votacao -> encerrada`. Promover para uma
+   * fase igual ou anterior a atual responde 409, e nao um 200 que nao faz nada
+   * -- a tela precisa saber que o botao nao tinha efeito. O caminho de
+   * arrependimento e o `DELETE`, que apaga os votos junto: despromover deixaria
+   * a pergunta editavel de novo **com votos em cima dela**, e quem votou votou
+   * naquele texto.
+   *
+   * **O `weekId` nao e tocado** (decisao 10). Mover a pergunta para outra
+   * semana "resolveria" a fase sem campo novo, e custaria recriar o documento,
+   * migrar a subcolecao de votos inteira e liberar o caminho da semana para uma
+   * segunda pergunta da mesma pessoa.
+   */
+  async promote(
+    questionId: string,
+    fase: 'votacao' | 'encerrada',
+    now: Date = new Date(),
+  ): Promise<MuralQuestionDto> {
+    const found = await this.repository.findById(questionId);
+    if (!found.found || !found.entry) {
+      throw new NotFoundException('Pergunta não encontrada.');
+    }
+
+    const atual = phaseOf(found.entry, now);
+    if (PHASE_ORDER[fase] <= PHASE_ORDER[atual]) {
+      throw new ConflictException(
+        atual === fase
+          ? `Essa pergunta já está em ${fase === 'votacao' ? 'votação' : 'pauta'}.`
+          : 'A promoção é de mão única, e essa pergunta já passou dessa fase. Para desfazer, remova a pergunta.',
+      );
+    }
+
+    const updated = await this.repository.update(questionId, {
+      promotedTo: fase,
+    });
+
+    return this.toDto(updated.entry, found.entry.authorUid, false, now);
   }
 
   async remove(questionId: string): Promise<void> {
@@ -263,6 +408,7 @@ export class MuralService {
       id: question.id,
       weekId: question.weekId,
       phase: phaseOf(question, now),
+      promotedTo: question.promotedTo,
       badgeId: question.badgeId,
       authorName: question.authorName,
       title: question.title,
@@ -273,6 +419,31 @@ export class MuralService {
       answerVideoId: question.answerVideoId,
     };
   }
+}
+
+/**
+ * Ordena a aba **em memória**, depois da partição (spec 016, decisão 6).
+ *
+ * O comportamento visível é o de sempre: votos decrescentes na votação, com
+ * desempate pela mais antiga; data crescente na coleta; e o `newestFirst` da
+ * spec 012 invertendo a coleta para quem chegou por uma notificação.
+ *
+ * A ordenação saiu da consulta porque a aba deixou de ser uma semana: uma
+ * pergunta adiantada vem do array da outra semana, e nenhuma consulta ordena
+ * duas semanas juntas sem trazê-las juntas.
+ */
+function sortForPhase(
+  questions: MuralQuestion[],
+  fase: 'coleta' | 'votacao',
+  newestFirst: boolean,
+): MuralQuestion[] {
+  const ordenadas = [...questions].sort((a, b) =>
+    fase === 'votacao' && b.voteCount !== a.voteCount
+      ? b.voteCount - a.voteCount
+      : a.createdAt.getTime() - b.createdAt.getTime(),
+  );
+
+  return fase === 'coleta' && newestFirst ? ordenadas.reverse() : ordenadas;
 }
 
 /**

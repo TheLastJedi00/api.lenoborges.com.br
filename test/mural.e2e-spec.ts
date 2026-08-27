@@ -267,6 +267,171 @@ describe('Mural (e2e)', () => {
     expect(votos.length).toBe(0);
   });
 
+  /**
+   * **O adiantamento, ponta a ponta** (spec 016). Uma pergunta da semana em
+   * coleta nao aceita voto; depois do `PATCH` do admin, tres coisas mudam de
+   * uma vez e nenhuma delas tem regra propria: ela aceita voto, ela sai da aba
+   * de coleta, e o autor recebe 409 ao tentar editar.
+   *
+   * E o unico lugar onde a decisao 1 desta spec e verificavel de ponta a
+   * ponta: uma coisa mudou de lugar -- `phaseOf` -- e tres comportamentos
+   * obedeceram.
+   */
+  it('adiantar para votacao abre o voto, tira da coleta e tranca a edicao', async () => {
+    const autor = await createSession({ tier: 'great-dev-tier' });
+
+    const criada = await request(app.getHttpServer())
+      .post('/mural/perguntas')
+      .set('Authorization', `Bearer ${autor.token}`)
+      .send({
+        badgeId: 'logica',
+        title: 'Uma pergunta que merece ser adiantada',
+      })
+      .expect(201);
+
+    const pergunta = criada.body as MuralQuestionDto;
+    createdQuestionIds.push(pergunta.id);
+
+    expect(pergunta.phase).toBe('coleta');
+    expect(pergunta.promotedTo).toBeNull();
+
+    // Antes: nao aceita voto, e o autor edita a vontade.
+    await request(app.getHttpServer())
+      .post(`/mural/perguntas/${pergunta.id}/voto`)
+      .set('Authorization', `Bearer ${freeToken}`)
+      .expect(409);
+
+    await request(app.getHttpServer())
+      .put(`/mural/perguntas/${pergunta.id}`)
+      .set('Authorization', `Bearer ${autor.token}`)
+      .send({ title: 'Uma pergunta que merece ser adiantada, revisada' })
+      .expect(200);
+
+    const promovida = await request(app.getHttpServer())
+      .patch(`/admin/mural/perguntas/${pergunta.id}/fase`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ fase: 'votacao' })
+      .expect(200);
+
+    expect((promovida.body as MuralQuestionDto).promotedTo).toBe('votacao');
+    expect((promovida.body as MuralQuestionDto).phase).toBe('votacao');
+
+    // Depois: aceita voto.
+    await request(app.getHttpServer())
+      .post(`/mural/perguntas/${pergunta.id}/voto`)
+      .set('Authorization', `Bearer ${freeToken}`)
+      .expect(204);
+
+    // Depois: mudou de aba, e continua com o weekId da coleta.
+    const naColeta = await request(app.getHttpServer())
+      .get('/mural/perguntas?fase=coleta')
+      .set('Authorization', `Bearer ${autor.token}`)
+      .expect(200);
+    const naVotacao = await request(app.getHttpServer())
+      .get('/mural/perguntas?fase=votacao')
+      .set('Authorization', `Bearer ${autor.token}`)
+      .expect(200);
+
+    const ids = (corpo: unknown) =>
+      (corpo as MuralQuestionDto[]).map((item) => item.id);
+
+    expect(ids(naColeta.body)).not.toContain(pergunta.id);
+    expect(ids(naVotacao.body)).toContain(pergunta.id);
+
+    // Depois: o texto nao muda mais, porque quem votou votou nele.
+    await request(app.getHttpServer())
+      .put(`/mural/perguntas/${pergunta.id}`)
+      .set('Authorization', `Bearer ${autor.token}`)
+      .send({ title: 'Tentando mudar depois de adiantada' })
+      .expect(409);
+
+    // E a vaga da semana continua ocupada: adiantar nao libera pergunta nova.
+    const estado = await request(app.getHttpServer())
+      .get('/mural')
+      .set('Authorization', `Bearer ${autor.token}`)
+      .expect(200);
+
+    expect((estado.body as MuralStateDto).canAsk).toBe(false);
+  });
+
+  /**
+   * A promocao e de mao unica: o caminho de arrependimento e o `DELETE`.
+   */
+  it('recusa despromover, e recusa promover para a fase em que ja esta', async () => {
+    const autor = await createSession({ tier: 'great-dev-tier' });
+
+    const criada = await request(app.getHttpServer())
+      .post('/mural/perguntas')
+      .set('Authorization', `Bearer ${autor.token}`)
+      .send({ badgeId: 'poo', title: 'Uma pergunta para testar a mao unica' })
+      .expect(201);
+
+    const id = (criada.body as MuralQuestionDto).id;
+    createdQuestionIds.push(id);
+
+    // 'coleta' nem chega ao service: a validacao recusa antes.
+    await request(app.getHttpServer())
+      .patch(`/admin/mural/perguntas/${id}/fase`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ fase: 'coleta' })
+      .expect(400);
+
+    await request(app.getHttpServer())
+      .patch(`/admin/mural/perguntas/${id}/fase`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ fase: 'encerrada' })
+      .expect(200);
+
+    await request(app.getHttpServer())
+      .patch(`/admin/mural/perguntas/${id}/fase`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ fase: 'votacao' })
+      .expect(409);
+  });
+
+  it('membro comum recebe 403 ao tentar adiantar', async () => {
+    await request(app.getHttpServer())
+      .patch(`/admin/mural/perguntas/${createdQuestionIds[0]}/fase`)
+      .set('Authorization', `Bearer ${paidToken}`)
+      .send({ fase: 'votacao' })
+      .expect(403);
+  });
+
+  /**
+   * **O contrato de que o formulario de edicao depende** (spec 016, decisao 9).
+   * Sem `myQuestion`, a tela de editar abre em branco e editar e reescrever.
+   */
+  it('GET /mural devolve a propria pergunta inteira, com o texto integro', async () => {
+    const autor = await createSession({ tier: 'great-dev-tier' });
+
+    const criada = await request(app.getHttpServer())
+      .post('/mural/perguntas')
+      .set('Authorization', `Bearer ${autor.token}`)
+      .send({
+        badgeId: 'poo',
+        title: 'O titulo que precisa voltar inteiro',
+        body: 'E o corpo, que tambem precisa voltar inteiro.',
+      })
+      .expect(201);
+
+    createdQuestionIds.push((criada.body as MuralQuestionDto).id);
+
+    const estado = await request(app.getHttpServer())
+      .get('/mural')
+      .set('Authorization', `Bearer ${autor.token}`)
+      .expect(200);
+
+    const state = estado.body as MuralStateDto;
+
+    expect(state.myQuestion).not.toBeNull();
+    expect(state.myQuestion?.id).toBe(state.myQuestionId);
+    expect(state.myQuestion?.title).toBe('O titulo que precisa voltar inteiro');
+    expect(state.myQuestion?.body).toBe(
+      'E o corpo, que tambem precisa voltar inteiro.',
+    );
+    expect(state.myQuestion?.badgeId).toBe('poo');
+  });
+
   it('o histórico de vencedoras inclui semanas em branco', async () => {
     const response = await request(app.getHttpServer())
       .get('/mural/vencedoras')
@@ -279,5 +444,89 @@ describe('Mural (e2e)', () => {
     // Sem perguntas antigas no emulador, todas passam em branco — e isso é
     // informação honesta, não erro.
     expect(winners.every((week) => week.question === null)).toBe(true);
+  });
+
+  /**
+   * **As decisoes 3, 4 e 5 juntas, e a invariante do adiantamento.**
+   *
+   * A mais votada da semana, adiantada, nao vence: quem vence e a segunda. E a
+   * semana que teve uma adiantada **continua tendo vencedora** -- ficar de fora
+   * da conta e diferente de esvaziar a conta.
+   *
+   * A segunda pergunta e semeada **sem o campo `promotedTo`**, de proposito: e
+   * a armadilha do `== null` da decisao 4. Um `where('promotedTo','==',null)`
+   * na consulta da vencedora nao a enxergaria, e a semana apareceria em branco
+   * com a resposta 200.
+   */
+  it('a semana com uma adiantada continua tendo vencedora, e a pauta tem as duas origens', async () => {
+    const estado = await request(app.getHttpServer())
+      .get('/mural')
+      .set('Authorization', `Bearer ${paidToken}`)
+      .expect(200);
+
+    // A encerrada mais recente: uma semana antes da que esta em votacao.
+    const votingWeekId = (estado.body as MuralStateDto).votingWeekId;
+    const encerrada = new Date(
+      new Date(`${votingWeekId}T00:00:00.000Z`).getTime() - 7 * 86400000,
+    )
+      .toISOString()
+      .slice(0, 10);
+
+    const agora = new Date();
+    const semear = async (
+      sufixo: string,
+      dados: Record<string, unknown>,
+    ): Promise<string> => {
+      const id = `${encerrada}__e2e-${sufixo}-${Date.now()}`;
+      await firestore
+        .collection(MURAL_COLLECTION)
+        .doc(id)
+        .set({
+          weekId: encerrada,
+          badgeId: 'poo',
+          authorUid: `e2e-${sufixo}`,
+          authorName: 'Membro',
+          body: null,
+          answerVideoId: null,
+          createdAt: agora,
+          updatedAt: agora,
+          ...dados,
+        });
+      createdQuestionIds.push(id);
+      return id;
+    };
+
+    const adiantadaId = await semear('adiantada', {
+      title: 'A mais votada, que o admin adiantou',
+      voteCount: 20,
+      promotedTo: 'encerrada',
+    });
+    // Sem o campo `promotedTo`, como todo documento anterior a spec 016.
+    const segundaId = await semear('segunda', {
+      title: 'A segunda mais votada, que vence a semana',
+      voteCount: 7,
+    });
+
+    const pauta = await request(app.getHttpServer())
+      .get('/mural/vencedoras')
+      .set('Authorization', `Bearer ${paidToken}`)
+      .expect(200);
+
+    const linhas = pauta.body as {
+      weekId: string;
+      question: MuralQuestionDto | null;
+      origem: string;
+    }[];
+
+    const vencedora = linhas.find(
+      (linha) => linha.weekId === encerrada && linha.origem === 'voto',
+    );
+    expect(vencedora?.question?.id).toBe(segundaId);
+
+    const adiantadas = linhas.filter(
+      (linha) => linha.question?.id === adiantadaId,
+    );
+    expect(adiantadas.length).toBe(1);
+    expect(adiantadas[0].origem).toBe('adiantada');
   });
 });
