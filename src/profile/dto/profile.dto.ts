@@ -1,5 +1,15 @@
 import type { TierId } from '../../billing/billing.tiers';
 import { ApiProperty } from '@nestjs/swagger';
+import { LegalDocumentSummaryDto } from '../../legal/dto/legal-document-summary.dto';
+
+/** O aceite vigente de um documento, como o front o le (spec 018). */
+export class LegalAcceptanceDto {
+  @ApiProperty({ example: '2026-08-27' })
+  version: string;
+
+  @ApiProperty({ example: '2026-03-12T14:02:00.000Z' })
+  acceptedAt: string;
+}
 
 export class ProfileDto {
   @ApiProperty({
@@ -89,4 +99,24 @@ export class ProfileDto {
       'Tier de acesso. É acesso, não conquista: não se deriva de grade nem o contrário',
   })
   tier: TierId;
+
+  @ApiProperty({
+    type: [LegalDocumentSummaryDto],
+    description:
+      'Documentos legais vigentes que este membro ainda não aceitou (spec ' +
+      '018). Lista vazia é o estado normal. É a MESMA lista que o corpo do 428 ' +
+      'carrega, calculada pelo mesmo LegalService.pendingFor — os dois canais ' +
+      'precisam dizer a mesma coisa, sempre. Este avisa na entrada, e o 428 ' +
+      'pega a versão publicada enquanto a pessoa estava com a aba aberta',
+  })
+  pendingLegal: LegalDocumentSummaryDto[];
+
+  @ApiProperty({
+    type: 'object',
+    additionalProperties: { $ref: '#/components/schemas/LegalAcceptanceDto' },
+    description:
+      'O aceite vigente de cada documento, por id. É o que a seção Contratos ' +
+      'de Meu Perfil mostra',
+  })
+  legalAcceptances: Record<string, LegalAcceptanceDto>;
 }

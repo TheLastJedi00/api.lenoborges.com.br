@@ -14,6 +14,9 @@ import { ChangePasswordDto } from './dto/change-password.dto';
 import { DeleteAccountDto } from './dto/delete-account.dto';
 import { EmailPreferenceDto } from './dto/email-preference.dto';
 import { ProfileDto } from './dto/profile.dto';
+import { LegalService } from '../legal/legal.service';
+import { LegalAcceptanceRepository } from '../legal/legal-acceptance.repository';
+import type { Profile } from './entities/profile.entity';
 import type { UserRole } from '../auth/decorators/current-user.decorator';
 import { AuthService } from '../auth/auth.service';
 import { MuralRepository } from '../mural/mural.repository';
@@ -71,7 +74,58 @@ export class ProfileService {
     @Inject(forwardRef(() => MuralRepository))
     private readonly muralRepository: MuralRepository,
     private readonly waitlistRepository: WaitlistRepository,
+    @Inject(forwardRef(() => LegalService))
+    private readonly legalService: LegalService,
+    private readonly legalAcceptanceRepository: LegalAcceptanceRepository,
   ) {}
+
+  /**
+   * A montagem do `ProfileDto`, num lugar so.
+   *
+   * Ela vivia duplicada em `getProfile` e `updateProfile`, e a spec 018 seria a
+   * terceira e a quarta copia dos mesmos campos -- inclusive do `pendingLegal`,
+   * que precisa sair identico nos dois. Duas montagens do mesmo DTO divergem no
+   * primeiro campo novo, e a que fica velha e sempre a que menos gente le.
+   */
+  private toDto(
+    profile: Profile,
+    email: string,
+    role: UserRole | null,
+  ): ProfileDto {
+    return {
+      id: profile.id,
+      email,
+      name: profile.name,
+      phone: profile.phone,
+      bio: profile.bio,
+      grade: profile.grade,
+      linkedin: profile.linkedin,
+      instagram: profile.instagram,
+      emailOptOut: profile.emailOptOut,
+      profileCompleted: profile.completedAt !== null,
+      role,
+      tier: profile.tier,
+      // **Do mesmo `pendingFor` que o guard usa** (spec 018, decisao 9). Nunca
+      // calcular de outro jeito aqui: este campo e o corpo do 428 tem de dizer a
+      // mesma coisa, ou o painel abre bloqueado por algo que ja foi aceito.
+      pendingLegal: this.legalService.pendingFor(profile.legalAcceptances),
+      // `?? {}` de novo, e nao e redundancia com o converter: o converter e o
+      // unico produtor hoje, mas um perfil montado a mao -- num teste, num
+      // script de migracao -- chegaria aqui sem o campo e derrubaria o `GET /me`
+      // com um TypeError que nao menciona aceite nenhum.
+      legalAcceptances: Object.fromEntries(
+        Object.entries(profile.legalAcceptances ?? {}).map(
+          ([id, acceptance]) => [
+            id,
+            {
+              version: acceptance.version,
+              acceptedAt: acceptance.acceptedAt.toISOString(),
+            },
+          ],
+        ),
+      ),
+    };
+  }
 
   async getProfile(
     userId: string,
@@ -83,20 +137,7 @@ export class ProfileService {
       throw new NotFoundException('Perfil não encontrado.');
     }
 
-    return {
-      id: profile.entry.id,
-      email,
-      name: profile.entry.name,
-      phone: profile.entry.phone,
-      bio: profile.entry.bio,
-      grade: profile.entry.grade,
-      linkedin: profile.entry.linkedin,
-      instagram: profile.entry.instagram,
-      emailOptOut: profile.entry.emailOptOut,
-      profileCompleted: profile.entry.completedAt !== null,
-      role,
-      tier: profile.entry.tier,
-    };
+    return this.toDto(profile.entry, email, role);
   }
 
   /**
@@ -260,7 +301,12 @@ export class ProfileService {
     // 3. Os votos dados saem, e os contadores acompanham no mesmo lote.
     await this.muralRepository.removeVotesBy(userId);
 
-    // 4. A subcolecao de leituras, e so entao o perfil.
+    // 4. As subcolecoes, e so entao o perfil. **Subcolecao nao some com o pai no
+    // Firestore** -- terceira vez que este produto esbarra nisso, depois dos
+    // votos do Mural e de `notification_reads` (spec 018, decisao 11). O aceite
+    // e dado pessoal, a pessoa pediu para ser esquecida, e o contrato que ele
+    // comprova terminou junto com a conta.
+    await this.legalAcceptanceRepository.removeAll(userId);
     await this.repository.remove(userId);
 
     // 5. A inscricao na lista de espera, que e nome, telefone e e-mail crus.
@@ -344,19 +390,6 @@ export class ProfileService {
 
     const updated = await this.repository.update(userId, patchData);
 
-    return {
-      id: updated.entry.id,
-      email,
-      name: updated.entry.name,
-      phone: updated.entry.phone,
-      bio: updated.entry.bio,
-      grade: updated.entry.grade,
-      linkedin: updated.entry.linkedin,
-      instagram: updated.entry.instagram,
-      emailOptOut: updated.entry.emailOptOut,
-      profileCompleted: updated.entry.completedAt !== null,
-      role,
-      tier: updated.entry.tier,
-    };
+    return this.toDto(updated.entry, email, role);
   }
 }
