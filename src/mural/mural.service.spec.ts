@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  NotFoundException,
 } from '@nestjs/common';
 import { MuralService } from './mural.service';
 import { MuralRepository } from './mural.repository';
@@ -13,6 +14,9 @@ import { TierId } from '../billing/billing.tiers';
 
 // Terca-feira. Semana corrente: 2026-08-16. Em votacao: 2026-08-09.
 const AGORA = new Date('2026-08-18T12:00:00.000Z');
+
+/** Um instante de agosto de 2026, pelo dia. Encurta os semeios de ordenacao. */
+const EM = (dia: string) => new Date(`2026-08-${dia}T00:00:00.000Z`);
 
 function profile(tier: TierId, name: string | null = 'Leno Borges'): Profile {
   return {
@@ -45,6 +49,7 @@ function question(overrides: Partial<MuralQuestion> = {}): MuralQuestion {
     body: null,
     voteCount: 0,
     answerVideoId: null,
+    promotedTo: null,
     createdAt: AGORA,
     updatedAt: AGORA,
     ...overrides,
@@ -77,7 +82,9 @@ describe('MuralService', () => {
       findById: jest.fn().mockResolvedValue({ found: false, entry: null }),
       findMine: jest.fn().mockResolvedValue({ found: false, entry: null }),
       findMyVotes: jest.fn().mockResolvedValue(new Set<string>()),
-      findWinner: jest.fn().mockResolvedValue({ found: false, entry: null }),
+      findWinner: jest
+        .fn()
+        .mockResolvedValue({ found: false, entry: null, questions: [] }),
       create: jest.fn(),
       update: jest.fn(),
       remove: jest.fn().mockResolvedValue(undefined),
@@ -129,6 +136,54 @@ describe('MuralService', () => {
       expect(state.myQuestionId).toBe('2026-08-16__uid-1');
     });
 
+    /**
+     * **O formulario de edicao abre preenchido a partir daqui** (spec 016,
+     * decisao 9). `GET /mural` ja lia o documento da propria pergunta para
+     * responder `myQuestionId` e jogava fora todo o resto.
+     */
+    it('devolve a pergunta inteira de quem ja perguntou', async () => {
+      repository.findMine.mockResolvedValue({
+        found: true,
+        entry: question({ title: 'O texto que estava la', body: 'e o corpo' }),
+      });
+
+      const state = await service.getState('uid-1', AGORA);
+
+      expect(state.myQuestion).toEqual(
+        expect.objectContaining({
+          id: '2026-08-16__uid-1',
+          title: 'O texto que estava la',
+          body: 'e o corpo',
+          badgeId: 'poo',
+          phase: 'coleta',
+        }),
+      );
+    });
+
+    it('devolve myQuestion null para quem ainda nao perguntou', async () => {
+      const state = await service.getState('uid-1', AGORA);
+
+      expect(state.myQuestion).toBeNull();
+    });
+
+    /**
+     * **Nenhuma leitura a mais.** A pergunta e montada do `findMine` que ja
+     * acontecia; um `GET /mural/perguntas/:id` novo, ou o front baixando a
+     * semana inteira para achar uma linha, seria o preco de nao fazer isto.
+     */
+    it('nao le nada a mais do que ja lia', async () => {
+      repository.findMine.mockResolvedValue({
+        found: true,
+        entry: question(),
+      });
+
+      await service.getState('uid-1', AGORA);
+
+      expect(repository.findMine).toHaveBeenCalledTimes(1);
+      expect(repository.findById).not.toHaveBeenCalled();
+      expect(repository.listByWeek).not.toHaveBeenCalled();
+    });
+
     it('bloqueia o Dev Tier', async () => {
       profiles.findById.mockResolvedValue({
         found: true,
@@ -142,20 +197,54 @@ describe('MuralService', () => {
   });
 
   describe('listagem', () => {
-    it('ordena por votos na fase de votação, e por data na coleta', async () => {
+    /**
+     * **O eixo da listagem deixou de ser o `weekId` e passou a ser a fase**
+     * (spec 016, decisao 6). Uma pergunta da semana em coleta, adiantada para
+     * votacao, pertence a aba de votacao e continua tendo o `weekId` da coleta
+     * -- entao consultar "a semana da aba" para de funcionar no primeiro
+     * adiantamento.
+     *
+     * As duas consultas por semana continuam identicas, e e por isso que
+     * nenhuma linha da tabela de indices do README muda: o que passou para a
+     * memoria foi a particao e a ordenacao, e nao a consulta.
+     */
+    it('carrega as duas semanas vivas, e nao so a da aba pedida', async () => {
       await service.listQuestions('uid-1', 'votacao', AGORA);
-      expect(repository.listByWeek).toHaveBeenCalledWith(
-        '2026-08-09',
-        true,
-        false,
+
+      expect(repository.listByWeek).toHaveBeenCalledWith('2026-08-16', false);
+      expect(repository.listByWeek).toHaveBeenCalledWith('2026-08-09', true);
+    });
+
+    it('ordena por votos na votação, e por data na coleta', async () => {
+      repository.listByWeek.mockImplementation((weekId: string) =>
+        Promise.resolve(
+          weekId === '2026-08-09'
+            ? [
+                question({
+                  id: 'poucos',
+                  weekId,
+                  voteCount: 1,
+                  createdAt: EM('10'),
+                }),
+                question({
+                  id: 'muitos',
+                  weekId,
+                  voteCount: 9,
+                  createdAt: EM('12'),
+                }),
+              ]
+            : [
+                question({ id: 'nova', createdAt: EM('18') }),
+                question({ id: 'antiga', createdAt: EM('17') }),
+              ],
+        ),
       );
 
-      await service.listQuestions('uid-1', 'coleta', AGORA);
-      expect(repository.listByWeek).toHaveBeenCalledWith(
-        '2026-08-16',
-        false,
-        false,
-      );
+      const votacao = await service.listQuestions('uid-1', 'votacao', AGORA);
+      expect(votacao.map((item) => item.id)).toEqual(['muitos', 'poucos']);
+
+      const coleta = await service.listQuestions('uid-1', 'coleta', AGORA);
+      expect(coleta.map((item) => item.id)).toEqual(['antiga', 'nova']);
     });
 
     /**
@@ -164,13 +253,20 @@ describe('MuralService', () => {
      * quebraria a leitura da semana inteira (spec 012, decisao 13).
      */
     it('inverte a coleta so quando pedem recentes', async () => {
-      await service.listQuestions('uid-1', 'coleta', AGORA, true);
-
-      expect(repository.listByWeek).toHaveBeenCalledWith(
-        '2026-08-16',
-        false,
-        true,
+      repository.listByWeek.mockImplementation((weekId: string) =>
+        Promise.resolve(
+          weekId === '2026-08-16'
+            ? [
+                question({ id: 'antiga', createdAt: EM('17') }),
+                question({ id: 'nova', createdAt: EM('18') }),
+              ]
+            : [],
+        ),
       );
+
+      const lista = await service.listQuestions('uid-1', 'coleta', AGORA, true);
+
+      expect(lista.map((item) => item.id)).toEqual(['nova', 'antiga']);
     });
 
     /**
@@ -178,10 +274,16 @@ describe('MuralService', () => {
      * cada recarga. Ela é um `getAll` por caminho — nunca N leituras em laço.
      */
     it('marca quais perguntas o usuário já votou', async () => {
-      repository.listByWeek.mockResolvedValue([
-        question({ id: 'a' }),
-        question({ id: 'b' }),
-      ]);
+      repository.listByWeek.mockImplementation((weekId: string) =>
+        Promise.resolve(
+          weekId === '2026-08-09'
+            ? [
+                question({ id: 'a', weekId, createdAt: EM('10') }),
+                question({ id: 'b', weekId, createdAt: EM('11') }),
+              ]
+            : [],
+        ),
+      );
       repository.findMyVotes.mockResolvedValue(new Set(['b']));
 
       const lista = await service.listQuestions('uid-2', 'votacao', AGORA);
@@ -190,7 +292,9 @@ describe('MuralService', () => {
     });
 
     it('marca a própria pergunta', async () => {
-      repository.listByWeek.mockResolvedValue([question()]);
+      repository.listByWeek.mockImplementation((weekId: string) =>
+        Promise.resolve(weekId === '2026-08-16' ? [question()] : []),
+      );
 
       const lista = await service.listQuestions('uid-1', 'coleta', AGORA);
 
@@ -198,13 +302,162 @@ describe('MuralService', () => {
     });
 
     it('carrega a fase derivada em cada pergunta', async () => {
-      repository.listByWeek.mockResolvedValue([
-        question({ weekId: '2026-08-09' }),
-      ]);
+      repository.listByWeek.mockImplementation((weekId: string) =>
+        Promise.resolve(weekId === '2026-08-09' ? [question({ weekId })] : []),
+      );
 
       const lista = await service.listQuestions('uid-1', 'votacao', AGORA);
 
       expect(lista[0].phase).toBe('votacao');
+    });
+
+    /**
+     * O `findMyVotes` e um `getAll` por caminho e o custo e linear nos ids
+     * passados. Particionar **antes** e o que impede a leitura dobrar de
+     * tamanho: sem isso, abrir uma aba leria os votos das duas semanas.
+     */
+    describe('a particao pela fase (spec 016)', () => {
+      it('pergunta da semana atual adiantada aparece na votacao e some da coleta', async () => {
+        repository.listByWeek.mockImplementation((weekId: string) =>
+          Promise.resolve(
+            weekId === '2026-08-16'
+              ? [question({ id: 'adiantada', promotedTo: 'votacao' })]
+              : [],
+          ),
+        );
+
+        const votacao = await service.listQuestions('uid-1', 'votacao', AGORA);
+        expect(votacao.map((item) => item.id)).toEqual(['adiantada']);
+
+        const coleta = await service.listQuestions('uid-1', 'coleta', AGORA);
+        expect(coleta).toEqual([]);
+      });
+
+      /**
+       * "Sair do mural" e exatamente isto: cair fora das duas abas. A pergunta
+       * continua no banco e aparece na pauta, que e a decisao 5.
+       */
+      it('pergunta adiantada para encerrada nao aparece em nenhuma das duas abas', async () => {
+        repository.listByWeek.mockImplementation((weekId: string) =>
+          Promise.resolve(
+            weekId === '2026-08-16'
+              ? [question({ id: 'na-pauta', promotedTo: 'encerrada' })]
+              : [],
+          ),
+        );
+
+        await expect(
+          service.listQuestions('uid-1', 'coleta', AGORA),
+        ).resolves.toEqual([]);
+        await expect(
+          service.listQuestions('uid-1', 'votacao', AGORA),
+        ).resolves.toEqual([]);
+      });
+
+      /**
+       * **O teste que garante que a troca de eixo nao e uma mudanca de
+       * comportamento.** Sem nenhuma promocao, as duas abas devolvem o que
+       * devolviam antes, na mesma ordem.
+       */
+      it('sem promocao nenhuma, as duas abas sao as de antes', async () => {
+        repository.listByWeek.mockImplementation((weekId: string) =>
+          Promise.resolve([
+            question({ id: `${weekId}-a`, weekId, createdAt: EM('10') }),
+            question({
+              id: `${weekId}-b`,
+              weekId,
+              voteCount: 5,
+              createdAt: EM('11'),
+            }),
+          ]),
+        );
+
+        const coleta = await service.listQuestions('uid-1', 'coleta', AGORA);
+        expect(coleta.map((item) => item.id)).toEqual([
+          '2026-08-16-a',
+          '2026-08-16-b',
+        ]);
+
+        const votacao = await service.listQuestions('uid-1', 'votacao', AGORA);
+        expect(votacao.map((item) => item.id)).toEqual([
+          '2026-08-09-b',
+          '2026-08-09-a',
+        ]);
+      });
+
+      /**
+       * **A invariante do adiantamento**, do lado da listagem: adiantar uma
+       * pergunta custa zero para quem nao foi adiantado.
+       *
+       * Sem esta trava, a primeira refatoracao que "simplificar" a particao
+       * empurra a semana inteira junto -- e o sintoma e um mural que abre o
+       * voto uma semana antes para todo mundo.
+       */
+      it('promover uma nao move as outras tres', async () => {
+        repository.listByWeek.mockImplementation((weekId: string) =>
+          Promise.resolve(
+            weekId === '2026-08-16'
+              ? [
+                  question({
+                    id: 'q1',
+                    createdAt: EM('17'),
+                    promotedTo: 'votacao',
+                  }),
+                  question({ id: 'q2', createdAt: EM('18') }),
+                  question({ id: 'q3', createdAt: EM('19') }),
+                  question({ id: 'q4', createdAt: EM('20') }),
+                ]
+              : [],
+          ),
+        );
+
+        const coleta = await service.listQuestions('uid-1', 'coleta', AGORA);
+        expect(coleta.map((item) => item.id)).toEqual(['q2', 'q3', 'q4']);
+        expect(coleta.every((item) => item.phase === 'coleta')).toBe(true);
+
+        const votacao = await service.listQuestions('uid-1', 'votacao', AGORA);
+        expect(votacao.map((item) => item.id)).toEqual(['q1']);
+      });
+
+      /**
+       * O inverso, na semana em votacao: tirar uma pergunta do mural nao fecha
+       * o voto das demais, que continuam ate a virada normal.
+       */
+      it('promover uma da votacao para encerrada nao tira as outras da aba', async () => {
+        repository.listByWeek.mockImplementation((weekId: string) =>
+          Promise.resolve(
+            weekId === '2026-08-09'
+              ? [
+                  question({
+                    id: 'saiu',
+                    weekId,
+                    voteCount: 9,
+                    promotedTo: 'encerrada',
+                  }),
+                  question({ id: 'ficou-a', weekId, voteCount: 4 }),
+                  question({ id: 'ficou-b', weekId, voteCount: 2 }),
+                ]
+              : [],
+          ),
+        );
+
+        const votacao = await service.listQuestions('uid-1', 'votacao', AGORA);
+
+        expect(votacao.map((item) => item.id)).toEqual(['ficou-a', 'ficou-b']);
+      });
+    });
+
+    it('le os votos so dos ids da aba pedida, e nao das duas semanas', async () => {
+      repository.listByWeek.mockImplementation((weekId: string) =>
+        Promise.resolve([question({ id: `${weekId}-x`, weekId })]),
+      );
+
+      await service.listQuestions('uid-1', 'coleta', AGORA);
+
+      expect(repository.findMyVotes).toHaveBeenCalledWith(
+        ['2026-08-16-x'],
+        'uid-1',
+      );
     });
   });
 
@@ -371,6 +624,62 @@ describe('MuralService', () => {
         ),
       ).rejects.toThrow(ConflictException);
     });
+
+    /**
+     * **A trava da edicao ja obedece ao piso, sem uma linha nova no service.**
+     *
+     * Ela le `phaseOf`, e a Fase 01 ensinou `phaseOf` a conhecer o
+     * adiantamento. E o teste que prova que a decisao 1 desta spec e uma
+     * decisao e nao um `if` a mais: uma coisa mudou de lugar e tres
+     * comportamentos obedeceram. Se este teste exigir codigo novo, a Fase 01
+     * foi feita errada.
+     */
+    it('recusa editar a pergunta da semana corrente que o admin adiantou', async () => {
+      repository.findById.mockResolvedValue({
+        found: true,
+        entry: question({ promotedTo: 'votacao' }),
+      });
+
+      await expect(
+        service.updateQuestion(
+          'uid-1',
+          '2026-08-16__uid-1',
+          { title: 'Mudando depois de adiantada' },
+          AGORA,
+        ),
+      ).rejects.toThrow(ConflictException);
+      expect(repository.update).not.toHaveBeenCalled();
+    });
+
+    /**
+     * A mensagem antiga dizia "a semana virou", e ela mente no caso da
+     * promocao. A nova fala do estado e nao da causa: os dois caminhos levam ao
+     * mesmo lugar, e a pessoa nao precisa saber qual foi.
+     */
+    it('a mensagem do 409 fala do estado, e nao da virada da semana', async () => {
+      repository.findById.mockResolvedValue({
+        found: true,
+        entry: question({ promotedTo: 'votacao' }),
+      });
+
+      await expect(
+        service.updateQuestion(
+          'uid-1',
+          '2026-08-16__uid-1',
+          { title: 'Mudando depois de adiantada' },
+          AGORA,
+        ),
+      ).rejects.toThrow(/em votação/);
+
+      await expect(
+        service.updateQuestion(
+          'uid-1',
+          '2026-08-16__uid-1',
+          { title: 'Mudando depois de adiantada' },
+          AGORA,
+        ),
+      ).rejects.not.toThrow(/semana virou/);
+    });
   });
 
   describe('vencedoras', () => {
@@ -390,6 +699,199 @@ describe('MuralService', () => {
       const winners = await service.listWinners('uid-1', 1, AGORA);
 
       expect(winners[0].weekId).toBe('2026-08-02');
+    });
+
+    it('rotula a vencedora da semana como origem voto', async () => {
+      repository.findWinner.mockResolvedValue({
+        found: true,
+        entry: question({ id: 'venceu', weekId: '2026-08-02' }),
+        questions: [question({ id: 'venceu', weekId: '2026-08-02' })],
+      });
+
+      const winners = await service.listWinners('uid-1', 1, AGORA);
+
+      expect(winners[0].origem).toBe('voto');
+    });
+
+    /**
+     * **A pauta tem duas origens** (spec 016, decisao 5). A adiantada nao some
+     * da vida do autor: sem esta linha ela sairia do mural e nao apareceria em
+     * lugar nenhum, o que e indistinguivel de ter sido removida pela moderacao.
+     */
+    it('a adiantada da semana corrente entra na pauta como origem adiantada', async () => {
+      repository.listByWeek.mockImplementation((weekId: string) =>
+        Promise.resolve(
+          weekId === '2026-08-16'
+            ? [question({ id: 'adiantada', promotedTo: 'encerrada' })]
+            : [],
+        ),
+      );
+
+      const pauta = await service.listWinners('uid-1', 1, AGORA);
+
+      const linha = pauta.find((item) => item.question?.id === 'adiantada');
+      expect(linha).toBeDefined();
+      expect(linha?.origem).toBe('adiantada');
+      expect(linha?.weekId).toBe('2026-08-16');
+    });
+
+    /**
+     * Ela nao pode aparecer duas vezes quando a semana dela encerrar: e por
+     * isso que a promovida fica fora da conta da vencedora, e nao so por causa
+     * da exposicao dobrada.
+     */
+    it('a adiantada nao aparece duas vezes quando a semana dela encerra', async () => {
+      const adiantada = question({
+        id: 'adiantada',
+        weekId: '2026-08-02',
+        voteCount: 20,
+        promotedTo: 'encerrada',
+      });
+      const segunda = question({
+        id: 'segunda',
+        weekId: '2026-08-02',
+        voteCount: 3,
+      });
+      repository.findWinner.mockResolvedValue({
+        found: true,
+        entry: segunda,
+        questions: [adiantada, segunda],
+      });
+
+      const pauta = await service.listWinners('uid-1', 1, AGORA);
+
+      const vezes = pauta.filter(
+        (item) => item.question?.id === 'adiantada',
+      ).length;
+      expect(vezes).toBe(1);
+      expect(
+        pauta.filter((item) => item.origem === 'voto')[0].question?.id,
+      ).toBe('segunda');
+    });
+  });
+
+  /**
+   * O adiantamento (spec 016). O admin empurra **uma** pergunta para a frente:
+   * `votacao` abre o voto agora, `encerrada` tira do Mural e poe na pauta.
+   */
+  describe('adiantamento', () => {
+    it('adianta a pergunta da semana em coleta para votacao', async () => {
+      repository.findById.mockResolvedValue({ found: true, entry: question() });
+      repository.update.mockResolvedValue({
+        entry: question({ promotedTo: 'votacao' }),
+      });
+
+      const promovida = await service.promote(
+        '2026-08-16__uid-1',
+        'votacao',
+        AGORA,
+      );
+
+      expect(repository.update).toHaveBeenCalledWith('2026-08-16__uid-1', {
+        promotedTo: 'votacao',
+      });
+      expect(promovida.promotedTo).toBe('votacao');
+      expect(promovida.phase).toBe('votacao');
+    });
+
+    it('responde 404 para pergunta que nao existe', async () => {
+      await expect(
+        service.promote('2026-08-16__ninguem', 'votacao', AGORA),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    /**
+     * **Nao pode ser um 200 que nao faz nada.** A tela precisa saber que o
+     * botao nao tinha efeito -- um botao que responde sucesso sem mudar nada e
+     * o que ensina a pessoa a nao confiar no que ela ve.
+     */
+    it('recusa com 409 adiantar para votacao o que ja esta em votacao pelo relogio', async () => {
+      repository.findById.mockResolvedValue({
+        found: true,
+        entry: question({ weekId: '2026-08-09' }),
+      });
+
+      await expect(
+        service.promote('2026-08-09__uid-1', 'votacao', AGORA),
+      ).rejects.toThrow(ConflictException);
+      expect(repository.update).not.toHaveBeenCalled();
+    });
+
+    it('recusa com 409 adiantar de novo para a fase que a promocao ja deu', async () => {
+      repository.findById.mockResolvedValue({
+        found: true,
+        entry: question({ promotedTo: 'votacao' }),
+      });
+
+      await expect(
+        service.promote('2026-08-16__uid-1', 'votacao', AGORA),
+      ).rejects.toThrow(ConflictException);
+    });
+
+    it('recusa com 409 voltar de encerrada para votacao', async () => {
+      repository.findById.mockResolvedValue({
+        found: true,
+        entry: question({ promotedTo: 'encerrada' }),
+      });
+
+      await expect(
+        service.promote('2026-08-16__uid-1', 'votacao', AGORA),
+      ).rejects.toThrow(ConflictException);
+    });
+
+    /**
+     * "Responder logo" e responder logo: a pergunta sai do Mural sem ter
+     * recebido um voto. E o ponto em aberto 3 da spec 016, assumido como o
+     * comportamento desejado e nao como buraco.
+     */
+    it('adianta de coleta direto para encerrada, pulando a votacao inteira', async () => {
+      repository.findById.mockResolvedValue({ found: true, entry: question() });
+      repository.update.mockResolvedValue({
+        entry: question({ promotedTo: 'encerrada' }),
+      });
+
+      const promovida = await service.promote(
+        '2026-08-16__uid-1',
+        'encerrada',
+        AGORA,
+      );
+
+      expect(promovida.phase).toBe('encerrada');
+    });
+
+    it('aceita votacao -> encerrada', async () => {
+      repository.findById.mockResolvedValue({
+        found: true,
+        entry: question({ promotedTo: 'votacao' }),
+      });
+      repository.update.mockResolvedValue({
+        entry: question({ promotedTo: 'encerrada' }),
+      });
+
+      await expect(
+        service.promote('2026-08-16__uid-1', 'encerrada', AGORA),
+      ).resolves.toEqual(expect.objectContaining({ promotedTo: 'encerrada' }));
+    });
+
+    /**
+     * **Adiantar nao abre vaga para uma pergunta nova** (decisao 10). O ID do
+     * documento continua sendo `{weekId}__{uid}` e a promocao nao o toca.
+     *
+     * Este teste existe para impedir a "otimizacao" de resolver a fase mexendo
+     * no `weekId`: ela exigiria recriar o documento e migrar a subcolecao de
+     * votos inteira, e liberaria o caminho da semana para uma segunda pergunta
+     * da mesma pessoa.
+     */
+    it('quem teve a pergunta adiantada continua com a vaga da semana ocupada', async () => {
+      repository.findMine.mockResolvedValue({
+        found: true,
+        entry: question({ promotedTo: 'votacao' }),
+      });
+
+      const state = await service.getState('uid-1', AGORA);
+
+      expect(state.canAsk).toBe(false);
+      expect(state.myQuestionId).toBe('2026-08-16__uid-1');
     });
   });
 

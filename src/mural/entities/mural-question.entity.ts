@@ -48,6 +48,29 @@ export interface MuralQuestion {
   voteCount: number;
   /** Vinculo com o video de resposta, quando ele existir. */
   answerVideoId: string | null;
+  /**
+   * O adiantamento do admin (spec 016). **E piso, e nunca estado.**
+   *
+   * Ele levanta o chao da fase e nunca a segura: a fase continua derivada na
+   * leitura, e passa a ser o **maior** entre a conta do relogio e este valor,
+   * na escala `coleta < votacao < encerrada`. Uma pergunta promovida a
+   * `votacao` em agosto nao fica presa em votacao para sempre -- quando a
+   * semana dela virar, a conta devolve `encerrada` sozinha, sem ninguem varrer
+   * nada.
+   *
+   * E a diferenca entre isto e um campo `status` gravado: **nenhum valor
+   * gravado pode ficar velho, porque nenhum valor gravado decide sozinho.** Um
+   * `status` teria a falha que a decisao 1 da spec 010 recusou, so que sem o
+   * cron -- alguem promove, a semana passa, o documento continua dizendo
+   * `votacao`, e o mural mostra em votacao uma pergunta de tres semanas atras.
+   * Sem erro, sem alarme, e a primeira pessoa a perceber e um aluno.
+   *
+   * **Documento anterior a spec 016 nao tem o campo**, e le como `null`. E o
+   * que torna `where('promotedTo', '==', null)` uma armadilha: no Firestore ele
+   * casa com quem tem o campo valendo null, e nao com quem nao tem o campo. Por
+   * isso o corte de pergunta promovida e em memoria (decisao 4 da spec 016).
+   */
+  promotedTo: 'votacao' | 'encerrada' | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -62,6 +85,7 @@ interface MuralQuestionDocument extends DocumentData {
   body: string | null;
   voteCount: number;
   answerVideoId: string | null;
+  promotedTo: 'votacao' | 'encerrada' | null;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
@@ -110,6 +134,7 @@ export const muralQuestionConverter: FirestoreDataConverter<MuralQuestion> = {
       body: question.body,
       voteCount: question.voteCount,
       answerVideoId: question.answerVideoId,
+      promotedTo: question.promotedTo,
       createdAt: Timestamp.fromDate(question.createdAt),
       updatedAt: Timestamp.fromDate(question.updatedAt),
     };
@@ -130,6 +155,9 @@ export const muralQuestionConverter: FirestoreDataConverter<MuralQuestion> = {
       // undefined aqui viraria NaN na primeira soma da tela.
       voteCount: data.voteCount ?? 0,
       answerVideoId: data.answerVideoId ?? null,
+      // Toda pergunta escrita antes da spec 016 nao tem este campo. Le como
+      // `null`, do mesmo jeito que `voteCount ?? 0`, e pela mesma razao.
+      promotedTo: data.promotedTo ?? null,
       createdAt: data.createdAt.toDate(),
       updatedAt: data.updatedAt.toDate(),
     };
