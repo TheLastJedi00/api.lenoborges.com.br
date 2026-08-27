@@ -122,6 +122,11 @@ export class MuralRepository {
       id,
       voteCount: 0,
       answerVideoId: null,
+      // Nasce sem adiantamento. Gravar `null` explicito e ler `?? null` dao o
+      // mesmo resultado -- e por isso que a decisao 4 da spec 016 corta em
+      // memoria: o documento anterior a ela nao tem o campo, e nenhuma consulta
+      // por `== null` enxerga os dois casos.
+      promotedTo: null,
       createdAt: now,
       updatedAt: now,
     };

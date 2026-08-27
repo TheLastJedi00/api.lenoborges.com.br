@@ -214,7 +214,7 @@ export class MuralService {
       throw new ForbiddenException('Essa pergunta não é sua.');
     }
 
-    if (phaseOf(found.entry.weekId, now) !== 'coleta') {
+    if (phaseOf(found.entry, now) !== 'coleta') {
       throw new ConflictException(
         'A semana virou e a sua pergunta já está em votação — o texto não muda mais.',
       );
@@ -262,7 +262,7 @@ export class MuralService {
     return {
       id: question.id,
       weekId: question.weekId,
-      phase: phaseOf(question.weekId, now),
+      phase: phaseOf(question, now),
       badgeId: question.badgeId,
       authorName: question.authorName,
       title: question.title,
