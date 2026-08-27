@@ -128,6 +128,31 @@ describe('Mural (e2e)', () => {
   });
 
   /**
+   * O 304 vazio que abriu o Mural em branco num celular (fix.md da spec 016).
+   *
+   * O que este teste tranca é o `no-store`: sem ele o browser guarda o par
+   * (ETag, corpo), revalida com `If-None-Match` e recebe 304 sem corpo — e se
+   * o corpo já tiver sido despejado do cache, a tela não tem o que renderizar.
+   *
+   * O que ele **não** tranca, porque não é verdade: o `no-store` não desliga o
+   * ETag. Um cliente que mande `If-None-Match` na mão continua recebendo 304
+   * (conferido no Express 5.2.1). A defesa é o browser nunca guardar o
+   * validador, não o servidor recusar a revalidação.
+   */
+  it.each(['/mural', '/mural/perguntas', '/mural/vencedoras'])(
+    '%s manda o browser não guardar a resposta',
+    async (path) => {
+      const response = await request(app.getHttpServer())
+        .get(path)
+        .set('Authorization', `Bearer ${paidToken}`)
+        .expect(200);
+
+      expect(response.headers['cache-control']).toBe('no-store');
+      expect(response.body).toBeDefined();
+    },
+  );
+
+  /**
    * A virada é uma conta: o estado sai do relógio do servidor a cada leitura, e
    * ninguém precisou rodar job nenhum para ele existir.
    */
