@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { MuralQuestionDto } from './mural-question.dto';
 
 /**
  * O estado do ciclo, para o front desenhar a tela inteira sem adivinhar nada.
@@ -39,7 +40,21 @@ export class MuralStateDto {
   @ApiProperty({
     nullable: true,
     example: null,
-    description: 'Id da pergunta que o usuário já fez nesta semana, se houver',
+    description:
+      'Id da pergunta que o usuário já fez nesta semana, se houver. **Fica**, e não ' +
+      'vai a Deprecated: é um campo e não uma estrutura, e a tela ainda o usa ' +
+      'para decidir qual botão mostrar',
   })
   myQuestionId: string | null;
+
+  @ApiProperty({
+    type: () => MuralQuestionDto,
+    nullable: true,
+    description:
+      'A pergunta da semana deste usuário, inteira. É dela que o formulário de ' +
+      'edição se preenche — sem ela, quem clica em "Editar minha pergunta" ' +
+      'reescreve tudo do zero. **Não custa leitura nenhuma**: o documento já ' +
+      'era lido para responder `myQuestionId`, e o resto era jogado fora',
+  })
+  myQuestion: MuralQuestionDto | null;
 }

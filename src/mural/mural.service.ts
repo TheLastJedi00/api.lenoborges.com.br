@@ -60,6 +60,11 @@ export class MuralService {
       // abrir um formulário que vai receber 409.
       canAsk: paid && !mine.found,
       myQuestionId: mine.entry?.id ?? null,
+      // A pergunta inteira, montada do que já está na mão: o `findMine` acima
+      // lia o documento e jogava fora todo o resto. É o que faz o formulário de
+      // edição abrir preenchido **sem endpoint novo e sem leitura a mais** —
+      // sem isto, editar é reescrever (spec 016, decisão 9).
+      myQuestion: mine.entry ? this.toDto(mine.entry, uid, false, now) : null,
     };
   }
 
@@ -301,9 +306,17 @@ export class MuralService {
       throw new ForbiddenException('Essa pergunta não é sua.');
     }
 
+    // A trava é a fase, e por isso o adiantamento já tranca a edição sem uma
+    // linha de regra nova: `phaseOf` conhece o piso desde a spec 016.
+    //
+    // A mensagem fala do **estado** e não da causa, de propósito. Chegar aqui
+    // tem dois caminhos — a semana virou enquanto a pessoa escrevia, ou o admin
+    // adiantou a pergunta — e o resultado é o mesmo nos dois. Dizer "a semana
+    // virou" mentiria no segundo, e distinguir os dois não muda nada para quem
+    // está lendo.
     if (phaseOf(found.entry, now) !== 'coleta') {
       throw new ConflictException(
-        'A semana virou e a sua pergunta já está em votação — o texto não muda mais.',
+        'A sua pergunta já está em votação — o texto não muda mais, porque quem votou votou nele.',
       );
     }
 

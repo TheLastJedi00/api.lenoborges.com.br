@@ -136,6 +136,54 @@ describe('MuralService', () => {
       expect(state.myQuestionId).toBe('2026-08-16__uid-1');
     });
 
+    /**
+     * **O formulario de edicao abre preenchido a partir daqui** (spec 016,
+     * decisao 9). `GET /mural` ja lia o documento da propria pergunta para
+     * responder `myQuestionId` e jogava fora todo o resto.
+     */
+    it('devolve a pergunta inteira de quem ja perguntou', async () => {
+      repository.findMine.mockResolvedValue({
+        found: true,
+        entry: question({ title: 'O texto que estava la', body: 'e o corpo' }),
+      });
+
+      const state = await service.getState('uid-1', AGORA);
+
+      expect(state.myQuestion).toEqual(
+        expect.objectContaining({
+          id: '2026-08-16__uid-1',
+          title: 'O texto que estava la',
+          body: 'e o corpo',
+          badgeId: 'poo',
+          phase: 'coleta',
+        }),
+      );
+    });
+
+    it('devolve myQuestion null para quem ainda nao perguntou', async () => {
+      const state = await service.getState('uid-1', AGORA);
+
+      expect(state.myQuestion).toBeNull();
+    });
+
+    /**
+     * **Nenhuma leitura a mais.** A pergunta e montada do `findMine` que ja
+     * acontecia; um `GET /mural/perguntas/:id` novo, ou o front baixando a
+     * semana inteira para achar uma linha, seria o preco de nao fazer isto.
+     */
+    it('nao le nada a mais do que ja lia', async () => {
+      repository.findMine.mockResolvedValue({
+        found: true,
+        entry: question(),
+      });
+
+      await service.getState('uid-1', AGORA);
+
+      expect(repository.findMine).toHaveBeenCalledTimes(1);
+      expect(repository.findById).not.toHaveBeenCalled();
+      expect(repository.listByWeek).not.toHaveBeenCalled();
+    });
+
     it('bloqueia o Dev Tier', async () => {
       profiles.findById.mockResolvedValue({
         found: true,
@@ -575,6 +623,62 @@ describe('MuralService', () => {
           AGORA,
         ),
       ).rejects.toThrow(ConflictException);
+    });
+
+    /**
+     * **A trava da edicao ja obedece ao piso, sem uma linha nova no service.**
+     *
+     * Ela le `phaseOf`, e a Fase 01 ensinou `phaseOf` a conhecer o
+     * adiantamento. E o teste que prova que a decisao 1 desta spec e uma
+     * decisao e nao um `if` a mais: uma coisa mudou de lugar e tres
+     * comportamentos obedeceram. Se este teste exigir codigo novo, a Fase 01
+     * foi feita errada.
+     */
+    it('recusa editar a pergunta da semana corrente que o admin adiantou', async () => {
+      repository.findById.mockResolvedValue({
+        found: true,
+        entry: question({ promotedTo: 'votacao' }),
+      });
+
+      await expect(
+        service.updateQuestion(
+          'uid-1',
+          '2026-08-16__uid-1',
+          { title: 'Mudando depois de adiantada' },
+          AGORA,
+        ),
+      ).rejects.toThrow(ConflictException);
+      expect(repository.update).not.toHaveBeenCalled();
+    });
+
+    /**
+     * A mensagem antiga dizia "a semana virou", e ela mente no caso da
+     * promocao. A nova fala do estado e nao da causa: os dois caminhos levam ao
+     * mesmo lugar, e a pessoa nao precisa saber qual foi.
+     */
+    it('a mensagem do 409 fala do estado, e nao da virada da semana', async () => {
+      repository.findById.mockResolvedValue({
+        found: true,
+        entry: question({ promotedTo: 'votacao' }),
+      });
+
+      await expect(
+        service.updateQuestion(
+          'uid-1',
+          '2026-08-16__uid-1',
+          { title: 'Mudando depois de adiantada' },
+          AGORA,
+        ),
+      ).rejects.toThrow(/em votação/);
+
+      await expect(
+        service.updateQuestion(
+          'uid-1',
+          '2026-08-16__uid-1',
+          { title: 'Mudando depois de adiantada' },
+          AGORA,
+        ),
+      ).rejects.not.toThrow(/semana virou/);
     });
   });
 

@@ -104,22 +104,22 @@ A fase que troca o eixo da listagem: de `weekId` para fase derivada.
   `promotedTo` diz se ela chegou lá pelo relógio ou pela mão do admin — sem o segundo, a tela não tem como
   escrever "adiantada" nem como saber qual botão de promoção ainda faz sentido.
 
-# Fase 04: A edição []
+# Fase 04: A edição [x]
 Branch: `feat/016-editar-pergunta`
 
-- [ ] Task 01 (TDD + implementação): A trava da edição já obedece ao piso. Arquivo: `mural.service.spec.ts`.
+- [x] Task 01 (TDD + implementação): A trava da edição já obedece ao piso. Arquivo: `mural.service.spec.ts`.
   Objetivo: teste-trava de que `updateQuestion` responde **409** para uma pergunta da semana corrente que
   foi promovida a `votacao` — **sem nenhuma linha nova no service**, porque a trava lê `phaseOf` e a Fase 01
   já a ensinou. Se este teste exigir código novo, a Fase 01 foi feita errada.
-- [ ] Task 02: A mensagem do 409. Arquivo: `src/mural/mural.service.ts`. Objetivo: a mensagem atual diz "a
+- [x] Task 02: A mensagem do 409. Arquivo: `src/mural/mural.service.ts`. Objetivo: a mensagem atual diz "a
   semana virou", e ela passa a mentir no caso da promoção. Trocar por uma que fale do estado e não da causa
   — a pergunta está em votação e o texto não muda mais. Comentário registrando que os dois caminhos levam ao
   mesmo lugar e que a pessoa não precisa saber qual foi.
-- [ ] Task 03 (TDD + implementação): `myQuestion` no estado. Arquivos: `src/mural/dto/mural-state.dto.ts`,
+- [x] Task 03 (TDD + implementação): `myQuestion` no estado. Arquivos: `src/mural/dto/mural-state.dto.ts`,
   `mural.service.ts`, `mural.service.spec.ts`. Objetivo: devolver a pergunta inteira montada do `findMine`
   que **já é lido** para responder `myQuestionId`. Teste-trava: **nenhuma leitura a mais** — o teste conta as
   chamadas ao repositório e exige o mesmo número de antes. `myQuestionId` continua na resposta (decisão 9).
-- [ ] Task 04: O segundo motivo do `badgeId`. Arquivo: `src/mural/dto/update-question.dto.ts`. Objetivo:
+- [x] Task 04: O segundo motivo do `badgeId`. Arquivo: `src/mural/dto/update-question.dto.ts`. Objetivo:
   acrescentar ao comentário que já existe o motivo da spec 012 — **a notificação de pergunta nova carrega o
   `badgeId`**, e trocar a insígnia depois deixaria um aviso publicado numa trilha apontando para uma
   pergunta de outra. É comentário e nada mais; o DTO não muda.
