@@ -77,17 +77,37 @@ export class MuralService {
     newestFirst = false,
   ): Promise<MuralQuestionDto[]> {
     const currentWeekId = weekIdOf(now);
-    const weekId =
-      fase === 'coleta' ? currentWeekId : previousWeekId(currentWeekId);
+    const votingWeekId = previousWeekId(currentWeekId);
 
-    const questions = await this.repository.listByWeek(
-      weekId,
-      fase === 'votacao',
+    // As DUAS semanas vivas, e não a semana da aba (spec 016, decisão 6). Uma
+    // pergunta da semana em coleta, adiantada para votação, pertence à aba de
+    // votação e continua tendo o `weekId` da coleta — então traduzir a aba em
+    // um `weekId` para de funcionar no primeiro adiantamento.
+    //
+    // As duas consultas são as mesmas de antes, com o mesmo `orderBy`: o que
+    // passou para a memória foi a partição e a ordenação. **Nenhuma linha da
+    // tabela de índices compostos do README muda.** Emendar cada aba com um
+    // `where` extra por `promotedTo` seria o caminho oposto — dois índices
+    // novos e a armadilha do `== null` de volta, em dois lugares.
+    const [naColeta, emVotacao] = await Promise.all([
+      this.repository.listByWeek(currentWeekId, false),
+      this.repository.listByWeek(votingWeekId, true),
+    ]);
+
+    const questions = sortForPhase(
+      [...naColeta, ...emVotacao].filter(
+        (question) => phaseOf(question, now) === fase,
+      ),
+      fase,
       newestFirst,
     );
 
     // Um `getAll` por caminho para a página inteira, e nunca N leituras em laço
     // nem uma consulta por autor. Sem isto o front não sabe qual coração pintar.
+    //
+    // Ele vem **depois** da partição, sobre os ids da aba pedida: o custo é
+    // linear nos ids passados, e ler antes dobraria a leitura de todo mundo
+    // para atender uma aba só.
     const myVotes = await this.repository.findMyVotes(
       questions.map((question) => question.id),
       uid,
@@ -333,6 +353,31 @@ export class MuralService {
       answerVideoId: question.answerVideoId,
     };
   }
+}
+
+/**
+ * Ordena a aba **em memória**, depois da partição (spec 016, decisão 6).
+ *
+ * O comportamento visível é o de sempre: votos decrescentes na votação, com
+ * desempate pela mais antiga; data crescente na coleta; e o `newestFirst` da
+ * spec 012 invertendo a coleta para quem chegou por uma notificação.
+ *
+ * A ordenação saiu da consulta porque a aba deixou de ser uma semana: uma
+ * pergunta adiantada vem do array da outra semana, e nenhuma consulta ordena
+ * duas semanas juntas sem trazê-las juntas.
+ */
+function sortForPhase(
+  questions: MuralQuestion[],
+  fase: 'coleta' | 'votacao',
+  newestFirst: boolean,
+): MuralQuestion[] {
+  const ordenadas = [...questions].sort((a, b) =>
+    fase === 'votacao' && b.voteCount !== a.voteCount
+      ? b.voteCount - a.voteCount
+      : a.createdAt.getTime() - b.createdAt.getTime(),
+  );
+
+  return fase === 'coleta' && newestFirst ? ordenadas.reverse() : ordenadas;
 }
 
 /**
