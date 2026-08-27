@@ -85,7 +85,7 @@ export class VoteService {
       throw new NotFoundException('Pergunta não encontrada.');
     }
 
-    const phase = phaseOf(found.entry.weekId, now);
+    const phase = phaseOf(found.entry, now);
     if (phase !== 'votacao') {
       throw new ConflictException(
         phase === 'coleta'
