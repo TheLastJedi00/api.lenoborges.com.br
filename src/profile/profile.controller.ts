@@ -27,6 +27,8 @@ import { EmailPreferenceDto } from './dto/email-preference.dto';
 import { CookieService } from '../auth/cookie.service';
 import { ProfileDto } from './dto/profile.dto';
 import { FirebaseAuthGuard } from '../auth/guards/firebase-auth.guard';
+import { LegalService } from '../legal/legal.service';
+import { AcceptLegalDto } from '../legal/dto/accept-legal.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { CurrentUserData } from '../auth/decorators/current-user.decorator';
 
@@ -38,6 +40,7 @@ export class ProfileController {
   constructor(
     private readonly profileService: ProfileService,
     private readonly cookieService: CookieService,
+    private readonly legalService: LegalService,
   ) {}
 
   @Get()
@@ -165,6 +168,44 @@ export class ProfileController {
     );
 
     this.cookieService.clearRefreshToken(res);
+  }
+
+  /**
+   * Registra o aceite de **um** documento legal (spec 018, decisao 5).
+   *
+   * Mora aqui, e nao no `LegalController`, porque o prefixo `/me` e deste
+   * controller e porque so faz sentido autenticado -- ler e publico, aceitar
+   * nao. E uma das rotas isentas do `LegalAcceptanceGuard`: sem isso ela seria
+   * bloqueada pela propria condicao que existe para resolver, e ninguem entraria
+   * no produto nunca mais.
+   *
+   * Throttle de 10/min: sao dois aceites por pessoa na vida normal, e o limite
+   * existe so contra script.
+   */
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @Post('legal-acceptances')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({
+    summary: 'Registrar o aceite de um documento legal',
+    description:
+      'Um documento por chamada, com a versão exibida ao usuário no corpo. ' +
+      'Aceitar de novo a mesma versão é 204 e NÃO reescreve a data original. ' +
+      'Versão diferente da vigente é 409 com a atual no corpo — significa aba ' +
+      'aberta desde antes do deploy, e o aceite dela é de um texto que não é ' +
+      'mais o texto.',
+  })
+  @ApiResponse({ status: 204, description: 'Aceite registrado.' })
+  @ApiResponse({ status: 404, description: 'Documento não encontrado.' })
+  @ApiResponse({
+    status: 409,
+    description: 'O documento foi atualizado. A versão vigente vai no corpo.',
+  })
+  @ApiResponse({ status: 429, description: 'Limite de requisições excedido.' })
+  async acceptLegal(
+    @CurrentUser() user: CurrentUserData,
+    @Body() dto: AcceptLegalDto,
+  ): Promise<void> {
+    await this.legalService.accept(user.id, dto);
   }
 
   @Throttle({ default: { limit: 10, ttl: 60000 } })
