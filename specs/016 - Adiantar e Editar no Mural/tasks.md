@@ -57,12 +57,12 @@ listagem.
   `canAsk: false` e `myQuestionId` apontando para ela (decisão 10). É o teste que impede a "otimização" de
   resolver a fase mexendo no `weekId` do documento.
 
-# Fase 03: O mural obedece à fase []
+# Fase 03: O mural obedece à fase [x]
 Branch: `feat/016-mural-por-fase`
 
 A fase que troca o eixo da listagem: de `weekId` para fase derivada.
 
-- [ ] Task 01 (TDD + implementação): As duas semanas vivas. Arquivos: `src/mural/mural.service.ts`,
+- [x] Task 01 (TDD + implementação): As duas semanas vivas. Arquivos: `src/mural/mural.service.ts`,
   `mural.service.spec.ts`. Objetivo: `listQuestions` carrega a semana atual **e** a anterior e particiona
   pela fase da Task 02 da Fase 01, ordenando em memória — votos decrescentes com desempate por
   `createdAt` crescente na votação, `createdAt` crescente na coleta, invertida pelo `newestFirst`.
@@ -70,7 +70,7 @@ A fase que troca o eixo da listagem: de `weekId` para fase derivada.
   coleta**; (b) pergunta promovida a `encerrada` **não aparece em nenhuma das duas**; (c) sem nenhuma
   promoção, as duas abas devolvem exatamente o que devolviam antes, na mesma ordem — é o teste que garante
   que a troca de eixo não é uma mudança de comportamento.
-- [ ] Task 01b (TDD + implementação): **A invariante do adiantamento.** Arquivos: `mural.service.spec.ts`,
+- [x] Task 01b (TDD + implementação): **A invariante do adiantamento.** Arquivos: `mural.service.spec.ts`,
   `vote.service.spec.ts`. Objetivo: semear quatro perguntas na semana em coleta, promover **uma**, e provar
   que as outras três não se moveram — continuam na aba de coleta, continuam **recusando voto com 409**, e
   continuam editáveis pelos autores. Depois o inverso, na semana em votação: promover uma para `encerrada`
@@ -78,11 +78,11 @@ A fase que troca o eixo da listagem: de `weekId` para fase derivada.
   adiantamento custar zero a quem não foi adiantado — sem ela, a primeira refatoração que "simplificar" a
   partição empurra a semana inteira junto, e o sintoma é um mural que abre o voto uma semana antes para todo
   mundo.
-- [ ] Task 02: O `getAll` dos votos continua sendo um só. Arquivo: `mural.service.ts`. Objetivo: a leitura
+- [x] Task 02: O `getAll` dos votos continua sendo um só. Arquivo: `mural.service.ts`. Objetivo: a leitura
   de "em quais eu votei" acontece **depois** da partição, sobre os ids da aba pedida, e não sobre as duas
   semanas inteiras. Comentário registrando o porquê: o `findMyVotes` é um `getAll` por caminho e o custo é
   linear nos ids passados — particionar antes é o que impede a leitura dobrar de tamanho.
-- [ ] Task 03 (TDD + implementação): A vencedora sai em memória. Arquivos: `src/mural/mural.repository.ts`,
+- [x] Task 03 (TDD + implementação): A vencedora sai em memória. Arquivos: `src/mural/mural.repository.ts`,
   `mural.repository.spec.ts`, `mural.service.ts`. Objetivo: `findWinner` deixa de ser um `limit(1)` e passa
   a carregar a semana pelo `listByWeek`, descartar quem tem `promotedTo` não nulo e escolher em memória —
   maior `voteCount`, desempate pela mais antiga. Testes-trava: (a) a mais votada da semana, **promovida**,
@@ -90,14 +90,14 @@ A fase que troca o eixo da listagem: de `weekId` para fase derivada.
   `promotedTo`** elege normalmente — é a armadilha do `== null` da decisão 4, e é o único teste desta spec
   que existe por causa de uma pegadinha do Firestore, não de uma regra de produto; (c) semana vazia continua
   devolvendo `{ found: false }`.
-- [ ] Task 04 (TDD + implementação): A pauta. Arquivos: `src/mural/dto/winner.dto.ts`,
+- [x] Task 04 (TDD + implementação): A pauta. Arquivos: `src/mural/dto/winner.dto.ts`,
   `src/mural/mural.service.ts`, `mural.service.spec.ts`. Objetivo: `listWinners` passa a devolver, junto das
   vencedoras das semanas encerradas, **as promovidas a `encerrada`**, cada entrada com
   `origem: 'voto' | 'adiantada'`. As adiantadas saem dos arrays que as Tasks 01 e 03 já carregaram — **sem
   consulta nova e sem índice novo** (decisão 5). Testes-trava: (a) uma pergunta adiantada da semana corrente
   aparece na pauta com `origem: 'adiantada'`; (b) ela **não aparece duas vezes** quando a semana dela
   encerrar naturalmente.
-- [ ] Task 05: `promotedTo` sai no DTO. Arquivos: `src/mural/dto/mural-question.dto.ts`, `winner.dto.ts`,
+- [x] Task 05: `promotedTo` sai no DTO. Arquivos: `src/mural/dto/mural-question.dto.ts`, `winner.dto.ts`,
   `mural.service.ts`. Objetivo: `promotedTo` passa a sair na pergunta, `phase` ganha a frase de que ela é
   derivada **e pode ter sido adiantada pelo admin**, e `origem` é documentado como enumeração. **O front
   precisa dos dois campos e eles não se derivam um do outro:** `phase` diz onde a pergunta está, e

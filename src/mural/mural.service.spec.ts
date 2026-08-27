@@ -82,7 +82,9 @@ describe('MuralService', () => {
       findById: jest.fn().mockResolvedValue({ found: false, entry: null }),
       findMine: jest.fn().mockResolvedValue({ found: false, entry: null }),
       findMyVotes: jest.fn().mockResolvedValue(new Set<string>()),
-      findWinner: jest.fn().mockResolvedValue({ found: false, entry: null }),
+      findWinner: jest
+        .fn()
+        .mockResolvedValue({ found: false, entry: null, questions: [] }),
       create: jest.fn(),
       update: jest.fn(),
       remove: jest.fn().mockResolvedValue(undefined),
@@ -593,6 +595,74 @@ describe('MuralService', () => {
       const winners = await service.listWinners('uid-1', 1, AGORA);
 
       expect(winners[0].weekId).toBe('2026-08-02');
+    });
+
+    it('rotula a vencedora da semana como origem voto', async () => {
+      repository.findWinner.mockResolvedValue({
+        found: true,
+        entry: question({ id: 'venceu', weekId: '2026-08-02' }),
+        questions: [question({ id: 'venceu', weekId: '2026-08-02' })],
+      });
+
+      const winners = await service.listWinners('uid-1', 1, AGORA);
+
+      expect(winners[0].origem).toBe('voto');
+    });
+
+    /**
+     * **A pauta tem duas origens** (spec 016, decisao 5). A adiantada nao some
+     * da vida do autor: sem esta linha ela sairia do mural e nao apareceria em
+     * lugar nenhum, o que e indistinguivel de ter sido removida pela moderacao.
+     */
+    it('a adiantada da semana corrente entra na pauta como origem adiantada', async () => {
+      repository.listByWeek.mockImplementation((weekId: string) =>
+        Promise.resolve(
+          weekId === '2026-08-16'
+            ? [question({ id: 'adiantada', promotedTo: 'encerrada' })]
+            : [],
+        ),
+      );
+
+      const pauta = await service.listWinners('uid-1', 1, AGORA);
+
+      const linha = pauta.find((item) => item.question?.id === 'adiantada');
+      expect(linha).toBeDefined();
+      expect(linha?.origem).toBe('adiantada');
+      expect(linha?.weekId).toBe('2026-08-16');
+    });
+
+    /**
+     * Ela nao pode aparecer duas vezes quando a semana dela encerrar: e por
+     * isso que a promovida fica fora da conta da vencedora, e nao so por causa
+     * da exposicao dobrada.
+     */
+    it('a adiantada nao aparece duas vezes quando a semana dela encerra', async () => {
+      const adiantada = question({
+        id: 'adiantada',
+        weekId: '2026-08-02',
+        voteCount: 20,
+        promotedTo: 'encerrada',
+      });
+      const segunda = question({
+        id: 'segunda',
+        weekId: '2026-08-02',
+        voteCount: 3,
+      });
+      repository.findWinner.mockResolvedValue({
+        found: true,
+        entry: segunda,
+        questions: [adiantada, segunda],
+      });
+
+      const pauta = await service.listWinners('uid-1', 1, AGORA);
+
+      const vezes = pauta.filter(
+        (item) => item.question?.id === 'adiantada',
+      ).length;
+      expect(vezes).toBe(1);
+      expect(
+        pauta.filter((item) => item.origem === 'voto')[0].question?.id,
+      ).toBe('segunda');
     });
   });
 

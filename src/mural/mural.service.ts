@@ -119,38 +119,91 @@ export class MuralService {
   }
 
   /**
-   * As vencedoras das semanas encerradas.
+   * A pauta: **o que está esperando vídeo**, com duas origens.
+   *
+   * As vencedoras das semanas encerradas — escolha da comunidade — e as
+   * perguntas que o admin adiantou para `encerrada`. Cada linha diz de onde
+   * veio, porque as duas pedem vídeos de peso diferente (spec 016, decisão 5).
    *
    * Semana em branco entra na lista com `question: null`. Ela é informação
    * honesta — nenhum vídeo é devido — e esconder a semana faria o histórico
    * parecer ter buracos.
+   *
+   * **Não custa nenhuma consulta por `promotedTo`, e nenhum índice novo.** As
+   * adiantadas de cada semana encerrada saem do array que o `findWinner` já
+   * carregou para escolher a vencedora em memória; as das duas semanas vivas
+   * saem das mesmas duas leituras por semana que a listagem já faz. Um
+   * `where('promotedTo', '==', 'encerrada')` seria o caminho óbvio, pediria um
+   * índice composto novo — e ainda cairia na armadilha do `== null`.
+   *
+   * A ordem é da mais recente para a mais antiga, com as adiantadas de cada
+   * semana antes da vencedora dela: separar em duas listas faria a tela
+   * perguntar ao leitor uma coisa que ele não precisa decidir.
    */
   async listWinners(
     uid: string,
     semanas = 8,
     now: Date = new Date(),
   ): Promise<WinnerDto[]> {
+    const currentWeekId = weekIdOf(now);
+    const votingWeekId = previousWeekId(currentWeekId);
+
     const encerradas: string[] = [];
-    let weekId = previousWeekId(previousWeekId(weekIdOf(now)));
+    let weekId = previousWeekId(votingWeekId);
 
     for (let i = 0; i < semanas; i += 1) {
       encerradas.push(weekId);
       weekId = previousWeekId(weekId);
     }
 
-    const winners = await Promise.all(
-      encerradas.map(async (semana) => {
-        const winner = await this.repository.findWinner(semana);
-        return {
-          weekId: semana,
-          question: winner.entry
-            ? this.toDto(winner.entry, uid, false, now)
-            : null,
-        };
-      }),
-    );
+    const [vivas, fechadas] = await Promise.all([
+      Promise.all(
+        [currentWeekId, votingWeekId].map((semana) =>
+          this.repository.listByWeek(semana, true),
+        ),
+      ),
+      Promise.all(
+        encerradas.map((semana) => this.repository.findWinner(semana)),
+      ),
+    ]);
 
-    return winners;
+    const pauta: WinnerDto[] = [];
+
+    for (const perguntas of vivas) {
+      pauta.push(...this.adiantadas(perguntas, uid, now));
+    }
+
+    fechadas.forEach((winner, indice) => {
+      pauta.push(...this.adiantadas(winner.questions, uid, now));
+      pauta.push({
+        weekId: encerradas[indice],
+        question: winner.entry
+          ? this.toDto(winner.entry, uid, false, now)
+          : null,
+        origem: 'voto',
+      });
+    });
+
+    return pauta;
+  }
+
+  /**
+   * As adiantadas de um array de perguntas já carregado, da mais recente para a
+   * mais antiga. Nenhuma leitura acontece aqui, e é esse o ponto.
+   */
+  private adiantadas(
+    questions: MuralQuestion[],
+    uid: string,
+    now: Date,
+  ): WinnerDto[] {
+    return questions
+      .filter((question) => question.promotedTo === 'encerrada')
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .map((question) => ({
+        weekId: question.weekId,
+        question: this.toDto(question, uid, false, now),
+        origem: 'adiantada' as const,
+      }));
   }
 
   async createQuestion(

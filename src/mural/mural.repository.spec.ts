@@ -1,5 +1,8 @@
-import { MuralRepository } from './mural.repository';
-import { ANONYMOUS_AUTHOR_UID } from './entities/mural-question.entity';
+import { MuralRepository, winnerOf } from './mural.repository';
+import {
+  ANONYMOUS_AUTHOR_UID,
+  MuralQuestion,
+} from './entities/mural-question.entity';
 import { FirebaseService } from '../auth/firebase.service';
 
 describe('MuralRepository', () => {
@@ -228,6 +231,114 @@ describe('MuralRepository', () => {
     await expect(repository.removeVotesBy('uid-1')).resolves.toBe(0);
 
     expect(getAll).not.toHaveBeenCalled();
+  });
+
+  /**
+   * A vencedora sai **em memoria** (spec 016, decisoes 3 e 4). O corte por
+   * `where('promotedTo','==',null)` seria o caminho obvio e quebraria em
+   * silencio: no Firestore ele nao enxerga documento que nao tem o campo, e
+   * todo documento anterior a spec 016 nao tem.
+   */
+  describe('a vencedora da semana', () => {
+    function pergunta(over: Partial<MuralQuestion>): MuralQuestion {
+      return {
+        id: 'q',
+        weekId: '2026-08-02',
+        badgeId: 'poo',
+        authorUid: 'uid-1',
+        authorName: 'Leno',
+        title: 'Uma pergunta qualquer',
+        body: null,
+        voteCount: 0,
+        answerVideoId: null,
+        promotedTo: null,
+        createdAt: new Date('2026-08-03T00:00:00.000Z'),
+        updatedAt: new Date('2026-08-03T00:00:00.000Z'),
+        ...over,
+      };
+    }
+
+    function semana(perguntas: MuralQuestion[]) {
+      queryGet.mockResolvedValue({
+        empty: perguntas.length === 0,
+        size: perguntas.length,
+        docs: perguntas.map((entry) => ({ data: () => entry })),
+      });
+    }
+
+    it('elege a mais votada, com desempate pela mais antiga', async () => {
+      semana([
+        pergunta({
+          id: 'empatada-nova',
+          voteCount: 5,
+          createdAt: new Date('2026-08-05T00:00:00.000Z'),
+        }),
+        pergunta({
+          id: 'empatada-antiga',
+          voteCount: 5,
+          createdAt: new Date('2026-08-03T00:00:00.000Z'),
+        }),
+        pergunta({ id: 'menos', voteCount: 1 }),
+      ]);
+
+      const winner = await repository.findWinner('2026-08-02');
+
+      expect(winner.found).toBe(true);
+      expect(winner.entry?.id).toBe('empatada-antiga');
+    });
+
+    it('a mais votada, se foi adiantada, nao vence: quem vence e a segunda', async () => {
+      semana([
+        pergunta({ id: 'adiantada', voteCount: 20, promotedTo: 'encerrada' }),
+        pergunta({ id: 'segunda', voteCount: 7 }),
+      ]);
+
+      const winner = await repository.findWinner('2026-08-02');
+
+      expect(winner.entry?.id).toBe('segunda');
+    });
+
+    /**
+     * **A armadilha do `== null`**, e o unico teste desta spec que existe por
+     * causa de uma pegadinha do Firestore e nao de uma regra de produto: a
+     * semana em que nenhum documento tem o campo elege normalmente.
+     */
+    it('semana anterior a spec 016, sem o campo em documento nenhum, elege normalmente', async () => {
+      const antigas = [
+        { ...pergunta({ id: 'antiga-a', voteCount: 3 }) },
+        { ...pergunta({ id: 'antiga-b', voteCount: 9 }) },
+      ];
+      // O converter le `data.promotedTo ?? null`, entao o que chega aqui ja e
+      // null -- e e exatamente esse null que a consulta nao enxergaria.
+      semana(antigas);
+
+      const winner = await repository.findWinner('2026-08-02');
+
+      expect(winner.entry?.id).toBe('antiga-b');
+    });
+
+    it('semana vazia continua devolvendo found: false', async () => {
+      semana([]);
+
+      await expect(repository.findWinner('2026-08-02')).resolves.toEqual(
+        expect.objectContaining({ found: false, entry: null }),
+      );
+    });
+
+    it('devolve a semana inteira junto, para a pauta sair sem consulta nova', async () => {
+      semana([
+        pergunta({ id: 'a' }),
+        pergunta({ id: 'b', promotedTo: 'encerrada' }),
+      ]);
+
+      const winner = await repository.findWinner('2026-08-02');
+
+      expect(winner.questions.map((item) => item.id)).toEqual(['a', 'b']);
+    });
+
+    it('semana so de adiantadas nao tem vencedora, e nao e erro', () => {
+      expect(winnerOf([pergunta({ promotedTo: 'votacao' })])).toBeNull();
+    });
   });
 
   it('devolve o contrato { found, entry } quando a pergunta nao existe', async () => {
