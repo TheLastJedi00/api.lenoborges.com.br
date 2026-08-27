@@ -417,6 +417,7 @@ export class MuralService {
       hasVoted,
       isMine: question.authorUid === uid,
       answerVideoId: question.answerVideoId,
+      createdAt: question.createdAt.toISOString(),
     };
   }
 }

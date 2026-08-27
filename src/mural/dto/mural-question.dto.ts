@@ -74,4 +74,14 @@ export class MuralQuestionDto {
     description: 'Vídeo de resposta, quando a pergunta venceu e foi respondida',
   })
   answerVideoId: string | null;
+
+  @ApiProperty({
+    example: '2026-08-09T18:00:00.000Z',
+    description:
+      'Quando a pergunta foi feita, em ISO 8601. **Não é o `weekId`**: aquele é ' +
+      'o domingo que abre a semana, e a pergunta pode ter nascido na quinta. ' +
+      'Saiu na spec 017, para o painel poder mostrar a data no balão de pré-' +
+      'visualização com o mesmo texto que o aluno vai ler na trilha',
+  })
+  createdAt: string;
 }

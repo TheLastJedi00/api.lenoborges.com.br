@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { CollectionReference, Timestamp } from 'firebase-admin/firestore';
 import { FirebaseService } from '../auth/firebase.service';
 import {
+  AnsweredQuestion,
   BadgeVideo,
   BadgeVideoKind,
   badgeVideoConverter,
@@ -19,6 +20,12 @@ export type CreateBadgeVideoData = Pick<
   /** Sem valor, o video nasce como aula: e o que quase todo video e. */
   kind?: BadgeVideoKind;
   questionId?: string | null;
+  /**
+   * A foto da pergunta (spec 017), tirada pelo service na publicacao.
+   *
+   * Sem valor, o video nasce sem balao -- que e o caso de toda aula.
+   */
+  question?: AnsweredQuestion | null;
   devTierFree?: boolean;
 };
 
@@ -77,6 +84,7 @@ export class BadgeVideoRepository {
     const entry: BadgeVideo = {
       kind: 'aula',
       questionId: null,
+      question: null,
       devTierFree: false,
       ...data,
       id,

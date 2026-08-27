@@ -9,6 +9,8 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { EmailCampaignService } from '../emails/email-campaign.service';
 import { ConfigService } from '@nestjs/config';
 import { BadgeVideo, BadgeVideoKind } from './entities/badge-video.entity';
+import { MuralRepository } from '../mural/mural.repository';
+import { MuralQuestion } from '../mural/entities/mural-question.entity';
 
 function video(
   id: string,
@@ -23,12 +25,29 @@ function video(
     youtubeId: id.split('__')[1] ?? 'dQw4w9WgXcQ',
     kind,
     questionId: null,
+    question: null,
     devTierFree: false,
     order,
     createdAt: new Date(),
     updatedAt: new Date(),
   };
 }
+
+/** A pergunta que o mock do mural devolve. Uma so, e sempre a mesma. */
+const PERGUNTA: MuralQuestion = {
+  id: '2026-08-09__uid-1',
+  weekId: '2026-08-09',
+  badgeId: 'poo',
+  authorUid: 'uid-1',
+  authorName: 'Ana Prado',
+  title: 'Quando usar herança em vez de composição?',
+  body: null,
+  voteCount: 12,
+  answerVideoId: null,
+  promotedTo: null,
+  createdAt: new Date('2026-08-09T18:00:00.000Z'),
+  updatedAt: new Date('2026-08-09T18:00:00.000Z'),
+};
 
 describe('BadgeVideoService', () => {
   let service: BadgeVideoService;
@@ -40,8 +59,14 @@ describe('BadgeVideoService', () => {
       'listByBadge' | 'findById' | 'create' | 'update' | 'delete' | 'reorder'
     >
   >;
+  let mural: jest.Mocked<Pick<MuralRepository, 'findById' | 'update'>>;
 
   beforeEach(() => {
+    mural = {
+      findById: jest.fn().mockResolvedValue({ found: true, entry: PERGUNTA }),
+      update: jest.fn().mockResolvedValue({ entry: PERGUNTA }),
+    };
+
     repository = {
       listByBadge: jest.fn().mockResolvedValue([]),
       findById: jest.fn().mockResolvedValue({ found: false, entry: null }),
@@ -72,6 +97,7 @@ describe('BadgeVideoService', () => {
       {
         getOrThrow: () => 'https://edu.lenoborges.com.br',
       } as unknown as ConfigService,
+      mural as unknown as MuralRepository,
     );
   });
 
@@ -86,6 +112,7 @@ describe('BadgeVideoService', () => {
           youtubeId: 'dQw4w9WgXcQ',
           kind: 'aula',
           questionId: null,
+          question: null,
           devTierFree: false,
           order: 0,
           createdAt: new Date('2026-08-25T12:00:00.000Z'),
@@ -483,6 +510,269 @@ describe('BadgeVideoService', () => {
           'admin-1',
         ),
       ).rejects.toThrow(BadRequestException);
+    });
+
+    /**
+     * A outra metade da simetria, que a spec 010 declarou em comentario e nao
+     * implementou. A janela para apertar isto e agora: nenhum video `resposta`
+     * foi publicado ate hoje, porque o formulario do front nunca mandou `kind`.
+     *
+     * E agora ha consequencia visivel: resposta sem pergunta e um video que a
+     * trilha desenha com um balao vazio em cima.
+     */
+    it('recusa resposta sem pergunta', async () => {
+      await expect(
+        service.create(
+          'logica',
+          {
+            title: 'Uma resposta orfa',
+            youtubeUrl: 'https://youtu.be/dQw4w9WgXcQ',
+            kind: 'resposta',
+          },
+          'admin-1',
+        ),
+      ).rejects.toThrow(BadRequestException);
+
+      expect(repository.create).not.toHaveBeenCalled();
+    });
+
+    it('recusa pergunta que nao existe, e nao grava nada', async () => {
+      mural.findById.mockResolvedValue({ found: false, entry: null });
+
+      await expect(
+        service.create(
+          'logica',
+          {
+            title: 'Respondendo o vento',
+            youtubeUrl: 'https://youtu.be/dQw4w9WgXcQ',
+            kind: 'resposta',
+            questionId: 'nao-existe',
+          },
+          'admin-1',
+        ),
+      ).rejects.toThrow(NotFoundException);
+
+      // O video nao pode nascer com um vinculo para lugar nenhum: o sintoma so
+      // apareceria na tela do aluno, com um balao vazio.
+      expect(repository.create).not.toHaveBeenCalled();
+    });
+
+    it('grava a foto da pergunta: titulo, autor e a data de quando foi perguntada', async () => {
+      repository.create.mockResolvedValue({
+        entry: video('logica__dQw4w9WgXcQ', 0, 'resposta'),
+      });
+
+      await service.create(
+        'logica',
+        {
+          title: 'Herança e composição, na prática',
+          youtubeUrl: 'https://www.youtube.com/shorts/dQw4w9WgXcQ',
+          kind: 'resposta',
+          questionId: '2026-08-09__uid-1',
+        },
+        'admin-1',
+      );
+
+      expect(repository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          question: {
+            id: '2026-08-09__uid-1',
+            title: 'Quando usar herança em vez de composição?',
+            authorName: 'Ana Prado',
+            // A data e a da PERGUNTA, e nunca a do video.
+            askedAt: new Date('2026-08-09T18:00:00.000Z'),
+          },
+        }),
+      );
+    });
+
+    /**
+     * **Teste-trava da decisao 3.** A foto e foto: editar a pergunta depois nao
+     * mexe no video, e e por isso que ela e uma copia e nao uma juncao.
+     */
+    it('teste-trava: editar a pergunta depois nao muda a foto ja gravada', async () => {
+      repository.create.mockResolvedValue({
+        entry: video('logica__dQw4w9WgXcQ', 0, 'resposta'),
+      });
+
+      await service.create(
+        'logica',
+        {
+          title: 'Herança e composição, na prática',
+          youtubeUrl: 'https://youtu.be/dQw4w9WgXcQ',
+          kind: 'resposta',
+          questionId: '2026-08-09__uid-1',
+        },
+        'admin-1',
+      );
+
+      const [gravado] = repository.create.mock.calls[0];
+
+      // A pergunta muda no mural, depois da publicacao.
+      mural.findById.mockResolvedValue({
+        found: true,
+        entry: { ...PERGUNTA, title: 'Outro titulo', authorName: 'Outro nome' },
+      });
+
+      expect(gravado.question).toEqual(
+        expect.objectContaining({
+          title: 'Quando usar herança em vez de composição?',
+          authorName: 'Ana Prado',
+        }),
+      );
+    });
+
+    /**
+     * **Teste-trava da decisao 6.** A insignia da pergunta e o palpite de quem
+     * perguntou, e quem perguntou frequentemente erra: uma duvida sobre
+     * `async/await` marcada como Logica e uma duvida sobre JavaScript. O video
+     * mora onde ele ensina.
+     *
+     * Existe para impedir que alguem "conserte" isto com uma validacao a mais.
+     */
+    it('teste-trava: a insignia do video pode ser diferente da insignia da pergunta', async () => {
+      repository.create.mockResolvedValue({
+        entry: video('logica__dQw4w9WgXcQ', 0, 'resposta'),
+      });
+
+      // A pergunta e de `poo`, e o video entra em `logica`.
+      await expect(
+        service.create(
+          'logica',
+          {
+            title: 'Herança e composição, na prática',
+            youtubeUrl: 'https://youtu.be/dQw4w9WgXcQ',
+            kind: 'resposta',
+            questionId: '2026-08-09__uid-1',
+          },
+          'admin-1',
+        ),
+      ).resolves.toEqual(expect.objectContaining({ badgeId: 'logica' }));
+    });
+
+    it('a resposta sai da API em retrato, e a aula em paisagem', async () => {
+      repository.create.mockResolvedValue({
+        entry: video('logica__dQw4w9WgXcQ', 0, 'resposta'),
+      });
+
+      const resposta = await service.create(
+        'logica',
+        {
+          title: 'Herança e composição, na prática',
+          youtubeUrl: 'https://www.youtube.com/shorts/dQw4w9WgXcQ',
+          kind: 'resposta',
+          questionId: '2026-08-09__uid-1',
+        },
+        'admin-1',
+      );
+
+      expect(resposta.orientation).toBe('retrato');
+
+      repository.create.mockResolvedValue({
+        entry: video('logica__aBcDeFgHiJk', 1),
+      });
+
+      const aula = await service.create(
+        'logica',
+        {
+          title: 'Uma aula comum',
+          youtubeUrl: 'https://youtu.be/aBcDeFgHiJk',
+        },
+        'admin-1',
+      );
+
+      expect(aula.orientation).toBe('paisagem');
+    });
+
+    it('publicar a resposta fecha o answerVideoId da pergunta', async () => {
+      repository.create.mockResolvedValue({
+        entry: {
+          ...video('logica__dQw4w9WgXcQ', 0, 'resposta'),
+          questionId: '2026-08-09__uid-1',
+        },
+      });
+
+      await service.create(
+        'logica',
+        {
+          title: 'Herança e composição, na prática',
+          youtubeUrl: 'https://youtu.be/dQw4w9WgXcQ',
+          kind: 'resposta',
+          questionId: '2026-08-09__uid-1',
+        },
+        'admin-1',
+      );
+
+      expect(mural.update).toHaveBeenCalledWith('2026-08-09__uid-1', {
+        answerVideoId: 'logica__dQw4w9WgXcQ',
+      });
+    });
+
+    /**
+     * **Teste-trava da decisao 7.** O vinculo e o lado barato de falhar: quando
+     * ele roda, o video ja esta no ar, e o balao do aluno vem da foto e nao
+     * daqui. Um 500 aqui perderia o trabalho do admin por causa de um ponteiro.
+     */
+    it('teste-trava: o vinculo falhando nao derruba a publicacao', async () => {
+      repository.create.mockResolvedValue({
+        entry: {
+          ...video('logica__dQw4w9WgXcQ', 0, 'resposta'),
+          questionId: '2026-08-09__uid-1',
+        },
+      });
+      mural.update.mockRejectedValue(new Error('firestore fora do ar'));
+
+      await expect(
+        service.create(
+          'logica',
+          {
+            title: 'Herança e composição, na prática',
+            youtubeUrl: 'https://youtu.be/dQw4w9WgXcQ',
+            kind: 'resposta',
+            questionId: '2026-08-09__uid-1',
+          },
+          'admin-1',
+        ),
+      ).resolves.toEqual(
+        expect.objectContaining({ id: 'logica__dQw4w9WgXcQ' }),
+      );
+    });
+
+    it('publicar aula nao escreve nada no mural', async () => {
+      repository.create.mockResolvedValue({
+        entry: video('logica__dQw4w9WgXcQ', 0),
+      });
+
+      await service.create(
+        'logica',
+        {
+          title: 'Uma aula comum',
+          youtubeUrl: 'https://youtu.be/dQw4w9WgXcQ',
+        },
+        'admin-1',
+      );
+
+      expect(mural.update).not.toHaveBeenCalled();
+    });
+
+    it('aula nao le o mural e nasce sem foto', async () => {
+      repository.create.mockResolvedValue({
+        entry: video('logica__dQw4w9WgXcQ', 0),
+      });
+
+      await service.create(
+        'logica',
+        {
+          title: 'Uma aula comum',
+          youtubeUrl: 'https://youtu.be/dQw4w9WgXcQ',
+        },
+        'admin-1',
+      );
+
+      expect(mural.findById).not.toHaveBeenCalled();
+      expect(repository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ question: null }),
+      );
     });
 
     it('marca o video como livre para todos', async () => {

@@ -27,6 +27,42 @@ import { BadgeId } from '../track.constants';
  */
 export type BadgeVideoKind = 'aula' | 'resposta';
 
+/**
+ * A pergunta que o video responde, **fotografada na publicacao** (spec 017).
+ *
+ * Nao e redundante com o `questionId` ao lado dela, e nao e cache: e a mesma
+ * escolha que a `MuralQuestion` ja fez com o `authorName` dela, por tres motivos
+ * que se somam.
+ *
+ * **1. Nao custa leitura por visita.** A alternativa era um `getAll` sobre os
+ * `questionId` a cada `listByBadge` -- uma leitura a mais por resposta listada,
+ * toda vez que alguem abre a aba. Aqui a leitura acontece uma vez, na
+ * publicacao.
+ *
+ * **2. Sobrevive a remocao da pergunta.** O admin pode apagar uma pergunta do
+ * mural, e o video publicado continua no ar. Com juncao, o balao sumiria junto e
+ * sobraria um video de resposta que ninguem entende.
+ *
+ * **3. E o que foi perguntado, e nao o que a pergunta virou.** O autor pode
+ * editar a pergunta enquanto ela esta em coleta (spec 016), e o video respondeu
+ * a versao antiga. A foto e o registro certo.
+ *
+ * O preco esta aceito e declarado: editar a pergunta depois nao muda o balao.
+ */
+export interface AnsweredQuestion {
+  id: string;
+  title: string;
+  authorName: string;
+  /**
+   * O `createdAt` da **pergunta**, nunca o do video.
+   *
+   * Sao datas diferentes e a que interessa ao balao e a primeira: ele diz "isto
+   * foi perguntado em tal dia", e a data em que o video foi gravado nao e
+   * informacao de ninguem.
+   */
+  askedAt: Date;
+}
+
 export interface BadgeVideo {
   id: string;
   badgeId: BadgeId;
@@ -43,6 +79,14 @@ export interface BadgeVideo {
   kind: BadgeVideoKind;
   /** A pergunta que originou a resposta. Nulo em toda aula. */
   questionId: string | null;
+  /**
+   * A foto da pergunta, para a tela desenhar o balao sem uma segunda leitura.
+   *
+   * Nulo em toda aula e em **todo video anterior a spec 017** -- inclusive nos
+   * que tiverem `kind: 'resposta'`, se algum existir. Quem consome desenha o
+   * balao quando ele existe e nao desenha quando nao existe.
+   */
+  question: AnsweredQuestion | null;
   /**
    * Libera o video para todo mundo, mesmo numa insignia adiantada.
    *
@@ -76,10 +120,19 @@ interface BadgeVideoDocument extends DocumentData {
   youtubeId: string;
   kind: BadgeVideoKind;
   questionId: string | null;
+  question: AnsweredQuestionDocument | null;
   devTierFree: boolean;
   order: number;
   createdAt: Timestamp;
   updatedAt: Timestamp;
+}
+
+/** A foto no Firestore: igual a entidade, com Timestamp no lugar de Date. */
+interface AnsweredQuestionDocument {
+  id: string;
+  title: string;
+  authorName: string;
+  askedAt: Timestamp;
 }
 
 /** Monta o ID do documento. Existe aqui para a regra ter um dono so. */
@@ -96,6 +149,14 @@ export const badgeVideoConverter: FirestoreDataConverter<BadgeVideo> = {
       youtubeId: video.youtubeId,
       kind: video.kind,
       questionId: video.questionId,
+      question: video.question
+        ? {
+            id: video.question.id,
+            title: video.question.title,
+            authorName: video.question.authorName,
+            askedAt: Timestamp.fromDate(video.question.askedAt),
+          }
+        : null,
       devTierFree: video.devTierFree,
       order: video.order,
       createdAt: Timestamp.fromDate(video.createdAt),
@@ -118,6 +179,16 @@ export const badgeVideoConverter: FirestoreDataConverter<BadgeVideo> = {
       // apagado nada.
       kind: data.kind ?? 'aula',
       questionId: data.questionId ?? null,
+      // Documento anterior a spec 017 nao tem a foto, e le como null: a tela
+      // desenha o balao quando ele existe e nao reserva espaco quando nao.
+      question: data.question
+        ? {
+            id: data.question.id,
+            title: data.question.title,
+            authorName: data.question.authorName,
+            askedAt: data.question.askedAt.toDate(),
+          }
+        : null,
       devTierFree: data.devTierFree ?? false,
       order: data.order,
       createdAt: data.createdAt.toDate(),
