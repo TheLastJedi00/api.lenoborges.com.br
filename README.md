@@ -256,7 +256,19 @@ assinatura existir.
 
 ### `GET /badges/:badgeId/videos`
 - Header: `Authorization: Bearer <accessToken>`
-- Resposta: `200` `{ badgeId, videos: [{ id, badgeId, title, description, youtubeId, order }] }`
+- Query: `kind` (`aula` ou `resposta`, opcional) — a aba. Sem ele, as duas
+- Resposta: `200` `{ badgeId, videos: [{ id, badgeId, title, description, youtubeId, kind, questionId,
+  question, orientation, devTierFree, order }] }`
+
+**`orientation` é derivada e não gravada** (spec 017). Vale `retrato` (9:16, o Short) nas respostas e
+`paisagem` (16:9) nas aulas, e **o cliente consome sem recalcular** — é a mesma forma da `phase` do
+Mural. Derivar de `kind` do lado da tela faria a mesma regra existir em template, folha de estilo e
+teste, e o dia em que uma resposta for gravada em paisagem o conserto exigiria deploy de front.
+
+**`question` é uma foto da pergunta**, tirada no momento da publicação: `{ id, title, authorName,
+askedAt }`, com `askedAt` em ISO 8601. É o que a tela usa para desenhar o balão acima do player sem uma
+segunda leitura. Ela **não substitui `questionId`** — o id serve para navegar, a foto serve para
+desenhar — e é `null` em toda aula e em todo vídeo anterior à spec 017.
 
 **Insígnia sem vídeo responde `200` com lista vazia, nunca `404`.** A trilha não é presa — o aluno
 escolhe qual insígnia quer conquistar e pode pular —, então insígnia vazia é o estado normal do
@@ -276,8 +288,8 @@ Todas passam por `FirebaseAuthGuard` e depois `AdminGuard`, nessa ordem. Membro 
 | `GET` | `/admin/users/:id` | Um membro inteiro: perfil, acesso, estado de e-mail e datas |
 | `POST` | `/admin/users/:id/email` | Escreve e envia um e-mail para aquele membro (campanha `direto`) |
 | `PATCH` | `/admin/users/:id` | Altera `grade` e `tier`, em requisições separadas |
-| `GET` | `/admin/badges/:badgeId/videos` | Vídeos da insígnia |
-| `POST` | `/admin/badges/:badgeId/videos` | Publica; recebe URL, grava o ID; entra no fim da ordem |
+| `GET` | `/admin/badges/:badgeId/videos?kind` | Vídeos da insígnia. **Sem `kind`, as duas abas juntas** |
+| `POST` | `/admin/badges/:badgeId/videos` | Publica; recebe URL (**Shorts inclusive**), grava o ID; entra no fim da ordem da aba |
 | `PATCH` | `/admin/badges/:badgeId/videos/order` | Reordena em lote atômico |
 | `PATCH` | `/admin/badges/:badgeId/videos/:videoId` | Edita título e descrição |
 | `DELETE` | `/admin/badges/:badgeId/videos/:videoId` | Remove e renormaliza a ordem |
@@ -342,8 +354,15 @@ diferentes, que é um caso real: um vídeo de Git serve à insígnia de Git e à
 O título é nosso porque o do YouTube é de lá: aquele é escrito para o algoritmo, este diz onde a
 pessoa está na trilha e precisa poder ser reescrito sem republicar o vídeo.
 
-Guarda-se o ID e não a URL porque ela chega em cinco formas (`watch?v=`, `youtu.be/`, `/embed/`, com
-`&t=`, com `?si=`). A extração acontece uma vez, na entrada, em `src/track/youtube-id.ts`.
+Guarda-se o ID e não a URL porque ela chega em seis formas (`watch?v=`, `youtu.be/`, `/embed/`,
+`/shorts/`, com `&t=`, com `?si=`). A extração acontece uma vez, na entrada, em
+`src/track/youtube-id.ts`, e **essa lista é a lista inteira que o produto aceita** — forma que não está
+lá é `400` na cara do admin. A de Shorts esteve de fora até a spec 017, e enquanto isso a aba de
+respostas parecia pronta e recusava o único link que o YouTube copia num celular.
+
+Short não precisa de nada além da extração: o ID dele é o mesmo ID de 11 caracteres e o player de embed
+serve Short sem tratamento especial. O que muda na tela é só a proporção do iframe, e ela sai do
+`orientation` derivado no DTO.
 
 **Esta é a primeira consulta do sistema que não é por caminho**, e por isso a primeira que precisa de
 índice composto no Firestore de produção. A spec 010 acrescentou o filtro por `kind`, e com ele um
@@ -529,6 +548,36 @@ por `kind` embaralha as duas de uma vez, e é o erro mais provável de quem mexe
 e sai. Existe porque o Mural cria uma armadilha — a melhor pergunta da semana pode ser sobre Angular,
 e a resposta nasceria trancada para 90% de quem votou nela.
 
+### A resposta carrega a pergunta dentro dela (spec 017)
+
+`badge_videos` ganha um campo, e ele é um objeto:
+
+- `question` (objeto ou null) — `{ id, title, authorName, askedAt }`, **fotografado na publicação**
+
+Publicar com `kind: resposta` passa a **exigir** `questionId` — a outra metade da simetria que a spec
+010 escreveu em comentário e não implementou —, a pergunta é lida uma vez por caminho direto, e id que
+não existe responde `404`. Aula com `questionId` continua respondendo `400`.
+
+**Por que uma foto e não uma junção**, em três motivos que se somam:
+
+1. **Não custa leitura por visita.** A alternativa era um `getAll` sobre os `questionId` a cada
+   listagem — uma leitura a mais por resposta, toda vez que alguém abre a aba. Aqui é uma leitura por
+   vídeo publicado.
+2. **Sobrevive à remoção da pergunta.** O admin pode apagar uma pergunta do Mural e o vídeo continua no
+   ar. Com junção, o balão sumiria junto e sobraria um vídeo que ninguém entende.
+3. **É o que foi perguntado, e não o que a pergunta virou.** O autor edita a pergunta enquanto ela está
+   em coleta (spec 016), e o vídeo respondeu a versão antiga.
+
+O preço está aceito e declarado: **editar a pergunta depois não muda o balão.** E `askedAt` é o
+`createdAt` da pergunta, nunca o do vídeo — o balão diz quando alguém teve a dúvida, e a data em que o
+vídeo foi gravado não é informação de ninguém.
+
+Publicada a resposta, a `MuralQuestion` recebe `answerVideoId` — o campo que existe desde a spec 010 e
+que até aqui nada nunca escreveu. Essa escrita vem **por último** e falha em silêncio, com log: quando
+ela roda, o vídeo já está gravado, já foi notificado e já foi anunciado, e um `500` aqui perderia o
+trabalho do admin por causa de um ponteiro. Nada do lado do aluno quebra quando ela falha, porque **o
+balão vem da foto e não do vínculo.**
+
 ## Notificações Internas (spec 012)
 
 Dois eventos avisam a comunidade: **vídeo novo numa insígnia** e **pergunta nova no Mural**. A lista
@@ -603,6 +652,11 @@ mesmo `orderBy`. O caminho oposto — emendar cada aba com um `where` por `promo
 **não enxerga documento que não tem o campo**, e todo documento anterior à spec 016 não tem
 `promotedTo`. O histórico de vencedoras apareceria vazio para todas as semanas anteriores, sem erro,
 com a resposta 200.
+
+**A spec 017 também não acrescenta nenhuma linha**, e pelo motivo mais simples de todos: a foto da
+pergunta mora **dentro** do documento do vídeo, o `orientation` é derivado e não existe no banco, e a
+única leitura nova é `mural_questions/{id}` — caminho direto, que não usa índice. O `?kind=` que o
+`GET` do admin ganhou usa a quarta linha, que já estava lá.
 
 A terceira linha é fácil de perder de vista, e ela já tinha sido perdida uma vez: `kind` é opcional em
 `listByBadge`, então **`badgeId` + `order` é uma consulta de verdade**, não um prefixo da de baixo. O
