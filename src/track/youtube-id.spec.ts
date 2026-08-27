@@ -1,7 +1,7 @@
 import { extractYoutubeId } from './youtube-id';
 
 describe('extractYoutubeId', () => {
-  // As cinco formas que uma URL de YouTube chega quando alguem copia do
+  // As seis formas que uma URL de YouTube chega quando alguem copia do
   // navegador, do botao de compartilhar ou de um embed.
   it.each([
     ['https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'watch?v='],
@@ -9,7 +9,21 @@ describe('extractYoutubeId', () => {
     ['https://www.youtube.com/embed/dQw4w9WgXcQ', 'embed'],
     ['https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=42s', 'com timestamp'],
     ['https://youtu.be/dQw4w9WgXcQ?si=AbCdEf123', 'com si de compartilhamento'],
+    ['https://www.youtube.com/shorts/dQw4w9WgXcQ', 'shorts'],
   ])('extrai de %s (%s)', (url) => {
+    expect(extractYoutubeId(url)).toEqual({ found: true, id: 'dQw4w9WgXcQ' });
+  });
+
+  // O video de resposta do Mural (spec 017) nasce como Short, e a forma abaixo e
+  // exatamente o que o botao Compartilhar do app do YouTube copia num celular --
+  // que e o link que o admin vai colar. Sem ela, a funcionalidade inteira parece
+  // pronta e a primeira pessoa a usa-la leva 400.
+  it.each([
+    ['https://www.youtube.com/shorts/dQw4w9WgXcQ?feature=share', 'com feature'],
+    ['https://youtube.com/shorts/dQw4w9WgXcQ', 'sem www'],
+    ['https://m.youtube.com/shorts/dQw4w9WgXcQ', 'no dominio movel'],
+    ['https://www.youtube.com/shorts/dQw4w9WgXcQ?t=5', 'com timestamp'],
+  ])('extrai de um Short: %s (%s)', (url) => {
     expect(extractYoutubeId(url)).toEqual({ found: true, id: 'dQw4w9WgXcQ' });
   });
 
@@ -36,6 +50,10 @@ describe('extractYoutubeId', () => {
     ['nao é uma url', 'texto solto'],
     ['', 'vazio'],
     ['https://youtu.be/curto', 'id de tamanho errado'],
+    // O caminho sem id nao pode virar string vazia: ela passaria adiante e o
+    // documento nasceria como `logica__`, um caminho valido apontando para nada.
+    ['https://www.youtube.com/shorts/', 'shorts sem id'],
+    ['https://www.youtube.com/shorts/abc', 'shorts com id curto demais'],
   ])('recusa %s (%s)', (url) => {
     expect(extractYoutubeId(url)).toEqual({ found: false, id: null });
   });

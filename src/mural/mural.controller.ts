@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Header,
   HttpCode,
   Param,
   Post,
@@ -38,7 +39,27 @@ export class MuralController {
     private readonly votes: VoteService,
   ) {}
 
+  /**
+   * O `no-store` dos três GET desta classe: a resposta é por usuário e o
+   * default da plataforma não é.
+   *
+   * Sem o header, a Vercel devolve `Cache-Control: public, max-age=0,
+   * must-revalidate` e o Express carimba um ETag. O browser guarda o par
+   * (validador, corpo) e passa a revalidar com `If-None-Match`, e a API
+   * responde **304 sem corpo**. Quase sempre isso é transparente — o browser
+   * serve o corpo do próprio cache —, mas quando o corpo é despejado e o
+   * validador sobrevive, o 304 vazio chega na aplicação e o Mural abre em
+   * branco. Foi o que aconteceu num celular em 27/08/2026, e limpar o cache do
+   * browser resolveu, que é a assinatura do problema.
+   *
+   * O `public` era o segundo defeito, independente do primeiro: numa rota
+   * atrás do `FirebaseAuthGuard`, ele autoriza cache compartilhado a guardar o
+   * mural de um membro específico.
+   *
+   * Ver `fix.md` da spec 016.
+   */
   @Get()
+  @Header('Cache-Control', 'no-store')
   @ApiOperation({
     summary: 'Estado do ciclo semanal',
     description:
@@ -51,6 +72,7 @@ export class MuralController {
   }
 
   @Get('perguntas')
+  @Header('Cache-Control', 'no-store')
   @ApiOperation({ summary: 'Perguntas de uma fase do ciclo' })
   @ApiQuery({ name: 'fase', enum: ['coleta', 'votacao'], required: false })
   @ApiQuery({
@@ -78,6 +100,7 @@ export class MuralController {
   }
 
   @Get('vencedoras')
+  @Header('Cache-Control', 'no-store')
   @ApiOperation({
     summary: 'Vencedoras das semanas encerradas',
     description:
