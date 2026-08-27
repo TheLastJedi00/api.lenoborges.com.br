@@ -6,7 +6,10 @@ import { MuralQuestion } from './entities/mural-question.entity';
 // Terca-feira. Semana corrente: 2026-08-16. Em votacao: 2026-08-09.
 const AGORA = new Date('2026-08-18T12:00:00.000Z');
 
-function question(weekId: string): MuralQuestion {
+function question(
+  weekId: string,
+  promotedTo: 'votacao' | 'encerrada' | null = null,
+): MuralQuestion {
   return {
     id: `${weekId}__uid-1`,
     weekId,
@@ -17,7 +20,7 @@ function question(weekId: string): MuralQuestion {
     body: null,
     voteCount: 3,
     answerVideoId: null,
-    promotedTo: null,
+    promotedTo,
     createdAt: AGORA,
     updatedAt: AGORA,
   };
@@ -133,5 +136,58 @@ describe('VoteService', () => {
     await expect(
       service.unvote('2026-08-16__uid-1', 'uid-2', AGORA),
     ).rejects.toThrow(ConflictException);
+  });
+
+  /**
+   * **A primeira prova de que o piso da spec 016 e uma decisao, e nao um `if` a
+   * mais em cada tela.**
+   *
+   * O VoteService nao ganhou uma linha: ele le `phaseOf`, e `phaseOf` aprendeu
+   * o adiantamento. Uma pergunta da semana em coleta adiantada pelo admin
+   * aceita voto agora; a pergunta ao lado, sem adiantamento, continua
+   * respondendo 409 -- que e a invariante do adiantamento vista do voto.
+   */
+  describe('o piso do adiantamento (spec 016)', () => {
+    it('aceita voto na pergunta em coleta que foi adiantada para votacao', async () => {
+      repository.findById.mockResolvedValue({
+        found: true,
+        entry: question('2026-08-16', 'votacao'),
+      });
+
+      await service.vote('2026-08-16__uid-1', 'uid-2', AGORA);
+
+      expect(repository.vote).toHaveBeenCalledWith(
+        '2026-08-16__uid-1',
+        'uid-2',
+      );
+    });
+
+    it('a mesma pergunta sem adiantamento continua recusando com 409', async () => {
+      repository.findById.mockResolvedValue({
+        found: true,
+        entry: question('2026-08-16'),
+      });
+
+      await expect(
+        service.vote('2026-08-16__uid-1', 'uid-2', AGORA),
+      ).rejects.toThrow(ConflictException);
+      expect(repository.vote).not.toHaveBeenCalled();
+    });
+
+    /**
+     * Adiantar para "responder logo" tira a pergunta do mural, e tirar do mural
+     * quer dizer que o voto fecha. Sem isto, a pauta continuaria recebendo voto
+     * depois de a pergunta ja ter virado pauta.
+     */
+    it('recusa voto na pergunta adiantada para encerrada', async () => {
+      repository.findById.mockResolvedValue({
+        found: true,
+        entry: question('2026-08-09', 'encerrada'),
+      });
+
+      await expect(
+        service.vote('2026-08-09__uid-1', 'uid-2', AGORA),
+      ).rejects.toThrow(ConflictException);
+    });
   });
 });

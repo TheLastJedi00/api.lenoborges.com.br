@@ -2,17 +2,17 @@
 > da 014 nem da 015. As fases entram em ordem: a Fase 01 muda a assinatura de `phaseOf` e é o que faz o
 > compilador apontar os chamadores para as fases seguintes.
 
-# Fase 01: O piso []
+# Fase 01: O piso [x]
 Branch: `feat/016-piso-da-fase`
 
 Nenhuma rota nova e nenhum comportamento visível. Ao fim desta fase a fase de uma pergunta sabe da
 promoção, e nada ainda promove nada.
 
-- [ ] Task 01: O campo. Arquivo: `src/mural/entities/mural-question.entity.ts`. Objetivo: `promotedTo:
+- [x] Task 01: O campo. Arquivo: `src/mural/entities/mural-question.entity.ts`. Objetivo: `promotedTo:
   'votacao' | 'encerrada' | null` na interface, no `MuralQuestionDocument` e nos dois lados do converter,
   com `data.promotedTo ?? null` na leitura. O comentário em cima do campo registra que ele é **piso e não
   estado**: levanta o chão da fase e nunca a segura, que é o que mantém a decisão 1 da spec 010 de pé.
-- [ ] Task 02 (TDD + implementação): `phaseOf` passa a receber a pergunta. Arquivos:
+- [x] Task 02 (TDD + implementação): `phaseOf` passa a receber a pergunta. Arquivos:
   `src/mural/mural-phase.ts`, `mural-phase.spec.ts`. Objetivo: assinatura `phaseOf(question, now)` onde
   `question` é `{ weekId, promotedTo }`, devolvendo o **maior** entre a fase natural e o piso, na escala
   `coleta < votacao < encerrada`. Testes-trava: (a) pergunta da semana em coleta com `promotedTo: 'votacao'`
@@ -20,11 +20,11 @@ promoção, e nada ainda promove nada.
   `encerrada`** — é o teste que prova que o relógio ganha quando está à frente, e é o bug que um campo
   `status` gravado teria; (c) `promotedTo: null` devolve exatamente o que a versão antiga devolvia, nos três
   casos.
-- [ ] Task 03: Os chamadores. Arquivos: `src/mural/mural.service.ts`, `src/mural/vote.service.ts`.
+- [x] Task 03: Os chamadores. Arquivos: `src/mural/mural.service.ts`, `src/mural/vote.service.ts`.
   Objetivo: passar a pergunta inteira onde hoje se passa `found.entry.weekId` ou `question.weekId`. É
   mecânico e é o motivo de a Task 02 ter trocado a assinatura em vez de aceitar um terceiro parâmetro
   opcional — **um parâmetro opcional deixaria os três chamadores compilando com a fase errada.**
-- [ ] Task 04 (TDD + implementação): O voto obedece ao piso. Arquivo: `src/mural/vote.service.spec.ts`.
+- [x] Task 04 (TDD + implementação): O voto obedece ao piso. Arquivo: `src/mural/vote.service.spec.ts`.
   Objetivo: teste-trava de que uma pergunta da semana em coleta, promovida a `votacao`, **aceita voto** — e
   que a mesma pergunta sem promoção continua respondendo 409. É a primeira prova de que a decisão 1 desta
   spec é uma decisão, e não um `if` a mais em cada tela.
