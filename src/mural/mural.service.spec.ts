@@ -45,6 +45,7 @@ function question(overrides: Partial<MuralQuestion> = {}): MuralQuestion {
     body: null,
     voteCount: 0,
     answerVideoId: null,
+    promotedTo: null,
     createdAt: AGORA,
     updatedAt: AGORA,
     ...overrides,

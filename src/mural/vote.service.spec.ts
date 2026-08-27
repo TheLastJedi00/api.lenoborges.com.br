@@ -17,6 +17,7 @@ function question(weekId: string): MuralQuestion {
     body: null,
     voteCount: 3,
     answerVideoId: null,
+    promotedTo: null,
     createdAt: AGORA,
     updatedAt: AGORA,
   };
