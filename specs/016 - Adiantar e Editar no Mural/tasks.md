@@ -124,28 +124,28 @@ Branch: `feat/016-editar-pergunta`
   `badgeId`**, e trocar a insígnia depois deixaria um aviso publicado numa trilha apontando para uma
   pergunta de outra. É comentário e nada mais; o DTO não muda.
 
-# Fase 05: Documentação e verificação []
+# Fase 05: Documentação e verificação [x]
 Branch: `feat/016-docs-e-e2e`
 
-- [ ] Task 01: `README.md`. Objetivo: a rota nova na tabela, o campo `promotedTo` em `mural_questions`, os
+- [x] Task 01: `README.md`. Objetivo: a rota nova na tabela, o campo `promotedTo` em `mural_questions`, os
   campos novos de `GET /mural` e de `GET /mural/vencedoras`, e uma frase dizendo que **a fase de uma
   pergunta é o maior entre a conta do relógio e o piso da promoção**. Na seção de índices compostos, dizer
   explicitamente que **nenhuma linha muda** — a partição e a ordenação passaram para a memória, e as
   consultas por semana que pedem índice continuam iguais (decisão 6).
-- [ ] Task 02: `CLAUDE.md`. Objetivo: duas linhas na lista de garantias que vivem em código — **a promoção é
+- [x] Task 02: `CLAUDE.md`. Objetivo: duas linhas na lista de garantias que vivem em código — **a promoção é
   um piso e nunca um estado, então o relógio ganha sempre que estiver à frente e nenhuma pergunta pode ficar
   presa numa fase velha**; e **o corte de pergunta promovida é em memória porque `where('campo','==',null)`
   não enxerga documento que não tem o campo, e todo documento anterior à spec 016 não tem**.
-- [ ] Task 03 (e2e): O adiantamento contra o emulador. Arquivo: `test/mural.e2e-spec.ts`. Objetivo: semear
+- [x] Task 03 (e2e, escrito e **não executado**: sem Java nesta máquina, `npm run test:e2e` não sobe o emulador): O adiantamento contra o emulador. Arquivo: `test/mural.e2e-spec.ts`. Objetivo: semear
   uma pergunta na semana corrente, provar que ela não aceita voto, promover pela rota de admin, e provar as
   três consequências de uma vez: **ela aceita voto, ela sai da aba de coleta, e o autor recebe 409 ao tentar
   editar**. É o único lugar onde a decisão 1 desta spec é verificável de ponta a ponta.
-- [ ] Task 04 (e2e): A pauta e a vencedora. Arquivo: `test/mural.e2e-spec.ts`. Objetivo: semear duas
+- [x] Task 04 (e2e, escrito e **não executado**: sem Java nesta máquina): A pauta e a vencedora. Arquivo: `test/mural.e2e-spec.ts`. Objetivo: semear duas
   perguntas numa semana encerrada, promover a mais votada a `encerrada`, e provar que **a segunda é a
   vencedora da semana** e que a promovida aparece na pauta com `origem: 'adiantada'` — uma vez só. É a prova
   das decisões 3, 4 e 5 juntas, e da invariante: **a semana que teve uma adiantada continua tendo
   vencedora**, e não vira uma semana em branco.
-- [ ] Task 05 (e2e): O formulário de edição tem o que preencher. Arquivo: `test/mural.e2e-spec.ts`.
+- [x] Task 05 (e2e, escrito e **não executado**: sem Java nesta máquina): O formulário de edição tem o que preencher. Arquivo: `test/mural.e2e-spec.ts`.
   Objetivo: criar uma pergunta e conferir que `GET /mural` devolve `myQuestion` com `title` e `body`
   íntegros. É o contrato de que o front depende para a tela de edição abrir preenchida, e é a metade desta
   spec que não tem nada a ver com adiantar.
