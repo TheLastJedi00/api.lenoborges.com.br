@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import cookieParser from 'cookie-parser';
 import request from 'supertest';
+import { acceptCurrentLegalDocuments } from './accept-legal.helper';
 import { App } from 'supertest/types';
 import { AppModule } from '../src/app.module';
 import { FirebaseService } from '../src/auth/firebase.service';
@@ -143,6 +144,12 @@ describe('Auth & Profile (e2e)', () => {
     expect(rtCookie).toContain('HttpOnly');
 
     const accessToken = sessionData.accessToken;
+
+    // 2.5. Os aceites dos documentos legais (spec 018). `GET /me` logo abaixo
+    // passaria sem eles -- e uma das rotas isentas --, mas o
+    // `PATCH /me/profile` do passo 4 nao: ele e o endpoint que carimba
+    // `completedAt`, e barra-lo e o que trava o onboarding de quem nao aceitou.
+    await acceptCurrentLegalDocuments(app.getHttpServer(), accessToken);
 
     // 3. GET /me com access token
     const meRes = await request(app.getHttpServer())

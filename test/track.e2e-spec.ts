@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import cookieParser from 'cookie-parser';
 import request from 'supertest';
+import { acceptCurrentLegalDocuments } from './accept-legal.helper';
 import { App } from 'supertest/types';
 import { Firestore } from 'firebase-admin/firestore';
 import { AppModule } from '../src/app.module';
@@ -57,8 +58,12 @@ describe('Trilha (e2e)', () => {
       .send({ email, password })
       .expect(200);
 
+    const token = (response.body as SessionResponseDto).accessToken;
+    // Sem isto a proxima requisicao desta sessao responde 428 (spec 018).
+    await acceptCurrentLegalDocuments(app.getHttpServer(), token);
+
     return {
-      token: (response.body as SessionResponseDto).accessToken,
+      token,
       uid: user.uid,
     };
   }
@@ -84,7 +89,11 @@ describe('Trilha (e2e)', () => {
       .send({ email, password })
       .expect(200);
 
-    return (response.body as SessionResponseDto).accessToken;
+    const token = (response.body as SessionResponseDto).accessToken;
+    // Sem isto a proxima requisicao desta sessao responde 428 (spec 018).
+    await acceptCurrentLegalDocuments(app.getHttpServer(), token);
+
+    return token;
   }
 
   beforeAll(async () => {

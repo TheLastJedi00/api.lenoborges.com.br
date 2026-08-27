@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import cookieParser from 'cookie-parser';
 import request from 'supertest';
+import { acceptCurrentLegalDocuments } from './accept-legal.helper';
 import { App } from 'supertest/types';
 import { Firestore } from 'firebase-admin/firestore';
 import { AppModule } from '../src/app.module';
@@ -83,6 +84,9 @@ describe('Billing (e2e)', () => {
       .expect(200);
 
     const session = loginRes.body as SessionResponseDto;
+
+    // Sem isto a requisicao seguinte responde 428 (spec 018).
+    await acceptCurrentLegalDocuments(app.getHttpServer(), session.accessToken);
 
     const response = await request(app.getHttpServer())
       .get('/billing/tiers')
