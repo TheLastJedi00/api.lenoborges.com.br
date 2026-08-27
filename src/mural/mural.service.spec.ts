@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  NotFoundException,
 } from '@nestjs/common';
 import { MuralService } from './mural.service';
 import { MuralRepository } from './mural.repository';
@@ -391,6 +392,131 @@ describe('MuralService', () => {
       const winners = await service.listWinners('uid-1', 1, AGORA);
 
       expect(winners[0].weekId).toBe('2026-08-02');
+    });
+  });
+
+  /**
+   * O adiantamento (spec 016). O admin empurra **uma** pergunta para a frente:
+   * `votacao` abre o voto agora, `encerrada` tira do Mural e poe na pauta.
+   */
+  describe('adiantamento', () => {
+    it('adianta a pergunta da semana em coleta para votacao', async () => {
+      repository.findById.mockResolvedValue({ found: true, entry: question() });
+      repository.update.mockResolvedValue({
+        entry: question({ promotedTo: 'votacao' }),
+      });
+
+      const promovida = await service.promote(
+        '2026-08-16__uid-1',
+        'votacao',
+        AGORA,
+      );
+
+      expect(repository.update).toHaveBeenCalledWith('2026-08-16__uid-1', {
+        promotedTo: 'votacao',
+      });
+      expect(promovida.promotedTo).toBe('votacao');
+      expect(promovida.phase).toBe('votacao');
+    });
+
+    it('responde 404 para pergunta que nao existe', async () => {
+      await expect(
+        service.promote('2026-08-16__ninguem', 'votacao', AGORA),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    /**
+     * **Nao pode ser um 200 que nao faz nada.** A tela precisa saber que o
+     * botao nao tinha efeito -- um botao que responde sucesso sem mudar nada e
+     * o que ensina a pessoa a nao confiar no que ela ve.
+     */
+    it('recusa com 409 adiantar para votacao o que ja esta em votacao pelo relogio', async () => {
+      repository.findById.mockResolvedValue({
+        found: true,
+        entry: question({ weekId: '2026-08-09' }),
+      });
+
+      await expect(
+        service.promote('2026-08-09__uid-1', 'votacao', AGORA),
+      ).rejects.toThrow(ConflictException);
+      expect(repository.update).not.toHaveBeenCalled();
+    });
+
+    it('recusa com 409 adiantar de novo para a fase que a promocao ja deu', async () => {
+      repository.findById.mockResolvedValue({
+        found: true,
+        entry: question({ promotedTo: 'votacao' }),
+      });
+
+      await expect(
+        service.promote('2026-08-16__uid-1', 'votacao', AGORA),
+      ).rejects.toThrow(ConflictException);
+    });
+
+    it('recusa com 409 voltar de encerrada para votacao', async () => {
+      repository.findById.mockResolvedValue({
+        found: true,
+        entry: question({ promotedTo: 'encerrada' }),
+      });
+
+      await expect(
+        service.promote('2026-08-16__uid-1', 'votacao', AGORA),
+      ).rejects.toThrow(ConflictException);
+    });
+
+    /**
+     * "Responder logo" e responder logo: a pergunta sai do Mural sem ter
+     * recebido um voto. E o ponto em aberto 3 da spec 016, assumido como o
+     * comportamento desejado e nao como buraco.
+     */
+    it('adianta de coleta direto para encerrada, pulando a votacao inteira', async () => {
+      repository.findById.mockResolvedValue({ found: true, entry: question() });
+      repository.update.mockResolvedValue({
+        entry: question({ promotedTo: 'encerrada' }),
+      });
+
+      const promovida = await service.promote(
+        '2026-08-16__uid-1',
+        'encerrada',
+        AGORA,
+      );
+
+      expect(promovida.phase).toBe('encerrada');
+    });
+
+    it('aceita votacao -> encerrada', async () => {
+      repository.findById.mockResolvedValue({
+        found: true,
+        entry: question({ promotedTo: 'votacao' }),
+      });
+      repository.update.mockResolvedValue({
+        entry: question({ promotedTo: 'encerrada' }),
+      });
+
+      await expect(
+        service.promote('2026-08-16__uid-1', 'encerrada', AGORA),
+      ).resolves.toEqual(expect.objectContaining({ promotedTo: 'encerrada' }));
+    });
+
+    /**
+     * **Adiantar nao abre vaga para uma pergunta nova** (decisao 10). O ID do
+     * documento continua sendo `{weekId}__{uid}` e a promocao nao o toca.
+     *
+     * Este teste existe para impedir a "otimizacao" de resolver a fase mexendo
+     * no `weekId`: ela exigiria recriar o documento e migrar a subcolecao de
+     * votos inteira, e liberaria o caminho da semana para uma segunda pergunta
+     * da mesma pessoa.
+     */
+    it('quem teve a pergunta adiantada continua com a vaga da semana ocupada', async () => {
+      repository.findMine.mockResolvedValue({
+        found: true,
+        entry: question({ promotedTo: 'votacao' }),
+      });
+
+      const state = await service.getState('uid-1', AGORA);
+
+      expect(state.canAsk).toBe(false);
+      expect(state.myQuestionId).toBe('2026-08-16__uid-1');
     });
   });
 

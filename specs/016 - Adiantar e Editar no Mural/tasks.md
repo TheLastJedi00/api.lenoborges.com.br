@@ -29,30 +29,30 @@ promoção, e nada ainda promove nada.
   que a mesma pergunta sem promoção continua respondendo 409. É a primeira prova de que a decisão 1 desta
   spec é uma decisão, e não um `if` a mais em cada tela.
 
-# Fase 02: A rota de adiantar []
+# Fase 02: A rota de adiantar [x]
 Branch: `feat/016-adiantar`
 
 Ao fim desta fase o admin promove, e o mural ainda não sabe mostrar o resultado — a Fase 03 é que arruma a
 listagem.
 
-- [ ] Task 01: DTO da promoção. Arquivo: `src/mural/dto/promote-question.dto.ts`. Objetivo: `fase` com
+- [x] Task 01: DTO da promoção. Arquivo: `src/mural/dto/promote-question.dto.ts`. Objetivo: `fase` com
   `@IsIn(['votacao', 'encerrada'])`. O comentário registra que **`'coleta'` não é valor aceito de
   propósito** (decisão 11): despromover é recusado na validação, que é o lugar mais barato de dizer a
   decisão 2.
-- [ ] Task 02 (TDD + implementação): `promote` no service. Arquivos: `src/mural/mural.service.ts`,
+- [x] Task 02 (TDD + implementação): `promote` no service. Arquivos: `src/mural/mural.service.ts`,
   `mural.service.spec.ts`. Objetivo: ler a pergunta, calcular a fase atual pela Task 02 da Fase 01, gravar
   `promotedTo` e devolver o DTO. Testes-trava: (a) pergunta inexistente responde **404**; (b) promover para
   `votacao` uma pergunta **já em votação pela conta natural** responde **409**, e não um 200 que não faz
   nada — a tela precisa saber que o botão não tinha efeito; (c) promover para `encerrada` uma pergunta em
   coleta funciona e **pula a votação inteira** (ponto em aberto 3); (d) `votacao → encerrada` é aceito.
-- [ ] Task 03: O `promotedTo` no repositório. Arquivo: `src/mural/mural.repository.ts`. Objetivo: incluir
+- [x] Task 03: O `promotedTo` no repositório. Arquivo: `src/mural/mural.repository.ts`. Objetivo: incluir
   `promotedTo` no `Partial<Pick<...>>` que o `update` aceita. Nada mais muda no repositório — o `create`
   continua nascendo sem o campo, e o converter da Task 01 da Fase 01 é quem o lê como `null`.
-- [ ] Task 04: A rota. Arquivo: `src/mural/admin-mural.controller.ts`. Objetivo:
+- [x] Task 04: A rota. Arquivo: `src/mural/admin-mural.controller.ts`. Objetivo:
   `PATCH perguntas/:id/fase`, sob os guards que a classe já aplica, devolvendo `MuralQuestionDto`.
   `@ApiOperation` explicando que a promoção é **de mão única** e que o caminho de arrependimento é o
   `DELETE` da mesma classe, com `@ApiResponse` para 404 e 409.
-- [ ] Task 05 (TDD + implementação): Adiantar não abre vaga. Arquivo: `mural.service.spec.ts`. Objetivo:
+- [x] Task 05 (TDD + implementação): Adiantar não abre vaga. Arquivo: `mural.service.spec.ts`. Objetivo:
   teste-trava de que, depois de promover a própria pergunta da semana corrente, `getState` continua com
   `canAsk: false` e `myQuestionId` apontando para ela (decisão 10). É o teste que impede a "otimização" de
   resolver a fase mexendo no `weekId` do documento.

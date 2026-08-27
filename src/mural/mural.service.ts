@@ -9,7 +9,7 @@ import { MuralRepository } from './mural.repository';
 import { ProfileRepository } from '../profile/profile.repository';
 import { ALREADY_EXISTS } from '../waitlist/waitlist.repository';
 import { previousWeekId, weekEndsAt, weekIdOf } from './week-id';
-import { phaseOf } from './mural-phase';
+import { MuralPhase, phaseOf } from './mural-phase';
 import { isBadgeId } from '../track/track.constants';
 import { MuralQuestion } from './entities/mural-question.entity';
 import { MuralQuestionDto } from './dto/mural-question.dto';
@@ -18,6 +18,20 @@ import { WinnerDto } from './dto/winner.dto';
 import { CreateQuestionDto } from './dto/create-question.dto';
 import { UpdateQuestionDto } from './dto/update-question.dto';
 import { NotificationsService } from '../notifications/notifications.service';
+
+/**
+ * A escala das fases, para a promocao saber o que e "avancar".
+ *
+ * Ela vive aqui e nao no `mural-phase.ts` de proposito: la a comparacao e entre
+ * relogio e piso, e aqui e entre a fase atual e a pedida. Sao a mesma ordem por
+ * uma razao so -- e a mesma escala -- e emprestar uma constante entre os dois
+ * juntaria duas perguntas diferentes numa linha so.
+ */
+const PHASE_ORDER: Readonly<Record<MuralPhase, number>> = {
+  coleta: 0,
+  votacao: 1,
+  encerrada: 2,
+};
 
 @Injectable()
 export class MuralService {
@@ -230,6 +244,51 @@ export class MuralService {
     return this.toDto(updated.entry, uid, false, now);
   }
 
+  /**
+   * Adianta uma pergunta (spec 016).
+   *
+   * **A promocao e um piso, e nunca um estado gravado.** O que se grava aqui
+   * levanta o chao da fase; o relogio continua sendo a autoridade quando esta a
+   * frente, e e por isso que nenhum valor gravado pode ficar velho.
+   *
+   * **E de mao unica**: `coleta -> votacao -> encerrada`. Promover para uma
+   * fase igual ou anterior a atual responde 409, e nao um 200 que nao faz nada
+   * -- a tela precisa saber que o botao nao tinha efeito. O caminho de
+   * arrependimento e o `DELETE`, que apaga os votos junto: despromover deixaria
+   * a pergunta editavel de novo **com votos em cima dela**, e quem votou votou
+   * naquele texto.
+   *
+   * **O `weekId` nao e tocado** (decisao 10). Mover a pergunta para outra
+   * semana "resolveria" a fase sem campo novo, e custaria recriar o documento,
+   * migrar a subcolecao de votos inteira e liberar o caminho da semana para uma
+   * segunda pergunta da mesma pessoa.
+   */
+  async promote(
+    questionId: string,
+    fase: 'votacao' | 'encerrada',
+    now: Date = new Date(),
+  ): Promise<MuralQuestionDto> {
+    const found = await this.repository.findById(questionId);
+    if (!found.found || !found.entry) {
+      throw new NotFoundException('Pergunta não encontrada.');
+    }
+
+    const atual = phaseOf(found.entry, now);
+    if (PHASE_ORDER[fase] <= PHASE_ORDER[atual]) {
+      throw new ConflictException(
+        atual === fase
+          ? `Essa pergunta já está em ${fase === 'votacao' ? 'votação' : 'pauta'}.`
+          : 'A promoção é de mão única, e essa pergunta já passou dessa fase. Para desfazer, remova a pergunta.',
+      );
+    }
+
+    const updated = await this.repository.update(questionId, {
+      promotedTo: fase,
+    });
+
+    return this.toDto(updated.entry, found.entry.authorUid, false, now);
+  }
+
   async remove(questionId: string): Promise<void> {
     const found = await this.repository.findById(questionId);
     if (!found.found) {
@@ -263,6 +322,7 @@ export class MuralService {
       id: question.id,
       weekId: question.weekId,
       phase: phaseOf(question, now),
+      promotedTo: question.promotedTo,
       badgeId: question.badgeId,
       authorName: question.authorName,
       title: question.title,

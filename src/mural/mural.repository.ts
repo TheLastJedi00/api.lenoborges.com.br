@@ -140,7 +140,9 @@ export class MuralRepository {
 
   async update(
     id: string,
-    data: Partial<Pick<MuralQuestion, 'title' | 'body' | 'answerVideoId'>>,
+    data: Partial<
+      Pick<MuralQuestion, 'title' | 'body' | 'answerVideoId' | 'promotedTo'>
+    >,
   ): Promise<{ entry: MuralQuestion }> {
     const ref = this.collection.doc(id);
     await ref.update({ ...data, updatedAt: Timestamp.now() });
