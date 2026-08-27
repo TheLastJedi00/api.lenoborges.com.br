@@ -9,6 +9,22 @@ import type { TierId } from '../../billing/billing.tiers';
  * um endereco morto na base.
  */
 export type EmailOptOutReason = 'membro' | 'bounce' | 'reclamacao';
+
+/**
+ * O aceite vigente de um documento legal (spec 018, decisao 6).
+ *
+ * Guardado num mapa no proprio perfil, **e nao so na subcolecao de historico**,
+ * porque a pergunta "esta pessoa esta em dia" e feita em toda requisicao
+ * autenticada pelo `LegalAcceptanceGuard`: no mapa ela e respondida pela leitura
+ * que a requisicao ja faz, sem consulta, sem indice e sem custo novo.
+ *
+ * O mapa sobrescreve na proxima versao -- e por isso a subcolecao existe. Ver
+ * `LegalAcceptanceRepository`.
+ */
+export interface LegalAcceptance {
+  version: string;
+  acceptedAt: Date;
+}
 import {
   DocumentData,
   FirestoreDataConverter,
@@ -80,6 +96,18 @@ export interface Profile {
    */
   emailOptOutReason: EmailOptOutReason | null;
   emailOptOutAt: Date | null;
+  /**
+   * O aceite vigente de cada documento legal, por id (spec 018, decisao 6).
+   *
+   * **Documento antigo nao tem este campo -- e sao todos, no dia em que a spec
+   * 018 sobe.** O `?? {}` no `fromFirestore` e o fallback mais caro de perder
+   * desta spec: sem ele o valor chega `undefined`, o guard tenta indexa-lo e a
+   * base inteira toma `500` em toda rota, no primeiro request depois do deploy.
+   * E o mesmo cuidado do `emailOptOut ?? false`, com a diferenca de que este
+   * falha ruidosamente em vez de em silencio -- o que, aqui, e sorte, nao
+   * projeto.
+   */
+  legalAcceptances: Record<string, LegalAcceptance>;
   completedAt: Date | null;
   waitlistEntryId: string | null;
   createdAt: Date;
@@ -98,6 +126,7 @@ interface ProfileDocument extends DocumentData {
   emailOptOut: boolean;
   emailOptOutReason: EmailOptOutReason | null;
   emailOptOutAt: Timestamp | null;
+  legalAcceptances: Record<string, { version: string; acceptedAt: Timestamp }>;
   completedAt: Timestamp | null;
   waitlistEntryId: string | null;
   createdAt: Timestamp;
@@ -141,6 +170,17 @@ export const profileConverter: FirestoreDataConverter<Profile> = {
       emailOptOutAt: profile.emailOptOutAt
         ? Timestamp.fromDate(profile.emailOptOutAt)
         : null,
+      legalAcceptances: Object.fromEntries(
+        Object.entries(profile.legalAcceptances ?? {}).map(
+          ([documentId, acceptance]) => [
+            documentId,
+            {
+              version: acceptance.version,
+              acceptedAt: Timestamp.fromDate(acceptance.acceptedAt),
+            },
+          ],
+        ),
+      ),
       completedAt: profile.completedAt
         ? Timestamp.fromDate(profile.completedAt)
         : null,
@@ -178,6 +218,22 @@ export const profileConverter: FirestoreDataConverter<Profile> = {
       emailOptOut: data.emailOptOut ?? false,
       emailOptOutReason: data.emailOptOutReason ?? null,
       emailOptOutAt: data.emailOptOutAt ? data.emailOptOutAt.toDate() : null,
+      // **O `?? {}` e o fallback mais caro de perder desta spec** (018, decisao
+      // 6). Documento antigo nao tem o campo -- e sao todos, no dia em que ela
+      // sobe. Sem ele o valor chega `undefined`, o guard de aceite tenta
+      // indexa-lo e a base inteira toma 500 em toda rota, no primeiro request
+      // depois do deploy.
+      legalAcceptances: Object.fromEntries(
+        Object.entries(data.legalAcceptances ?? {}).map(
+          ([documentId, acceptance]) => [
+            documentId,
+            {
+              version: acceptance.version,
+              acceptedAt: acceptance.acceptedAt.toDate(),
+            },
+          ],
+        ),
+      ),
       // completedAt nulo e o estado normal de quem ainda nao fez o onboarding, e
       // e por ele que profileCompleted e decidido. Um undefined vindo de
       // documento antigo viraria "completou", entao o ?? null e carga util.

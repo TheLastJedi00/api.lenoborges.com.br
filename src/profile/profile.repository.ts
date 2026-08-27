@@ -97,6 +97,10 @@ export class ProfileRepository {
       emailOptOut: false,
       emailOptOutReason: null,
       emailOptOutAt: null,
+      // E nasce sem ter aceitado nada (spec 018). O mapa vazio -- e nao
+      // `undefined` -- e o que faz o guard responder 428 no primeiro request em
+      // vez de estourar, e e ele que trava o onboarding ate os dois aceites.
+      legalAcceptances: {},
       ...data,
       createdAt: now,
       updatedAt: now,

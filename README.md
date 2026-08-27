@@ -509,6 +509,26 @@ invisível.
 > **Subcoleção não desaparece com o pai no Firestore.** A moderação apaga os votos explicitamente,
 > ou eles ficam órfãos — invisíveis, cobrados e impossíveis de encontrar depois.
 
+### Subcoleção `profiles/{uid}/legal_acceptances/{documentId}__{version}`
+
+O histórico de aceites dos documentos legais (spec 018). O caminho carrega a versão, e é ele que
+garante a idempotência: duplo clique não grava duas vezes, retry tampouco. **`create()`, nunca
+`set()`** — `ALREADY_EXISTS` aqui significa "já tinha aceitado", que é sucesso, e reescrever apagaria
+a data em que a pessoa realmente concordou, que é a única prova que existe.
+
+Ela convive com o mapa `legalAcceptances` no próprio perfil, e a diferença é o ponto: o **mapa**
+responde "esta pessoa está em dia" na leitura que a requisição já faz — é o que o
+`LegalAcceptanceGuard` lê a cada request, sem consulta e sem índice; a **subcoleção** responde "quando
+ela aceitou a versão de agosto", que o mapa perde ao sobrescrever na versão seguinte.
+
+**Não há IP nem user-agent aqui.** A pessoa está autenticada: uid, data e versão já dizem quem aceitou
+o quê e quando. IP seria dado pessoal novo, com finalidade única de uma disputa que não existe — e é o
+primeiro passo do caminho que quebra a condição da spec 013 (nenhuma coleção nova pode ligar `uid` a
+dado pessoal).
+
+> **Terceira subcoleção do produto, e a terceira vez que a mesma regra vale:** apagar um perfil precisa
+> apagá-la explicitamente, junto de `notification_reads` e dos votos do Mural.
+
 ### `tier` no perfil, e o primeiro portão do produto
 
 | Ação | Dev Tier | Great, Ultra e Master |
@@ -959,3 +979,65 @@ subir ao longo de semanas.
 As três marcadas como "em produção" são checadas no boot. Sem `API_PUBLIC_URL`, todo link de descadastro
 aponta para `localhost`: quem quiser sair da lista não consegue, e o que ele aperta em seguida é
 "marcar como spam".
+
+---
+
+## Termos de Uso e Política de Privacidade (spec 018)
+
+O produto passou a exigir aceite antes de funcionar. É o terceiro motivo de recusa da API, ao lado de
+sessão (`401`) e papel (`403`), e tem código próprio: **`428 Precondition Required`**, com a lista do
+que falta no corpo.
+
+### O texto mora no código, junto da versão
+
+`src/legal/documents/` guarda os dois documentos como estrutura — `sections: { heading, paragraphs }[]`,
+texto puro, nunca HTML. Cada um traz `version` (uma data, `YYYY-MM-DD`) e `contentHash`.
+
+**Editar uma vírgula do texto derruba a suíte.** `legal.documents.spec.ts` recalcula o SHA-256 e compara
+com o literal do arquivo; a versão fica de fora do hash de propósito, senão bumpá-la consertaria o teste
+sozinho. O único jeito de deixar verde é escrever o hash novo, e a linha da versão está logo acima.
+
+Essa é a razão de o texto não morar no front: com o texto lá e a versão aqui, existe um estado em que a
+cláusula de reembolso mudou, o número não mudou, e **ninguém é chamado a aceitar de novo** — sem erro,
+sem log, e a descoberta acontece no dia em que alguém pede reembolso citando um texto que o produto não
+mostra mais.
+
+### Rotas
+
+| Método | Rota | Guard |
+|---|---|---|
+| `GET` | `/legal/documents` | **nenhum** |
+| `GET` | `/legal/documents/:id` | **nenhum** |
+| `POST` | `/me/legal-acceptances` | `FirebaseAuthGuard` |
+
+Ler é público porque o rodapé da landing aponta para lá e quem lê ali ainda não tem conta — exigir login
+para ler o contrato é exigir que a pessoa concorde antes de poder ler. Mesma razão do `/descadastro`.
+
+O aceite é **um documento por chamada**, com a versão no corpo. Versão diferente da vigente é `409` com
+a atual na resposta: significa aba aberta desde antes do deploy, e aquele aceite é de um texto que não é
+mais o texto. Aceite repetido é `204` e **não** reescreve a data.
+
+### O que o guard deixa passar, e o que não
+
+`LegalAcceptanceGuard` é global e roda depois do `FirebaseAuthGuard`. Isento: tudo em `/auth`
+(entrar e sair não podem depender de aceitar nada), `GET /me` (é por onde o front descobre o que falta),
+`POST /me/legal-acceptances` (é a saída do bloqueio), `/legal/**` (já é público) e `PATCH /me/emails`
+(descadastrar-se nunca depende de concordar com nada).
+
+**`PATCH /me/profile` não está isento, e é o detalhe que faz o onboarding funcionar de graça.** Aquele é
+o endpoint que carimba `completedAt`: barrado pelo guard, quem não aceitou não conclui o cadastro. O
+bloqueio do membro novo e o do membro antigo são a mesma regra, num lugar só.
+
+**Admin não é exceção.** O preço está assumido: um bug aqui tranca todo mundo do lado de fora, inclusive
+quem conserta, e a saída é deploy. Não há flag de emergência — criar uma seria criar uma forma de rodar
+o produto com o bloqueio desligado.
+
+### O nada de sempre
+
+Nenhum índice composto novo: o mapa é lido por caminho e a subcoleção é escrita e lida por caminho. A
+tabela de índices não ganha linha.
+
+**Toda `createSession` dos e2e passou a aceitar os documentos logo depois do login** — sem isso a
+requisição seguinte de qualquer suite responde `428`. Como isso deixaria a suíte verde mesmo se o guard
+sumisse, `test/legal.e2e-spec.ts` bate no `428` **antes** de aceitar qualquer coisa, e é ele que cobra a
+existência da regra.

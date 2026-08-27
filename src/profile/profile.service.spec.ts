@@ -12,6 +12,8 @@ import { MuralRepository } from '../mural/mural.repository';
 import { WaitlistRepository } from '../waitlist/waitlist.repository';
 import { FirebaseService } from '../auth/firebase.service';
 import { Profile } from './entities/profile.entity';
+import { LegalService } from '../legal/legal.service';
+import { LegalAcceptanceRepository } from '../legal/legal-acceptance.repository';
 
 describe('ProfileService', () => {
   let service: ProfileService;
@@ -33,6 +35,8 @@ describe('ProfileService', () => {
   /** Ordem real das chamadas, para o teste-trava da decisao 9. */
   let ordem: string[];
   let authService: { reauthenticate: jest.Mock; continueUrl: string };
+  let legalService: { pendingFor: jest.Mock };
+  let legalAcceptanceRepository: { removeAll: jest.Mock };
 
   beforeEach(async () => {
     repository = {
@@ -62,6 +66,8 @@ describe('ProfileService', () => {
       removeVotesBy: registra('removeVotesBy'),
     };
     waitlistRepository = { remove: registra('waitlist.remove') };
+    legalService = { pendingFor: jest.fn().mockReturnValue([]) };
+    legalAcceptanceRepository = { removeAll: registra('legal.removeAll') };
     repository.remove = registra('profile.remove');
     authService = {
       reauthenticate: jest.fn().mockResolvedValue('id-token-fresco'),
@@ -79,6 +85,11 @@ describe('ProfileService', () => {
         { provide: AuthService, useValue: authService },
         { provide: MuralRepository, useValue: muralRepository },
         { provide: WaitlistRepository, useValue: waitlistRepository },
+        { provide: LegalService, useValue: legalService },
+        {
+          provide: LegalAcceptanceRepository,
+          useValue: legalAcceptanceRepository,
+        },
       ],
     }).compile();
 
@@ -144,6 +155,9 @@ describe('ProfileService', () => {
       expect(ordem).toEqual([
         'anonymizeAuthor',
         'removeVotesBy',
+        // A subcolecao de aceites sai antes do perfil, pelo mesmo motivo que
+        // 'notification_reads': subcolecao nao some com o pai (spec 018).
+        'legal.removeAll',
         'profile.remove',
         'waitlist.remove',
         'deleteUser',
@@ -355,6 +369,8 @@ describe('ProfileService', () => {
         grade: 1,
         profileCompleted: true,
         role: null,
+        pendingLegal: [],
+        legalAcceptances: {},
       });
     });
 

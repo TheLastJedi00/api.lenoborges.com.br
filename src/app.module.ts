@@ -15,6 +15,8 @@ import { AdminModule } from './admin/admin.module';
 import { MuralModule } from './mural/mural.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { EmailsModule } from './emails/emails.module';
+import { LegalModule } from './legal/legal.module';
+import { LegalAcceptanceGuard } from './legal/legal-acceptance.guard';
 
 @Module({
   imports: [
@@ -39,6 +41,7 @@ import { EmailsModule } from './emails/emails.module';
 
     NotificationsModule,
     EmailsModule,
+    LegalModule,
   ],
   controllers: [AppController],
   providers: [
@@ -46,6 +49,19 @@ import { EmailsModule } from './emails/emails.module';
     {
       provide: APP_GUARD,
       useClass: ThrottlerGuard,
+    },
+    {
+      // O bloqueio por falta de aceite (spec 018, decisao 8).
+      //
+      // **Global e depois do FirebaseAuthGuard**, que e por controller: quando
+      // este roda, `request.user` ja foi preenchido por quem autenticou. Ele
+      // deixa passar a rota que nao tem usuario -- a publica --, entao ser
+      // global nao o torna um segundo autenticador.
+      //
+      // Aqui e onde se desliga o produto inteiro por engano. A lista de rotas
+      // isentas mora no proprio guard, com o motivo de cada linha ao lado.
+      provide: APP_GUARD,
+      useClass: LegalAcceptanceGuard,
     },
   ],
 })

@@ -31,6 +31,7 @@ function profile(tier: TierId, name: string | null = 'Leno Borges'): Profile {
     emailOptOut: false,
     emailOptOutReason: null,
     emailOptOutAt: null,
+    legalAcceptances: {},
     completedAt: new Date(),
     waitlistEntryId: null,
     createdAt: new Date(),

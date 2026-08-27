@@ -4,6 +4,7 @@ import { ProfileService } from './profile.service';
 import { CookieService } from '../auth/cookie.service';
 import { FirebaseAuthGuard } from '../auth/guards/firebase-auth.guard';
 import { CurrentUserData } from '../auth/decorators/current-user.decorator';
+import { LegalService } from '../legal/legal.service';
 
 describe('ProfileController', () => {
   let controller: ProfileController;
@@ -15,6 +16,7 @@ describe('ProfileController', () => {
     setEmailPreference: jest.Mock;
   };
   let cookieService: { clearRefreshToken: jest.Mock };
+  let legalService: { accept: jest.Mock };
 
   const mockUser: CurrentUserData = {
     id: 'user-123',
@@ -32,6 +34,7 @@ describe('ProfileController', () => {
     };
 
     cookieService = { clearRefreshToken: jest.fn() };
+    legalService = { accept: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [ProfileController],
@@ -41,6 +44,7 @@ describe('ProfileController', () => {
           useValue: service,
         },
         { provide: CookieService, useValue: cookieService },
+        { provide: LegalService, useValue: legalService },
       ],
     })
       .overrideGuard(FirebaseAuthGuard)
