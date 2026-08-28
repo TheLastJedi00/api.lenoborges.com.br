@@ -80,6 +80,8 @@ npm run test:e2e         # e2e: boots the Firebase emulator, runs jest --config 
 npm run emulators        # Auth + Firestore emulators (needs the Firebase CLI)
 npm run rules:deploy     # publishes firestore.rules to the linked project
 npm run admin:grant -- <email>   # grants the admin claim (add --revoke to undo)
+npm run tab:backfill -- --dry-run # spec 021: shows which badge_videos lack `tab`
+npm run tab:backfill             # writes tab = kind ?? 'aula'; idempotent, per-project via .env
 ```
 
 **The emulator needs Java on the PATH.** Without it, `npm run test:e2e` fails at startup with "Could not spawn `java -version`" and no test runs — the unit suite (`npm test`) is unaffected.
