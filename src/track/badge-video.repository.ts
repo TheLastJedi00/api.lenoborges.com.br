@@ -5,6 +5,7 @@ import {
   AnsweredQuestion,
   BadgeVideo,
   BadgeVideoKind,
+  BadgeVideoTab,
   badgeVideoConverter,
   badgeVideoDocId,
 } from './entities/badge-video.entity';
@@ -19,6 +20,17 @@ export type CreateBadgeVideoData = Pick<
 > & {
   /** Sem valor, o video nasce como aula: e o que quase todo video e. */
   kind?: BadgeVideoKind;
+  /**
+   * A lista em que o video vive (spec 021). Sem valor, nasce em `'aula'`, do
+   * mesmo jeito que `kind`.
+   *
+   * **Este repositorio nao deriva `tab` de `kind`, e isso e decisao.** Derivar
+   * aqui pareceria mais barato e faria a validacao do service nunca ser
+   * alcancada: `kind: 'aula'` com `tab: 'resposta'` e 400 (decisao 4 da spec
+   * 021), e um default silencioso neste arquivo transformaria esse 400 em
+   * codigo morto. Quem decide a lista e o service, que e onde a regra mora.
+   */
+  tab?: BadgeVideoTab;
   questionId?: string | null;
   /**
    * A foto da pergunta (spec 017), tirada pelo service na publicacao.
@@ -83,6 +95,7 @@ export class BadgeVideoRepository {
     const id = badgeVideoDocId(data.badgeId, data.youtubeId);
     const entry: BadgeVideo = {
       kind: 'aula',
+      tab: 'aula',
       questionId: null,
       question: null,
       devTierFree: false,

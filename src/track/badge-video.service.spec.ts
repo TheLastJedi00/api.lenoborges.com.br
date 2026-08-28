@@ -8,15 +8,27 @@ import { BadgeVideoRepository } from './badge-video.repository';
 import { NotificationsService } from '../notifications/notifications.service';
 import { EmailCampaignService } from '../emails/email-campaign.service';
 import { ConfigService } from '@nestjs/config';
-import { BadgeVideo, BadgeVideoKind } from './entities/badge-video.entity';
+import {
+  BadgeVideo,
+  BadgeVideoKind,
+  BadgeVideoTab,
+} from './entities/badge-video.entity';
 import { MuralRepository } from '../mural/mural.repository';
 import { WatchedVideoRepository } from './watched-video.repository';
 import { MuralQuestion } from '../mural/entities/mural-question.entity';
 
+/**
+ * Um video de fixture.
+ *
+ * `tab` cai em `kind` quando nao e dito, que e o padrao do produto: uma aula
+ * vive na trilha e uma resposta vive na aba de respostas. Os dois so divergem
+ * quando o teste diz que divergem -- e e o caso da spec 021.
+ */
 function video(
   id: string,
   order: number,
   kind: BadgeVideoKind = 'aula',
+  tab: BadgeVideoTab = kind,
 ): BadgeVideo {
   return {
     id,
@@ -25,6 +37,7 @@ function video(
     description: null,
     youtubeId: id.split('__')[1] ?? 'dQw4w9WgXcQ',
     kind,
+    tab,
     questionId: null,
     question: null,
     devTierFree: false,
@@ -120,6 +133,7 @@ describe('BadgeVideoService', () => {
           description: null,
           youtubeId: 'dQw4w9WgXcQ',
           kind: 'aula',
+          tab: 'aula',
           questionId: null,
           question: null,
           devTierFree: false,
