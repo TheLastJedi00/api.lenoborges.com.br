@@ -15,6 +15,7 @@ import { LoginDto } from './dto/login.dto';
 import { SessionResponseDto } from './dto/session.dto';
 import { normalizeEmail } from '../common/normalize';
 import { roleOf } from './role';
+import { translateOobError, translatePasswordError } from './password-errors';
 
 /** Resposta do accounts:signInWithPassword (camelCase, Identity Toolkit). */
 interface SignInResponse {
@@ -25,6 +26,16 @@ interface SignInResponse {
   email?: string;
 }
 
+/**
+ * Resposta das operacoes de oobCode (accounts:resetPassword e accounts:update).
+ *
+ * O `requestType` vem e nao e usado: quem escolhe a tela e o `mode` da URL, e
+ * ter duas fontes para a mesma informacao e ter duas para divergirem.
+ */
+interface OobCodeResponse {
+  email: string;
+  requestType?: string;
+}
 /** Resposta do securetoken (snake_case, outra API do Google). */
 interface RefreshResponse {
   id_token: string;
@@ -306,6 +317,122 @@ export class AuthService {
     } catch {
       // Idempotente: falha de rede nao pode prender o usuario dentro da conta.
     }
+  }
+
+  /**
+   * Confere um `oobCode` sem consumi-lo, e devolve o e-mail dono do link.
+   *
+   * `accounts:resetPassword` **so com o `oobCode`** e a chamada de conferencia
+   * do Identity Toolkit: sem `newPassword` no corpo, ela valida o codigo e
+   * responde de quem ele e, sem gasta-lo. Mandar a senha junto aqui trocaria a
+   * senha de quem apenas abriu a tela.
+   *
+   * **Devolver o e-mail nao e o oraculo que o `signup` evita** (decisao 4), e a
+   * diferenca esta em qual segredo prova o que: no `signup` o requisitante
+   * fornece o e-mail e quer saber se ele existe -- responder e o oraculo. Aqui
+   * ele fornece o `oobCode`, que so chegou por uma caixa de entrada, e portanto
+   * ja sabe de qual e-mail se trata: foi nela que o link chegou. E o que a tela
+   * do Firebase mostrava no lugar desta, e serve a quem tem duas contas ou
+   * clicou num link antigo: ver **de qual** conta e a senha antes de digita-la.
+   */
+  async checkOobCode(oobCode: string): Promise<{ email: string }> {
+    try {
+      const data = await this.firebase.identityToolkit<OobCodeResponse>(
+        'resetPassword',
+        { oobCode },
+      );
+
+      return { email: data.email };
+    } catch (error) {
+      throw this.deadLink(error, 'checkOobCode');
+    }
+  }
+
+  /**
+   * Confirma a senha nova pelo `oobCode` do link do e-mail.
+   *
+   * **Nao devolve token, nao emite cookie e nao chama o `signInWithPassword`**,
+   * mesmo sendo trivial faze-lo -- a senha nova esta no corpo da requisicao, e
+   * um login logo depois seria uma linha. E a decisao 5 da spec 005: sessao
+   * nasce no `POST /auth/login`, num caminho so. Um segundo emissor do cookie
+   * de refresh seria exercitado apenas no cadastro, o fluxo que menos gente
+   * percorre duas vezes, e portanto aquele em que um defeito de `SameSite` ou
+   * de `Domain` ficaria escondido por mais tempo. A spec 011 e a memoria de
+   * quanto custa descobrir isso tarde.
+   *
+   * O front manda a pessoa para `/?entrar=1` e ela entra com a senha que acabou
+   * de criar -- o que e, de quebra, a prova de que ela e a senha que a pessoa
+   * achou que digitou.
+   *
+   * **Nao ha `updateUser({ emailVerified: true })` a acrescentar** (decisao 9):
+   * o proprio `accounts:resetPassword` marca `emailVerified`, porque quem
+   * provou receber o e-mail provou ser dono dele. Forca-lo a mao transformaria
+   * o cadastro num caminho em que ninguem prova nada.
+   *
+   * Dois ramos de erro distintos de proposito: link morto e senha recusada pela
+   * politica do console sao coisas diferentes para quem esta na tela, e quem
+   * teve a senha recusada precisa saber que foi por isso.
+   */
+  async confirmPassword(oobCode: string, newPassword: string): Promise<void> {
+    try {
+      await this.firebase.identityToolkit('resetPassword', {
+        oobCode,
+        newPassword,
+      });
+    } catch (error) {
+      const code = error instanceof Error ? error.message : String(error);
+
+      if (
+        code.startsWith('WEAK_PASSWORD') ||
+        code.startsWith('PASSWORD_DOES')
+      ) {
+        // A politica do console e que decide o piso (decisao 6). Nao ha oraculo
+        // a proteger: quem chegou aqui ja provou ter a caixa de entrada.
+        this.logger.warn(`Senha recusada pela politica do projeto: ${code}`);
+        throw new BadRequestException(translatePasswordError(error));
+      }
+
+      throw this.deadLink(error, 'confirmPassword');
+    }
+  }
+
+  /**
+   * Aplica a acao de e-mail que o `oobCode` carrega, e devolve o e-mail final.
+   *
+   * Serve a `VERIFY_AND_CHANGE_EMAIL`, `VERIFY_EMAIL` e `RECOVER_EMAIL`, e
+   * **quem decide qual deles e o proprio codigo** (decisao 3). Nao ha `switch`
+   * de modo aqui: o `oobCode` carrega o proprio `requestType`, e o Firebase
+   * recusa um codigo de reset usado como codigo de verificacao. Deixar essa
+   * recusa acontecer no Google, e nao num `if` nosso, e ter uma regra em vez de
+   * duas -- e a segunda seria escrita a partir do `mode` da query, que quem
+   * manda o link escreve.
+   *
+   * O `requestType` que a resposta traz e ignorado (ponto em aberto 5): a tela
+   * desenha o modo que veio na URL, e ter duas fontes para a mesma informacao e
+   * ter duas para divergirem.
+   */
+  async applyEmailAction(oobCode: string): Promise<{ email: string }> {
+    try {
+      const data = await this.firebase.identityToolkit<OobCodeResponse>(
+        'update',
+        { oobCode },
+      );
+
+      return { email: data.email };
+    } catch (error) {
+      throw this.deadLink(error, 'applyEmailAction');
+    }
+  }
+
+  /**
+   * A recusa unica de link morto, com o codigo do Google indo para o log.
+   *
+   * O log e onde o codigo e diagnostico; a resposta e onde ele seria oraculo.
+   * Mesma divisao que o `login` e o `changeEmail` ja fazem.
+   */
+  private deadLink(error: unknown, operacao: string): BadRequestException {
+    this.logger.warn(`${operacao}: oobCode recusado — ${describe(error)}`);
+    return new BadRequestException(translateOobError());
   }
 
   /**

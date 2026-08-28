@@ -4,7 +4,7 @@ API para o serviço da Seita Dev (eduleno-back).
 
 ## Funcionalidades
 - Endpoint para lista de espera (`POST /waitlist`)
-- Autenticação com Firebase Auth (`/auth/*`): cadastro por e-mail, login com e-mail/senha, renovação de sessão e logout. **A senha é definida na tela hospedada pelo Firebase**, fora desta API
+- Autenticação com Firebase Auth (`/auth/*`): cadastro por e-mail, login com e-mail/senha, renovação de sessão e logout. **A senha é definida na nossa tela** (`<front>/acesso`), pelo `oobCode` que chega aqui
 - Gestão de perfil e onboarding do membro (`/me` e `/me/profile`), com ID token verificado pelo Admin SDK
 - Sessão segura: access token em memória e refresh token em cookie `HttpOnly` rotacionado
 - Persistência no Firestore pelo Admin SDK, sem ORM, sem migrations e sem schema a versionar
@@ -50,35 +50,53 @@ Identidade e dados vivem no mesmo fornecedor, autenticados pelo mesmo arquivo: a
 `FIREBASE_SERVICE_ACCOUNT_JSON`. Ela fica confinada ao `FirebaseService`, como a service role key do
 Supabase ficava antes.
 
-### A senha é definida fora desta aplicação
+### A senha é definida na nossa tela
 
 Este é o ponto que o código não conta e que costuma surpreender quem lê só os endpoints.
 
 O cadastro (`POST /auth/signup`) cria o usuário com uma senha aleatória descartada na mesma linha, e
-dispara o e-mail de definição de senha pelo Firebase. O link desse e-mail leva para a **tela
-hospedada pelo Google**, em `<projeto>.firebaseapp.com/__/auth/action`, e é lá que o usuário digita a
-senha. **Não existe `POST /auth/password`**: o `oobCode` nunca chega nesta API.
+dispara o e-mail de definição de senha pelo Firebase. **O corpo do e-mail continua sendo o do
+Firebase**, editado no console; o que mudou na [spec 020](specs/020%20-%20A%20Tela%20de%20Senha%20e%20o%20oobCode/context.md)
+foi para onde o link dele leva: a tela é nossa, no domínio do front, e o `oobCode` chega nesta API.
 
 ```
-signup -> e-mail do Firebase -> tela do Google -> botão de retorno -> <front>/?entrar=1
+signup -> e-mail do Firebase -> <front>/acesso -> POST /auth/password -> <front>/?entrar=1
 ```
 
-O `continueUrl` que a API passa no envio é o que faz esse botão de retorno existir. Sem ele o usuário
-define a senha e fica parado numa página do Google, sem caminho de volta.
+Três valores parecidos, e trocá-los é o erro fácil:
+
+| Valor | Quem define | O que é |
+|---|---|---|
+| **Action URL** | Console do Firebase, uma vez por projeto | Para onde **o link do e-mail** leva: `<front>/acesso` |
+| **`continueUrl`** | Esta API, em cada `sendOobCode` | Para onde a **tela** manda a pessoa quando termina: `<front>/?entrar=1` |
+| **`mode`** | Query da URL, escrita por quem manda o link | Só escolhe qual tela o front desenha. **Não** escolhe qual operação a API executa |
+
+Apontar o `continueUrl` para `/acesso` produz um laço: a tela termina mandando a pessoa de volta
+para a tela.
+
+Duas coisas que parecem faltar e não faltam. **A sessão não nasce aqui**: `POST /auth/password`
+responde `204` sem token e sem cookie, e a pessoa entra pelo `POST /auth/login` com a senha que
+acabou de criar — sessão nasce num caminho só (spec 005, decisão 5). E **`emailVerified` não
+precisa ser marcado à mão**: o próprio `accounts:resetPassword` o marca, porque quem provou receber
+o e-mail provou ser dono dele. Acrescentar um `updateUser` em qualquer um dos dois casos desfaz uma
+decisão sem citá-la.
 
 ### O que vive no console, e não no repositório
 
-Três configurações não têm representação em código, e todas afetam o fluxo:
+Quatro configurações não têm representação em código, e todas afetam o fluxo. **Cada ambiente tem seu
+próprio projeto do Firebase**, e todas elas são por projeto: configurar só um é o defeito que nenhum
+teste pega, porque funciona em preview e quebra em produção.
 
 | Onde | O quê | Por que importa |
 |---|---|---|
-| Authentication > Settings > Password policy | **Mínimo de 8 caracteres** | A tela é do Firebase e aplica a política do projeto, que nasce em 6. O front garantia 8 e deixou de existir; sem configurar, o piso cai sem aviso. |
+| Authentication > Templates > **customize action URL** | `https://liga.lenoborges.com.br/acesso` em produção e `https://ligapreview.lenoborges.com.br/acesso` em `dev-liga-dev` | É para onde o link do e-mail leva. **São dois projetos.** Esquecer um faz o cadastro funcionar em preview e mandar o membro de produção para a tela do Google — verde em todo teste. |
+| Authentication > Settings > Password policy | **Mínimo de 8 caracteres** | É o piso real, e nasce em 6. O front voltou a exigir 8 (spec 020), e isso torna a divergência mais fácil de não notar: se alguém baixar o mínimo aqui, a única coisa que recusa 6 caracteres passa a ser um `Validators.minLength` no navegador. |
 | Authentication > Templates | Nome público do projeto e remetente | Aparecem no e-mail e na tela onde a senha é digitada. |
 | Authentication > Sign-in method | Provedor Email/Password ligado | Sem ele, nada do fluxo funciona. |
 
-**Não configure "customize action URL".** Ela desviaria o link para uma página nossa, e a decisão da
-[spec 007](specs/007%20-%20Firestore%20e%20Firebase%20Auth/context.md) é usar a tela do Firebase como
-está — desfazer isso significa ressuscitar página, endpoint, DTO e testes.
+O domínio do front precisa estar em **Authentication > Settings > Authorized domains**, e ele já está
+— é o mesmo `continueUrl` de sempre. Fica escrito porque `UNAUTHORIZED_DOMAIN` já custou um deploy
+inteiro a este projeto: o sintoma foi o cadastro respondendo `202` com ninguém recebendo nada.
 
 ### Sessão
 
@@ -190,9 +208,29 @@ Acesse `/docs` para visualizar o Swagger com os esquemas e exemplos.
 - Comportamento: Idêntico para e-mails novos ou já cadastrados (anti-enumeração de usuários). Vincula dados da waitlist no perfil inicial se existirem.
 - Rate limit: 3 req / 60s
 
-> **`POST /auth/password` não existe.** A senha é definida na tela hospedada pelo Firebase, para onde
-> o link do e-mail aponta, e o `oobCode` nunca chega nesta API. Ver "A senha é definida fora desta
-> aplicação", acima.
+### `POST /auth/password/check`
+- Entrada: `{ oobCode }`
+- Resposta: `200` `{ email }`
+- Comportamento: Confere o código **sem consumi-lo** e diz de quem é o link, para a tela escrever "criando a senha de fulano@exemplo.com". Devolver o e-mail não é o oráculo que o `signup` evita: aqui o requisitante forneceu o `oobCode`, que só chegou por uma caixa de entrada.
+- Público, sem guard. Rate limit: 10 req / 60s
+
+### `POST /auth/password`
+- Entrada: `{ oobCode, newPassword }`
+- Resposta: `204`, **sem corpo, sem token e sem `Set-Cookie`**
+- Comportamento: Define a senha e encerra. A sessão nasce no `POST /auth/login`, num caminho só. Concluir a redefinição também marca `emailVerified`, e é o Firebase quem faz isso.
+- Público, sem guard. Rate limit: 5 req / 60s
+
+### `POST /auth/email-action`
+- Entrada: `{ oobCode }`
+- Resposta: `200` `{ email }`
+- Comportamento: Aplica `VERIFY_AND_CHANGE_EMAIL`, `VERIFY_EMAIL` ou `RECOVER_EMAIL`. **Qual deles, quem decide é o próprio código** — ele carrega o `requestType`, e o corpo não tem campo `mode`.
+- Público, sem guard. Rate limit: 5 req / 60s
+
+> **Os três são públicos de propósito** e o `Throttle` é o único controle que resta: eles precisam
+> funcionar para quem nunca esteve logado naquele navegador. O `LegalAcceptanceGuard` da spec 018
+> **não** os alcança, e é obrigatório que não alcance — um `428` aqui trancaria a pessoa fora da conta
+> pela porta que ela usa para entrar. Os limites não protegem o `oobCode`, que tem entropia de sobra:
+> protegem o Identity Toolkit de virar um alvo barato através desta API.
 
 ### `POST /auth/login`
 - Entrada: `{ email, password }`

@@ -25,6 +25,7 @@ describe('AuthService', () => {
       createUser: jest.Mock;
       getUser: jest.Mock;
       revokeRefreshTokens: jest.Mock;
+      updateUser: jest.Mock;
     };
     identityToolkit: jest.Mock;
     secureToken: jest.Mock;
@@ -59,6 +60,9 @@ describe('AuthService', () => {
         // falam de admin sobrescrevem este retorno.
         getUser: jest.fn().mockResolvedValue({ customClaims: undefined }),
         revokeRefreshTokens: jest.fn(),
+        // So existe para o teste-trava da decisao 9: confirmar a redefinicao
+        // ja marca emailVerified, e nada aqui deve chama-lo a mao.
+        updateUser: jest.fn(),
       },
       identityToolkit: jest.fn(),
       secureToken: jest.fn(),
@@ -614,6 +618,213 @@ describe('AuthService', () => {
         (call: unknown[]) => call[0],
       );
       expect(endpoints).toEqual(['signInWithPassword', 'signInWithPassword']);
+    });
+  });
+  /**
+   * Spec 020: o oobCode volta a chegar nesta API.
+   *
+   * Os tres metodos batem no Identity Toolkit pela mesma porta do login -- a
+   * REST, daqui, com a Web API Key -- e nao pelo SDK web no front. Instalar o
+   * SDK no bundle seria desfazer a decisao 2 da spec 005 pela porta dos fundos:
+   * um segundo caminho de login instalado ao lado do primeiro, para sempre, por
+   * causa de uma tela.
+   */
+  describe('oobCode (spec 020)', () => {
+    const FRASE_DE_LINK_MORTO =
+      'Esse link não vale mais. Links de senha valem uma vez só e expiram. ' +
+      'Peça um novo na tela de entrar.';
+
+    describe('checkOobCode', () => {
+      it('confere o codigo e devolve o e-mail dono do link', async () => {
+        firebase.identityToolkit.mockResolvedValue({
+          email: 'fulano@email.com',
+          requestType: 'PASSWORD_RESET',
+        });
+
+        const result = await service.checkOobCode('codigo-vivo');
+
+        expect(result).toEqual({ email: 'fulano@email.com' });
+        expect(firebase.identityToolkit).toHaveBeenCalledWith('resetPassword', {
+          oobCode: 'codigo-vivo',
+        });
+      });
+
+      it('teste-trava: confere SEM senha nenhuma no corpo', async () => {
+        // Mandar newPassword junto trocaria a senha de quem so abriu a tela.
+        firebase.identityToolkit.mockResolvedValue({ email: 'f@email.com' });
+
+        await service.checkOobCode('codigo-vivo');
+
+        const body = (
+          firebase.identityToolkit.mock.calls[0] as unknown[]
+        )[1] as Record<string, unknown>;
+        expect(body).not.toHaveProperty('newPassword');
+        expect(Object.keys(body)).toEqual(['oobCode']);
+      });
+
+      it('codigo morto vira 400 com a frase que tem saida, e nada do Google', async () => {
+        firebase.identityToolkit.mockRejectedValue(
+          new Error('EXPIRED_OOB_CODE'),
+        );
+
+        await expect(service.checkOobCode('codigo-morto')).rejects.toThrow(
+          new BadRequestException(FRASE_DE_LINK_MORTO),
+        );
+      });
+
+      it('teste-trava: expirado e invalido dao a MESMA resposta', async () => {
+        // Distinguir informaria a quem colou um codigo qualquer se ele existiu
+        // algum dia (decisao 5).
+        const mensagens: string[] = [];
+        for (const code of [
+          'EXPIRED_OOB_CODE',
+          'INVALID_OOB_CODE',
+          'OPERATION_NOT_ALLOWED',
+        ]) {
+          firebase.identityToolkit.mockRejectedValue(new Error(code));
+          try {
+            await service.checkOobCode('x');
+          } catch (error) {
+            mensagens.push((error as BadRequestException).message);
+          }
+        }
+
+        expect(new Set(mensagens).size).toBe(1);
+        expect(mensagens[0]).not.toMatch(/OOB_CODE|OPERATION_NOT_ALLOWED/);
+      });
+
+      it('o codigo do Google vai para o log, onde e diagnostico e nao oraculo', async () => {
+        const aviso = jest
+          .spyOn(Logger.prototype, 'warn')
+          .mockImplementation(() => undefined);
+        firebase.identityToolkit.mockRejectedValue(
+          new Error('INVALID_OOB_CODE'),
+        );
+
+        await expect(service.checkOobCode('x')).rejects.toThrow(
+          BadRequestException,
+        );
+        expect(aviso).toHaveBeenCalledWith(
+          expect.stringContaining('INVALID_OOB_CODE'),
+        );
+
+        aviso.mockRestore();
+      });
+    });
+
+    describe('confirmPassword', () => {
+      it('confirma a senha nova e nao devolve nada', async () => {
+        firebase.identityToolkit.mockResolvedValue({
+          email: 'fulano@email.com',
+        });
+
+        const result = await service.confirmPassword(
+          'codigo-vivo',
+          'senha-nova-forte',
+        );
+
+        expect(result).toBeUndefined();
+        expect(firebase.identityToolkit).toHaveBeenCalledWith('resetPassword', {
+          oobCode: 'codigo-vivo',
+          newPassword: 'senha-nova-forte',
+        });
+      });
+
+      it('teste-trava: NAO cria sessao -- nada de signInWithPassword', async () => {
+        // Decisao 10: sessao nasce no POST /auth/login, num caminho so. Um
+        // segundo emissor do cookie de refresh so seria exercitado no cadastro,
+        // o fluxo que menos gente percorre duas vezes -- e portanto aquele em
+        // que um defeito de SameSite ficaria escondido por mais tempo (spec
+        // 011). Este teste fica vermelho no dia em que alguem "melhorar" o
+        // cadastro logando a pessoa direto.
+        firebase.identityToolkit.mockResolvedValue({ email: 'f@email.com' });
+
+        await service.confirmPassword('codigo-vivo', 'senha-nova-forte');
+
+        const endpoints = firebase.identityToolkit.mock.calls.map(
+          (call: unknown[]) => call[0],
+        );
+        expect(endpoints).toEqual(['resetPassword']);
+        expect(endpoints).not.toContain('signInWithPassword');
+        expect(firebase.secureToken).not.toHaveBeenCalled();
+      });
+
+      it('codigo morto usa a traducao de oobCode', async () => {
+        firebase.identityToolkit.mockRejectedValue(
+          new Error('EXPIRED_OOB_CODE'),
+        );
+
+        await expect(
+          service.confirmPassword('morto', 'senha-nova-forte'),
+        ).rejects.toThrow(new BadRequestException(FRASE_DE_LINK_MORTO));
+      });
+
+      it('senha recusada pela politica do console usa a OUTRA traducao', async () => {
+        // Dois ramos distintos de proposito (decisao 6): o piso real e a
+        // politica do console, e quem teve a senha recusada precisa saber que
+        // foi por isso, nao que o link morreu.
+        firebase.identityToolkit.mockRejectedValue(
+          new Error('PASSWORD_DOES_NOT_MEET_REQUIREMENTS : ...'),
+        );
+
+        await expect(service.confirmPassword('vivo', 'fraca')).rejects.toThrow(
+          new BadRequestException(
+            'A nova senha não atende à política de segurança do projeto.',
+          ),
+        );
+      });
+
+      it('nao chama updateUser para marcar emailVerified a mao', async () => {
+        // O proprio accounts:resetPassword marca emailVerified: quem provou
+        // receber o e-mail provou ser dono dele (decisao 9). Acrescentar um
+        // updateUser aqui transformaria o cadastro num caminho em que ninguem
+        // prova nada.
+        firebase.identityToolkit.mockResolvedValue({ email: 'f@email.com' });
+
+        await service.confirmPassword('vivo', 'senha-nova-forte');
+
+        expect(firebase.auth.updateUser).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('applyEmailAction', () => {
+      it('aplica a acao de e-mail e devolve o e-mail resultante', async () => {
+        firebase.identityToolkit.mockResolvedValue({
+          email: 'novo@email.com',
+          requestType: 'VERIFY_AND_CHANGE_EMAIL',
+        });
+
+        const result = await service.applyEmailAction('codigo-vivo');
+
+        expect(result).toEqual({ email: 'novo@email.com' });
+        expect(firebase.identityToolkit).toHaveBeenCalledWith('update', {
+          oobCode: 'codigo-vivo',
+        });
+      });
+
+      it('teste-trava: nao ha switch de modo -- quem decide e o proprio codigo', async () => {
+        // O mesmo corpo serve aos tres modos de e-mail, e o Firebase e que
+        // recusa um codigo de reset usado como codigo de verificacao. Uma regra
+        // em vez de duas (decisao 3).
+        firebase.identityToolkit.mockResolvedValue({ email: 'a@email.com' });
+
+        await service.applyEmailAction('codigo-de-qualquer-modo');
+
+        const body = (
+          firebase.identityToolkit.mock.calls[0] as unknown[]
+        )[1] as Record<string, unknown>;
+        expect(Object.keys(body)).toEqual(['oobCode']);
+      });
+
+      it('codigo morto cai na mesma frase dos outros dois endpoints', async () => {
+        firebase.identityToolkit.mockRejectedValue(
+          new Error('INVALID_OOB_CODE'),
+        );
+
+        await expect(service.applyEmailAction('morto')).rejects.toThrow(
+          new BadRequestException(FRASE_DE_LINK_MORTO),
+        );
+      });
     });
   });
 });

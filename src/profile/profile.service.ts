@@ -25,6 +25,9 @@ import { AuthService } from '../auth/auth.service';
 import { MuralRepository } from '../mural/mural.repository';
 import { WaitlistRepository } from '../waitlist/waitlist.repository';
 import { FirebaseService } from '../auth/firebase.service';
+// A traducao mora em src/auth/password-errors.ts desde a spec 020: dois fluxos
+// precisam dela -- POST /me/password (aqui) e POST /auth/password (por link).
+import { translatePasswordError } from '../auth/password-errors';
 import {
   normalizeName,
   normalizePhone,
@@ -44,26 +47,6 @@ import {
  * da UX desfaz aquela decisao sem citar ela.
  */
 const EMAIL_REJECTED = 'Não foi possível usar este e-mail.';
-
-/**
- * Traduz a recusa de senha do Identity Toolkit.
- *
- * O piso real e a politica do console (Authentication > Settings > Password
- * policy), nao o `@MinLength` do DTO: o Google recusa a senha fraca mesmo
- * quando o decorator deixou passar, e e esta mensagem que a pessoa le.
- */
-function translatePasswordError(error: unknown): string {
-  const code = error instanceof Error ? error.message : String(error);
-
-  if (code.startsWith('WEAK_PASSWORD') || code.startsWith('PASSWORD_DOES')) {
-    return 'A nova senha não atende à política de segurança do projeto.';
-  }
-  if (code.startsWith('TOKEN_EXPIRED') || code.startsWith('INVALID_ID_TOKEN')) {
-    return 'Sessão expirada. Entre de novo e tente outra vez.';
-  }
-
-  return 'Não foi possível trocar a senha.';
-}
 
 @Injectable()
 export class ProfileService {
