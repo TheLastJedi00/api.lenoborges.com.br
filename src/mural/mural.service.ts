@@ -11,7 +11,10 @@ import { ALREADY_EXISTS } from '../waitlist/waitlist.repository';
 import { previousWeekId, weekEndsAt, weekIdOf } from './week-id';
 import { MuralPhase, phaseOf } from './mural-phase';
 import { isBadgeId } from '../track/track.constants';
-import { MuralQuestion } from './entities/mural-question.entity';
+import {
+  ANONYMOUS_AUTHOR_UID,
+  MuralQuestion,
+} from './entities/mural-question.entity';
 import { MuralQuestionDto } from './dto/mural-question.dto';
 import { MuralStateDto } from './dto/mural-state.dto';
 import { WinnerDto } from './dto/winner.dto';
@@ -411,6 +414,13 @@ export class MuralService {
       promotedTo: question.promotedTo,
       badgeId: question.badgeId,
       authorName: question.authorName,
+      // **A traducao do sentinela acontece aqui, uma vez** (spec 019, decisao
+      // 11). O front nunca aprende que existe um `__removido__`: ele testa se o
+      // campo e nulo e nao compara com string nenhuma -- uma comparacao de
+      // sentinela do outro lado sobrevive a uma renomeacao daqui e vira um
+      // cartao 404 em cima da pergunta de quem pediu para ser esquecido.
+      authorUid:
+        question.authorUid === ANONYMOUS_AUTHOR_UID ? null : question.authorUid,
       title: question.title,
       body: question.body,
       voteCount: question.voteCount,
