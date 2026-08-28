@@ -55,6 +55,11 @@ destino só, a primeira da lista**, e é dela que sai o `continueUrl` do `AuthSe
 | produção | `liga.lenoborges.com.br` | `https://liga.lenoborges.com.br/acesso` | `https://liga.lenoborges.com.br/?entrar=1` |
 | `dev-liga-dev` | `ligapreview.lenoborges.com.br` | `https://ligapreview.lenoborges.com.br/acesso` | `https://ligapreview.lenoborges.com.br/?entrar=1` |
 
+O **SMTP também é por projeto** (spec 020, Fase 05): `Authentication > Templates > SMTP settings`,
+apontando para `smtp.resend.com` com o remetente `acesso@lenoborges.com.br` — separado do
+`comunidade@` da spec 014, porque o e-mail que devolve a conta para a pessoa não pode morar no mesmo
+endereço de que ela pode se descadastrar.
+
 **Action URL e `continueUrl` são valores diferentes e é fácil trocá-los:** a action URL é do console e diz
 para onde **o link do e-mail** leva; o `continueUrl` é desta API, vai em cada `sendOobCode`, e diz para
 onde a **tela** manda a pessoa quando termina. Apontar o `continueUrl` para `/acesso` faz um laço.

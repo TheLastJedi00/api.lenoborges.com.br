@@ -83,16 +83,23 @@ decisão sem citá-la.
 
 ### O que vive no console, e não no repositório
 
-Quatro configurações não têm representação em código, e todas afetam o fluxo. **Cada ambiente tem seu
+Cinco configurações não têm representação em código, e todas afetam o fluxo. **Cada ambiente tem seu
 próprio projeto do Firebase**, e todas elas são por projeto: configurar só um é o defeito que nenhum
 teste pega, porque funciona em preview e quebra em produção.
 
 | Onde | O quê | Por que importa |
 |---|---|---|
 | Authentication > Templates > **customize action URL** | `https://liga.lenoborges.com.br/acesso` em produção e `https://ligapreview.lenoborges.com.br/acesso` em `dev-liga-dev` | É para onde o link do e-mail leva. **São dois projetos.** Esquecer um faz o cadastro funcionar em preview e mandar o membro de produção para a tela do Google — verde em todo teste. |
+| Authentication > Templates > **SMTP settings** | `smtp.resend.com`, porta 587, usuário `resend`, senha = API key própria do Resend | Sem ele o e-mail sai de `noreply@<projeto>.firebaseapp.com`, e o cadastro fica com a identidade partida no passo anterior à tela. **Este defeito não quebra o fluxo** — o e-mail chega e o link funciona — e por isso é o mais fácil de esquecer num dos dois projetos. |
 | Authentication > Settings > Password policy | **Mínimo de 8 caracteres** | É o piso real, e nasce em 6. O front voltou a exigir 8 (spec 020), e isso torna a divergência mais fácil de não notar: se alguém baixar o mínimo aqui, a única coisa que recusa 6 caracteres passa a ser um `Validators.minLength` no navegador. |
 | Authentication > Templates | Nome público do projeto e remetente | Aparecem no e-mail e na tela onde a senha é digitada. |
 | Authentication > Sign-in method | Provedor Email/Password ligado | Sem ele, nada do fluxo funciona. |
+
+O remetente dos e-mails de ação é **`acesso@lenoborges.com.br`**, e não o `comunidade@` da spec 014.
+São dois tipos de e-mail com destinos opostos quando o membro se cansa: o da comunidade tem cabeçalho
+de descadastro e a pessoa pode sair dele; o de acesso ela nunca pode perder, porque é o que devolve a
+conta para ela. Um endereço só carregando as duas coisas faz quem apertou "marcar como spam" num aviso
+de vídeo levar junto o e-mail que abre a própria conta.
 
 O domínio do front precisa estar em **Authentication > Settings > Authorized domains**, e ele já está
 — é o mesmo `continueUrl` de sempre. Fica escrito porque `UNAUTHORIZED_DOMAIN` já custou um deploy
