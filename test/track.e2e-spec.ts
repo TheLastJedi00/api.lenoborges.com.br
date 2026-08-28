@@ -347,7 +347,7 @@ describe('Trilha (e2e)', () => {
 
       // E o aluno recebe tudo isso na listagem pública, sem leitura extra.
       const naTrilha = await request(app.getHttpServer())
-        .get('/badges/poo/videos?kind=resposta')
+        .get('/badges/poo/videos?tab=resposta')
         .set('Authorization', `Bearer ${memberToken}`)
         .expect(200);
 
@@ -421,7 +421,7 @@ describe('Trilha (e2e)', () => {
     /**
      * **As duas abas não se misturam no painel.**
      *
-     * Sem o `?kind=` que esta spec deu ao `GET` do admin, a tela lista as duas
+     * Sem o `?tab=` que esta spec deu ao `GET` do admin, a tela lista as duas
      * juntas e manda essa lista para uma reordenação que valida contra **uma**
      * aba — 400 em toda seta clicada, a partir da primeira resposta publicada.
      */
@@ -464,7 +464,7 @@ describe('Trilha (e2e)', () => {
       );
 
       const respostas = await request(app.getHttpServer())
-        .get(`/admin/badges/${badgeId}/videos?kind=resposta`)
+        .get(`/admin/badges/${badgeId}/videos?tab=resposta`)
         .set('Authorization', `Bearer ${adminToken}`)
         .expect(200);
 
@@ -474,14 +474,14 @@ describe('Trilha (e2e)', () => {
 
       // Reordenar as respostas: a lista bate com a aba, então passa.
       await request(app.getHttpServer())
-        .patch(`/admin/badges/${badgeId}/videos/order?kind=resposta`)
+        .patch(`/admin/badges/${badgeId}/videos/order?tab=resposta`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ videoIds: [ids.resp2, ids.resp1] })
         .expect(204);
 
       // E as aulas não se mexeram: a renormalização é dentro da aba.
       const aulas = await request(app.getHttpServer())
-        .get(`/admin/badges/${badgeId}/videos?kind=aula`)
+        .get(`/admin/badges/${badgeId}/videos?tab=aula`)
         .set('Authorization', `Bearer ${adminToken}`)
         .expect(200);
 
@@ -491,6 +491,119 @@ describe('Trilha (e2e)', () => {
         ids.aula2,
       ]);
       expect(listaDeAulas.map((item) => item.order)).toEqual([0, 1]);
+    });
+
+    /**
+     * **O caminho inteiro da spec 021, numa prova só.**
+     *
+     * Uma resposta publicada com `tab: 'aula'` numa insígnia que já tem aulas,
+     * e as três consequências que nenhuma outra prova junta: ela aparece na
+     * trilha, **no fim**; ela não aparece na aba de respostas; e a lista da
+     * trilha **com ela dentro** é uma lista válida para o `PATCH .../order`.
+     *
+     * A terceira é a que mais importa: escrita contra `kind`, a validação da
+     * reordenação recusaria exatamente o caso que esta spec existe para
+     * permitir, com 400 em toda seta clicada.
+     */
+    it('posiciona uma resposta na trilha: ela entra no fim, some da aba e reordena junto', async () => {
+      const badgeId = 'javascript';
+      const { question } = await perguntar(
+        badgeId,
+        'Por que o async/await não espera dentro do forEach?',
+      );
+
+      const publicar = async (
+        title: string,
+        youtubeUrl: string,
+        extra: Record<string, unknown> = {},
+      ) => {
+        const criado = await request(app.getHttpServer())
+          .post(`/admin/badges/${badgeId}/videos`)
+          .set('Authorization', `Bearer ${adminToken}`)
+          .send({ title, youtubeUrl, ...extra })
+          .expect(201);
+
+        const video = criado.body as BadgeVideoDto;
+        createdVideoIds.push(video.id);
+
+        return video;
+      };
+
+      const aula1 = await publicar('Aula 1', 'https://youtu.be/j1111111111');
+      const aula2 = await publicar('Aula 2', 'https://youtu.be/j2222222222');
+
+      // Uma resposta na aba, para provar que a contagem da ordem não a inclui.
+      await publicar('Resposta da aba', 'https://youtu.be/j3333333333', {
+        kind: 'resposta',
+        questionId: question.id,
+      });
+
+      const naTrilha = await publicar(
+        'Respondendo: async/await no forEach',
+        'https://www.youtube.com/shorts/j4444444444',
+        { kind: 'resposta', questionId: question.id, tab: 'aula' },
+      );
+
+      // Ela continua sendo resposta -- balão, foto e retrato -- e mudou só de
+      // lista. A `orientation` sai de `kind`, e não de `tab`.
+      expect(naTrilha.kind).toBe('resposta');
+      expect(naTrilha.tab).toBe('aula');
+      expect(naTrilha.orientation).toBe('retrato');
+      expect(naTrilha.question?.id).toBe(question.id);
+
+      // (a) A trilha a devolve, no FIM. Contada pelo `kind`, ela teria nascido
+      // em `order: 1` -- a posição dela na outra lista -- e dois vídeos com o
+      // mesmo `order` ordenam por sorte do Firestore.
+      const trilha = await request(app.getHttpServer())
+        .get(`/badges/${badgeId}/videos?tab=aula`)
+        .set('Authorization', `Bearer ${memberToken}`)
+        .expect(200);
+
+      const idsDaTrilha = (trilha.body as BadgeVideoListDto).videos.map(
+        (item) => item.id,
+      );
+      expect(idsDaTrilha).toEqual([aula1.id, aula2.id, naTrilha.id]);
+      expect(naTrilha.order).toBe(2);
+
+      // (b) A aba de respostas NÃO a devolve: uma resposta tem um endereço.
+      const aba = await request(app.getHttpServer())
+        .get(`/badges/${badgeId}/videos?tab=resposta`)
+        .set('Authorization', `Bearer ${memberToken}`)
+        .expect(200);
+
+      expect(
+        (aba.body as BadgeVideoListDto).videos.map((item) => item.id),
+      ).not.toContain(naTrilha.id);
+
+      // (c) A lista da trilha com a resposta dentro é uma lista válida.
+      await request(app.getHttpServer())
+        .patch(`/admin/badges/${badgeId}/videos/order?tab=aula`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ videoIds: [naTrilha.id, aula1.id, aula2.id] })
+        .expect(204);
+
+      const reordenada = await request(app.getHttpServer())
+        .get(`/badges/${badgeId}/videos?tab=aula`)
+        .set('Authorization', `Bearer ${memberToken}`)
+        .expect(200);
+
+      expect(
+        (reordenada.body as BadgeVideoListDto).videos.map((item) => item.id),
+      ).toEqual([naTrilha.id, aula1.id, aula2.id]);
+    });
+
+    // O terceiro estado incoerente da família (decisão 4). Ignorar o campo
+    // seria a forma mais barata de esconder um bug de front por seis meses.
+    it('recusa aula na aba de respostas', async () => {
+      await request(app.getHttpServer())
+        .post('/admin/badges/poo/videos')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          title: 'Uma aula na aba errada',
+          youtubeUrl: 'https://youtu.be/hhhhhhhhhhh',
+          tab: 'resposta',
+        })
+        .expect(400);
     });
   });
 });
