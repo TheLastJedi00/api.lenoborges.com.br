@@ -94,7 +94,7 @@ Sem código. É a fase que, esquecida, faz tudo o mais funcionar em preview e qu
 # Fase 04: Fechar [ ]
 Branch: `feat/020-fechamento`
 
-- [ ] Task 14: `npm run lint` e `npm test`. Suíte verde antes de fechar.
+- [x] Task 14: `npm run lint` e `npm test`. Suíte verde antes de fechar. **618 testes, 56 suítes, lint limpo e `nest build` passando.**
 - [ ] Task 15: O fluxo inteiro contra o projeto de preview, com o front da 020 rodando.
   - Cadastro novo: e-mail chega, link cai em `/acesso`, senha definida, `204`, login com ela funciona.
   - **O mesmo link clicado de novo**: `400` com a frase da decisão 5, e não um erro genérico.
