@@ -29,38 +29,38 @@ muda, nenhuma consulta muda, e a suíte inteira continua verde sem uma expectati
   service, que é onde a regra da decisão 4 mora. O comentário registra isso, porque a derivação aqui pareceria
   mais barata e faria a validação do 400 nunca ser alcançada.
 
-# Fase 02: A lista e a ordem passam a ser por `tab`
+# Fase 02: A lista e a ordem passam a ser por `tab` [x]
 Branch: `feat/021-ordem-por-tab`
 
 A fase que muda comportamento. Ao fim dela uma resposta publicada com `tab: 'aula'` aparece na trilha, entra
 no fim dela, e é reordenada pelas setas como qualquer aula — tudo isso ainda com o parâmetro de rota antigo.
 
-- [ ] Task 01: `listByBadge` filtra por `tab`. Arquivo: `src/track/badge-video.repository.ts`. Objetivo: a
+- [x] Task 01: `listByBadge` filtra por `tab`. Arquivo: `src/track/badge-video.repository.ts`. Objetivo: a
   assinatura passa a receber `tab?: BadgeVideoTab` e o `where` troca de campo. **Sem filtro continua
   devolvendo as duas listas juntas**, que é a visão da administração e não muda. O comentário do topo do
   método troca "filtra a aba (spec 010)" pela frase nova: a aba é o endereço, e o endereço deixou de ser a
   natureza — uma resposta pode viver na lista das aulas desde a spec 021.
-- [ ] Task 02 (TDD + implementação): O 400 da aula na aba errada. Arquivos:
+- [x] Task 02 (TDD + implementação): O 400 da aula na aba errada. Arquivos:
   `src/track/badge-video.service.ts`, `badge-video.service.spec.ts`. Objetivo: em `create`, `tab = dto.tab ??
   kind`; `kind: 'aula'` com `tab: 'resposta'` responde **400** com a mensagem que diz o que fazer, na mesma
   família dos dois 400 da spec 017. Testes-trava: (a) `kind: 'resposta'` com `tab: 'aula'` é aceito e grava
   `tab: 'aula'` — **é o caso que a spec inteira existe para permitir**, e um teste que só cobre o erro
   deixaria alguém "endurecer" a validação e matar a funcionalidade; (b) corpo sem `tab` grava `tab` igual ao
   `kind`, nos dois valores; (c) `kind: 'aula'` com `tab: 'resposta'` é 400 e **não grava nada**.
-- [ ] Task 03 (TDD + implementação): O novo vídeo entra no fim da lista dele, e não da aba do `kind`.
+- [x] Task 03 (TDD + implementação): O novo vídeo entra no fim da lista dele, e não da aba do `kind`.
   Arquivos: `src/track/badge-video.service.ts`, `badge-video.service.spec.ts`. Objetivo: o `order` do vídeo
   novo é calculado sobre `listByBadge(badge, tab)`. Teste-trava com o caso que revela a diferença: numa
   insígnia com **três aulas e uma resposta na aba**, publicar uma resposta com `tab: 'aula'` grava
   `order: 3` — e não `order: 1`, que é o que sai se alguém contar pela lista do `kind`. Esse é o bug mais
   provável desta fase, e ele não estoura: **dois vídeos com o mesmo `order` na mesma lista** ordenam por
   sorte do Firestore e a trilha embaralha em silêncio.
-- [ ] Task 04 (TDD + implementação): A renormalização passa a ser por `(badgeId, tab)`. Arquivos:
+- [x] Task 04 (TDD + implementação): A renormalização passa a ser por `(badgeId, tab)`. Arquivos:
   `src/track/badge-video.service.ts`, `badge-video.service.spec.ts`. Objetivo: `remove` renormaliza a lista do
   `video.tab`, e `reorder` recebe e valida contra `tab`. O lote atômico da spec 009 não muda em nada além do
   eixo. Teste-trava: apagar uma resposta que estava **no meio da trilha** deixa as aulas restantes em 0..n-1 e
   **não toca em nenhum vídeo da aba de respostas** — renormalizar as duas listas de uma vez é o jeito de
   embaralhar as duas com uma escrita só.
-- [ ] Task 05: O comentário do `order` na entidade. Arquivo: `src/track/entities/badge-video.entity.ts`.
+- [x] Task 05: O comentário do `order` na entidade. Arquivo: `src/track/entities/badge-video.entity.ts`.
   Objetivo: o bloco que hoje diz "posição dentro da insígnia **e da aba**" e explica a renormalização por
   `(badgeId, kind)` passa a dizer `(badgeId, tab)`, mantendo a frase que importa — renormalizar sem separar
   por lista embaralha as duas de uma vez, e é o bug mais provável de toda essa família.
