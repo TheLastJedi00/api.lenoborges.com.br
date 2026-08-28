@@ -30,7 +30,7 @@
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "badgeId", "order": "ASCENDING" },
-        { "fieldPath": "kind", "order": "ASCENDING" },
+        { "fieldPath": "tab", "order": "ASCENDING" },
         { "fieldPath": "order", "order": "ASCENDING" }
       ]
     }

@@ -5,6 +5,7 @@ import {
   AnsweredQuestion,
   BadgeVideo,
   BadgeVideoKind,
+  BadgeVideoTab,
   badgeVideoConverter,
   badgeVideoDocId,
 } from './entities/badge-video.entity';
@@ -19,6 +20,17 @@ export type CreateBadgeVideoData = Pick<
 > & {
   /** Sem valor, o video nasce como aula: e o que quase todo video e. */
   kind?: BadgeVideoKind;
+  /**
+   * A lista em que o video vive (spec 021). Sem valor, nasce em `'aula'`, do
+   * mesmo jeito que `kind`.
+   *
+   * **Este repositorio nao deriva `tab` de `kind`, e isso e decisao.** Derivar
+   * aqui pareceria mais barato e faria a validacao do service nunca ser
+   * alcancada: `kind: 'aula'` com `tab: 'resposta'` e 400 (decisao 4 da spec
+   * 021), e um default silencioso neste arquivo transformaria esse 400 em
+   * codigo morto. Quem decide a lista e o service, que e onde a regra mora.
+   */
+  tab?: BadgeVideoTab;
   questionId?: string | null;
   /**
    * A foto da pergunta (spec 017), tirada pelo service na publicacao.
@@ -45,21 +57,27 @@ export class BadgeVideoRepository {
    * **A ordenacao e do servidor**, e nao do service depois de ler: ordenar aqui
    * e o que faz a lista ser a mesma para todo mundo, independente de quem a leu.
    *
-   * `kind` filtra a aba (spec 010): Aulas e Perguntas Frequentes sao duas listas
-   * com propositos diferentes, e a ordem de cada uma e propria. Sem filtro,
-   * devolve as duas juntas -- que e o que a administracao precisa.
+   * `tab` filtra a aba: Aulas e Perguntas Frequentes sao duas listas com
+   * propositos diferentes, e a ordem de cada uma e propria. Sem filtro, devolve
+   * as duas juntas -- que e o que a administracao precisa.
+   *
+   * **O filtro era por `kind` ate a spec 021, e a aba deixou de ser a natureza
+   * do video.** Uma resposta pode viver na lista das aulas desde entao: `kind`
+   * continua dizendo que ela e resposta -- com balao, com pergunta, em retrato
+   * -- e `tab` diz onde ela aparece. Filtrar por `kind` aqui devolveria a
+   * trilha sem as respostas que o admin posicionou nela.
    *
    * Esta consulta pede um indice composto (`badgeId` + `order`, e
-   * `badgeId` + `kind` + `order`) no Firestore de producao. Ele nao existe
+   * `badgeId` + `tab` + `order`) no Firestore de producao. Ele nao existe
    * sozinho, e o primeiro acesso real falha com um erro que traz o link para
    * cria-lo -- o emulador nao exige indice, entao a suite passa verde ate la.
    */
   async listByBadge(
     badgeId: BadgeId,
-    kind?: BadgeVideoKind,
+    tab?: BadgeVideoTab,
   ): Promise<BadgeVideo[]> {
     const base = this.collection.where('badgeId', '==', badgeId);
-    const query = kind ? base.where('kind', '==', kind) : base;
+    const query = tab ? base.where('tab', '==', tab) : base;
 
     const snapshot = await query.orderBy('order').get();
 
@@ -83,6 +101,7 @@ export class BadgeVideoRepository {
     const id = badgeVideoDocId(data.badgeId, data.youtubeId);
     const entry: BadgeVideo = {
       kind: 'aula',
+      tab: 'aula',
       questionId: null,
       question: null,
       devTierFree: false,

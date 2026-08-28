@@ -46,21 +46,24 @@ export class AdminTrackController {
   @ApiOperation({
     summary: 'Vídeos da insígnia, para administrar',
     description:
-      'Sem `kind`, as duas abas juntas. **O painel precisa pedir uma aba por ' +
+      'Sem `tab`, as duas abas juntas. **O painel precisa pedir uma aba por ' +
       'vez**: a reordenação valida a lista contra os vídeos daquela aba, e uma ' +
       'lista misturada responde 400 em toda seta clicada.',
   })
   @ApiQuery({
-    name: 'kind',
+    name: 'tab',
     required: false,
     enum: ['aula', 'resposta'],
-    description: 'A aba a listar. Sem o parâmetro, as duas',
+    description:
+      'A aba a listar. Sem o parâmetro, as duas. Nomeia a **lista**, e não a ' +
+      'natureza do vídeo — chamava-se `kind` até a spec 021, e não há alias ' +
+      'do nome antigo',
   })
   @ApiResponse({ status: 200, type: BadgeVideoListDto })
   async list(
     @CurrentUser() user: CurrentUserData,
     @Param('badgeId') badgeId: string,
-    @Query('kind') kind?: string,
+    @Query('tab') tab?: string,
   ): Promise<BadgeVideoListDto> {
     // O `uid` do próprio admin: o `watched` da resposta é o check **dele**, e
     // não tem uso nesta tela. Passá-lo — em vez de um ramo que devolvesse
@@ -69,7 +72,7 @@ export class AdminTrackController {
     return this.videos.listByBadge(
       badgeId,
       user.id,
-      kind === 'aula' || kind === 'resposta' ? kind : undefined,
+      tab === 'aula' || tab === 'resposta' ? tab : undefined,
     );
   }
 
@@ -80,15 +83,20 @@ export class AdminTrackController {
       'Recebe a URL do YouTube em qualquer uma das seis formas — **link de ' +
       'Shorts incluído** — e grava só o ID. Entra no fim da ordem **da aba**. O ' +
       'título é da plataforma e é obrigatório.\n\n' +
-      'Com `kind: resposta`, o `questionId` é **obrigatório** e a pergunta é ' +
-      'lida e fotografada: o vídeo passa a carregar título, autor e data dela, e ' +
-      'a pergunta passa a apontar de volta para o vídeo.',
+      'Com `kind: resposta`, o `questionId` é **obrigatório** e a pergunta ' +
+      'é lida e fotografada: o vídeo passa a carregar título, autor e data ' +
+      'dela, e a pergunta passa a apontar de volta para o vídeo.\n\n' +
+      'A lista de destino é `tab`, e sem ela vale `tab = kind`. ' +
+      '`kind: resposta` com `tab: aula` é a **resposta posicionada na ' +
+      'trilha**: ela entra no fim da trilha, é reordenada pelas setas como ' +
+      'qualquer aula, e continua saindo em `retrato`.',
   })
   @ApiResponse({ status: 201, type: BadgeVideoDto })
   @ApiResponse({
     status: 400,
     description:
-      'Link do YouTube irreconhecível, resposta sem pergunta, ou aula com pergunta.',
+      'Link do YouTube irreconhecível, resposta sem pergunta, aula com ' +
+      'pergunta, ou aula na aba de respostas.',
   })
   @ApiResponse({ status: 404, description: 'A pergunta informada não existe.' })
   @ApiResponse({ status: 409, description: 'Vídeo já está nesta insígnia.' })
@@ -119,24 +127,28 @@ export class AdminTrackController {
       'cria, não apaga e não mexe na outra aba.',
   })
   @ApiQuery({
-    name: 'kind',
+    name: 'tab',
     required: false,
     enum: ['aula', 'resposta'],
-    description: 'A aba a reordenar. Sem o parâmetro, Aulas',
+    description:
+      'A aba a reordenar. Sem o parâmetro, Aulas. A lista de `tab: aula` ' +
+      '**pode conter respostas posicionadas na trilha**, e é uma lista válida',
   })
   @ApiResponse({ status: 204, description: 'Ordem gravada.' })
   @ApiResponse({ status: 400, description: 'A ordem não bate com a aba.' })
   async reorder(
     @Param('badgeId') badgeId: string,
     @Body() dto: ReorderVideosDto,
-    @Query('kind') kind?: string,
+    @Query('tab') tab?: string,
   ): Promise<void> {
-    // Sem `kind`, assume Aulas: é onde a esmagadora maioria das reordenações
-    // acontece, e é o comportamento que a spec 009 já tinha.
+    // Sem `tab`, assume Aulas: é onde a esmagadora maioria das reordenações
+    // acontece, e é o comportamento que a spec 009 já tinha. A tolerância é a
+    // de sempre — valor desconhecido é tratado como `'aula'` —, e só o nome do
+    // parâmetro mudou (spec 021, decisão 7).
     await this.videos.reorder(
       badgeId,
       dto,
-      kind === 'resposta' ? 'resposta' : 'aula',
+      tab === 'resposta' ? 'resposta' : 'aula',
     );
   }
 
