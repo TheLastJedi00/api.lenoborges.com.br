@@ -57,21 +57,27 @@ export class BadgeVideoRepository {
    * **A ordenacao e do servidor**, e nao do service depois de ler: ordenar aqui
    * e o que faz a lista ser a mesma para todo mundo, independente de quem a leu.
    *
-   * `kind` filtra a aba (spec 010): Aulas e Perguntas Frequentes sao duas listas
-   * com propositos diferentes, e a ordem de cada uma e propria. Sem filtro,
-   * devolve as duas juntas -- que e o que a administracao precisa.
+   * `tab` filtra a aba: Aulas e Perguntas Frequentes sao duas listas com
+   * propositos diferentes, e a ordem de cada uma e propria. Sem filtro, devolve
+   * as duas juntas -- que e o que a administracao precisa.
+   *
+   * **O filtro era por `kind` ate a spec 021, e a aba deixou de ser a natureza
+   * do video.** Uma resposta pode viver na lista das aulas desde entao: `kind`
+   * continua dizendo que ela e resposta -- com balao, com pergunta, em retrato
+   * -- e `tab` diz onde ela aparece. Filtrar por `kind` aqui devolveria a
+   * trilha sem as respostas que o admin posicionou nela.
    *
    * Esta consulta pede um indice composto (`badgeId` + `order`, e
-   * `badgeId` + `kind` + `order`) no Firestore de producao. Ele nao existe
+   * `badgeId` + `tab` + `order`) no Firestore de producao. Ele nao existe
    * sozinho, e o primeiro acesso real falha com um erro que traz o link para
    * cria-lo -- o emulador nao exige indice, entao a suite passa verde ate la.
    */
   async listByBadge(
     badgeId: BadgeId,
-    kind?: BadgeVideoKind,
+    tab?: BadgeVideoTab,
   ): Promise<BadgeVideo[]> {
     const base = this.collection.where('badgeId', '==', badgeId);
-    const query = kind ? base.where('kind', '==', kind) : base;
+    const query = tab ? base.where('tab', '==', tab) : base;
 
     const snapshot = await query.orderBy('order').get();
 
