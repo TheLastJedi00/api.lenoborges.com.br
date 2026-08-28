@@ -1,19 +1,21 @@
-import {
-  translateOobError,
-  translatePasswordError,
-} from './password-errors';
+import { translateOobError, translatePasswordError } from './password-errors';
 import { FirebaseRestError } from './firebase.service';
 
 describe('password-errors', () => {
   describe('translatePasswordError', () => {
     it('traduz a recusa da politica de senha do console', () => {
       expect(
-        translatePasswordError(new FirebaseRestError('WEAK_PASSWORD : ...', 400)),
+        translatePasswordError(
+          new FirebaseRestError('WEAK_PASSWORD : ...', 400),
+        ),
       ).toBe('A nova senha não atende à política de segurança do projeto.');
 
       expect(
         translatePasswordError(
-          new FirebaseRestError('PASSWORD_DOES_NOT_MEET_REQUIREMENTS : ...', 400),
+          new FirebaseRestError(
+            'PASSWORD_DOES_NOT_MEET_REQUIREMENTS : ...',
+            400,
+          ),
         ),
       ).toBe('A nova senha não atende à política de segurança do projeto.');
     });
