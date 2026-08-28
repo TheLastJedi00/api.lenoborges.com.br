@@ -34,3 +34,35 @@
 3. Ao fim da spec abrir uma branch release/ unindo todas as feat/ da spec
 4. Merge em dev a release
 5. PR contra a main (se houver origin, se não, merge de dev contra main local)
+
+# Ambientes e URLs
+
+| Ambiente | API | Front (`FRONTEND_URL`) |
+|---|---|---|
+| Produção | `https://api.lenoborges.com.br` | `https://liga.lenoborges.com.br` |
+| Preview (branch `dev`) | `https://apipreview.lenoborges.com.br` | `https://ligapreview.lenoborges.com.br` |
+
+API e front são **subdomínios do mesmo domínio registrável** (`lenoborges.com.br`) de propósito: o cookie
+do refresh token é `HttpOnly; SameSite=Lax`, e `Lax` não acompanha requisição cross-site nenhuma. Sob um
+`*.vercel.app` os dois seriam sites diferentes para o navegador (Public Suffix List) e o F5 deslogaria —
+é a spec 011 inteira. `FRONTEND_URL` aceita lista separada por vírgula para o CORS; **o retorno tem um
+destino só, a primeira da lista**, e é dela que sai o `continueUrl` do `AuthService`.
+
+**Cada ambiente tem seu próprio projeto do Firebase**, e o que vive no console é por projeto:
+
+| Projeto | Front que ele atende | Action URL (spec 020) | `continueUrl` |
+|---|---|---|---|
+| produção | `liga.lenoborges.com.br` | `https://liga.lenoborges.com.br/acesso` | `https://liga.lenoborges.com.br/?entrar=1` |
+| `dev-liga-dev` | `ligapreview.lenoborges.com.br` | `https://ligapreview.lenoborges.com.br/acesso` | `https://ligapreview.lenoborges.com.br/?entrar=1` |
+
+**Action URL e `continueUrl` são valores diferentes e é fácil trocá-los:** a action URL é do console e diz
+para onde **o link do e-mail** leva; o `continueUrl` é desta API, vai em cada `sendOobCode`, e diz para
+onde a **tela** manda a pessoa quando termina. Apontar o `continueUrl` para `/acesso` faz um laço.
+
+Ao mexer em qualquer um dos dois, ou em `Authorized domains`, **são sempre dois projetos**. Configurar só
+um é o defeito que nenhum teste pega: funciona em preview e quebra em produção. É a mesma classe dos
+índices compostos, que existiam só no projeto de produção até 2026-08-28 — e o deploy do Firebase é
+sempre com `--project` explícito pelo mesmo motivo.
+
+> Há exemplos e um fixture de teste com `edu.lenoborges.com.br` (`create-campaign.dto.ts`,
+> `badge-video.service.spec.ts`). O domínio é `liga.` — os exemplos estão desatualizados.
