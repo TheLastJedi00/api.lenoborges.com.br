@@ -17,7 +17,7 @@ import { BadgeVideoDto, BadgeVideoListDto } from './dto/badge-video.dto';
 import {
   AnsweredQuestion,
   BadgeVideo,
-  BadgeVideoKind,
+  BadgeVideoTab,
 } from './entities/badge-video.entity';
 import { MuralRepository } from '../mural/mural.repository';
 import { WatchedVideoRepository } from './watched-video.repository';
@@ -99,10 +99,14 @@ export class BadgeVideoService {
      * o check de uma pessoa para outra, sem falhar em nada.
      */
     uid: string,
-    kind?: BadgeVideoKind,
+    /**
+     * A aba pedida (spec 021). E `tab`, e nao `kind`: a trilha inclui as
+     * respostas que o admin posicionou nela, e a aba de respostas nao as inclui.
+     */
+    tab?: BadgeVideoTab,
   ): Promise<BadgeVideoListDto> {
     const badge = this.assertBadge(badgeId);
-    const videos = await this.repository.listByBadge(badge, kind);
+    const videos = await this.repository.listByBadge(badge, tab);
 
     // Um `getAll` nos caminhos exatos dos videos que esta resposta ja vai
     // listar. Ver `findWatchedIds` para por que nao e uma consulta.
@@ -136,6 +140,11 @@ export class BadgeVideoService {
 
     const kind = dto.kind ?? 'aula';
 
+    // Sem `tab` no corpo, a lista e a natureza -- que e o comportamento de
+    // sempre. **O cliente que nao conhece a spec 021 continua funcionando sem
+    // enviar nada**, e e isso que permite subir a API antes do front.
+    const tab: BadgeVideoTab = dto.tab ?? kind;
+
     // `questionId` so faz sentido em resposta. Aula com pergunta e resposta sem
     // pergunta sao os dois estados incoerentes, e o 400 e mais barato que um
     // dado torto que ninguem sabe interpretar depois.
@@ -155,12 +164,30 @@ export class BadgeVideoService {
       );
     }
 
+    // O terceiro estado incoerente da familia (spec 021, decisao 4): a aba de
+    // respostas e a lista das perguntas respondidas, e uma aula ali e um video
+    // sem balao numa lista de baloes.
+    //
+    // O caminho contrario -- `kind: 'resposta'` com `tab: 'aula'` -- e o que a
+    // spec inteira existe para permitir, e nao valida nada.
+    if (kind === 'aula' && tab === 'resposta') {
+      throw new BadRequestException(
+        'Aula não entra na aba de Perguntas Frequentes. Só vídeo de resposta vive lá.',
+      );
+    }
+
     const question = await this.snapshotQuestion(dto.questionId);
 
-    // A ordem e por (badgeId, kind): o novo video entra no fim da ABA dele, e
+    // A ordem e por (badgeId, tab): o novo video entra no fim da LISTA dele, e
     // nao no fim da insignia. Contar a insignia inteira faria a primeira
     // resposta nascer na posicao 3 de uma lista que tem um item so.
-    const existing = await this.repository.listByBadge(badge, kind);
+    //
+    // **E `tab`, nao `kind`.** Numa insignia com tres aulas e uma resposta na
+    // aba, uma resposta publicada na trilha contada pelo `kind` nasceria em
+    // `order: 1` -- a posicao dela na outra lista. Dois videos com o mesmo
+    // `order` na mesma lista ordenam por sorte do Firestore, e a trilha
+    // embaralha em silencio: o bug nao estoura em lugar nenhum.
+    const existing = await this.repository.listByBadge(badge, tab);
 
     let created: { entry: BadgeVideo };
 
@@ -171,6 +198,7 @@ export class BadgeVideoService {
         description: dto.description?.length ? dto.description : null,
         youtubeId: youtube.id,
         kind,
+        tab,
         questionId: dto.questionId ?? null,
         question,
         devTierFree: dto.devTierFree ?? false,
@@ -389,8 +417,13 @@ export class BadgeVideoService {
    * e 2 -- um buraco que nao quebra nada visivelmente e vai envelhecendo ate
    * alguem tentar entender por que os numeros pulam.
    *
-   * A renormalizacao e **dentro do `kind`** (spec 010): renormalizar a insignia
+   * A renormalizacao e **dentro do `tab`** (spec 021): renormalizar a insignia
    * inteira embaralharia as duas abas de uma vez, e uma delas nao foi tocada.
+   *
+   * **E `tab`, nao `kind`.** Apagar uma resposta que estava no meio da trilha e
+   * o caso em que os dois divergem: pelo `kind`, esta linha renormalizaria a
+   * aba de respostas -- que ninguem tocou -- e deixaria a trilha com o buraco
+   * que a renormalizacao existe para fechar.
    */
   async remove(badgeId: string, videoId: string): Promise<void> {
     const badge = this.assertBadge(badgeId);
@@ -398,7 +431,7 @@ export class BadgeVideoService {
 
     await this.repository.delete(videoId);
 
-    const remaining = await this.repository.listByBadge(badge, video.kind);
+    const remaining = await this.repository.listByBadge(badge, video.tab);
     if (remaining.length > 0) {
       await this.repository.reorder(remaining.map((item) => item.id));
     }
@@ -411,14 +444,19 @@ export class BadgeVideoService {
    * Reordenar nao pode criar nem apagar, e as tres formas de errar -- faltando,
    * sobrando e repetido -- viram 400 aqui, antes de qualquer escrita. Misturar
    * ids de abas diferentes tambem cai no 400, pelo mesmo teste de conjunto.
+   *
+   * **A aba e `tab`, e nao `kind` (spec 021).** A lista da trilha pode conter
+   * uma resposta posicionada nela, e essa lista e valida: escrita contra
+   * `kind`, esta validacao recusaria exatamente o caso que a spec existe para
+   * permitir, com 400 em toda seta clicada.
    */
   async reorder(
     badgeId: string,
     dto: ReorderVideosDto,
-    kind: BadgeVideoKind = 'aula',
+    tab: BadgeVideoTab = 'aula',
   ): Promise<void> {
     const badge = this.assertBadge(badgeId);
-    const existing = await this.repository.listByBadge(badge, kind);
+    const existing = await this.repository.listByBadge(badge, tab);
 
     const existingIds = new Set(existing.map((video) => video.id));
     const receivedIds = new Set(dto.videoIds);
@@ -450,7 +488,7 @@ export class BadgeVideoService {
     return badgeId;
   }
 
-  /** Devolve o vídeo, porque quem chama precisa do `kind` para renormalizar. */
+  /** Devolve o vídeo, porque quem chama precisa do `tab` para renormalizar. */
   private async assertVideo(videoId: string): Promise<BadgeVideo> {
     const found = await this.repository.findById(videoId);
     if (!found.found || !found.entry) {

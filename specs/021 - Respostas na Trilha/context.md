@@ -1,5 +1,11 @@
 # Spec 021: Respostas na Trilha
 
+> **Alteração de escopo durante a execução (2026-08-28).** O campo `tab` no
+> `CreateBadgeVideoDto` estava escrito na Fase 03, Task 01, e foi **antecipado para a Fase 02,
+> Task 02**: a regra do 400 lê `dto.tab`, e sem o campo declarado no DTO a fase não compila. O
+> conteúdo é o mesmo — `@IsOptional() @IsIn([...])` e a descrição de Swagger com as três frases —,
+> só mudou de fase. A Task 01 da Fase 03 fica como conferência.
+
 ## Objetivo
 Uma resposta hoje tem **um lugar só**: a aba Perguntas Frequentes da insígnia. Foi a decisão certa da spec
 010 — aula se assiste em ordem, resposta se consulta por assunto, e misturar as duas deixaria a trilha com
