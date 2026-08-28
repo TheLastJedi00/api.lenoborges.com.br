@@ -65,7 +65,12 @@ Branch: `feat/020-endpoints-do-oobcode`
   respostas de erro descritas, no mesmo padrão do resto do controller. A descrição do `check` diz por que
   ele devolve o e-mail, com uma frase — é a pergunta que quem lê o `/docs` faz primeiro.
 
-# Fase 03: O console e a documentação [ ] (código pronto; Tasks 10 e 11 são do console)
+# Fase 03: O console e a documentação [ ]
+
+> **Tasks 12 e 13 feitas.** As Tasks 10 e 11 são configuração do console do Firebase, em dois
+> projetos, e não têm representação em código — ficam abertas até serem feitas à mão. **Sem a Task 10
+> o cadastro continua caindo na tela do Google**, com os três endpoints publicados e ninguém chegando
+> neles.
 Branch: `feat/020-console-e-readme`
 
 Sem código. É a fase que, esquecida, faz tudo o mais funcionar em preview e quebrar em produção.
@@ -92,6 +97,9 @@ Sem código. É a fase que, esquecida, faz tudo o mais funcionar em preview e qu
   (decisão 10), que é a "melhoria" que alguém tentará fazer.
 
 # Fase 04: Fechar [ ]
+
+> **Task 14 feita.** A Task 15 é a prova à mão contra o projeto de preview, e depende da Task 10 e do
+> front da 020 rodando.
 Branch: `feat/020-fechamento`
 
 - [x] Task 14: `npm run lint` e `npm test`. Suíte verde antes de fechar. **618 testes, 56 suítes, lint limpo e `nest build` passando.**
@@ -104,3 +112,49 @@ Branch: `feat/020-fechamento`
     `/acesso?mode=verifyAndChangeEmail`, o `POST /auth/email-action` responde, e o login passa a ser com o
     e-mail novo. **Nenhuma linha de código deste repositório mudou para isso acontecer** (decisão 12), e é
     exatamente por isso que ele precisa ser testado à mão.
+
+# Fase 05: O SMTP do Firebase Auth [ ]
+Branch: `feat/020-smtp-do-firebase-auth`
+
+**Alteração de escopo, acrescentada depois de as Fases 01 a 04 estarem mergeadas** — ver o bloco no topo
+do `context.md`. A tela ficou nossa e o e-mail que leva até ela continuou saindo do remetente do Google.
+
+Sem código, como a Fase 03: é console, nos dois projetos. **O corpo do e-mail continua sendo o template
+do Firebase** — o que muda é o transporte e o remetente (decisão 14).
+
+- [ ] Task 16: O remetente separado no Resend. Objetivo: `acesso@lenoborges.com.br` como remetente dos
+  e-mails de ação, com `leno@lenoborges.com.br` no reply-to. O domínio `lenoborges.com.br` **já está
+  verificado** desde a spec 014, com SPF e DKIM de pé, e nada disso precisa ser refeito — o que entra é
+  um endereço novo no domínio que já existe. **Não é o `comunidade@` da 014**, e a decisão 14 diz por
+  quê: são dois tipos de e-mail com destinos opostos quando o membro se cansa, e quem apertasse "marcar
+  como spam" num aviso de vídeo levaria junto o e-mail que abre a própria conta.
+- [ ] Task 17: A credencial de SMTP. Objetivo: uma **API key própria** do Resend para este uso, e não a
+  `RESEND_API_KEY` que a API já usa. Os valores são fixos: host `smtp.resend.com`, usuário `resend`,
+  senha = a API key. Porta **587 com STARTTLS** (465 é SMTPS implícito, e serve igual — 587 é o que o
+  console do Firebase assume). Uma chave separada é o que permite revogar o envio do Firebase sem
+  derrubar o disparo da spec 014, que é justamente o caso em que alguém vai querer revogar às pressas.
+- [ ] Task 18: **Configurar o SMTP nos dois projetos.** Objetivo: `Authentication > Templates > SMTP
+  settings` em produção **e** em `dev-liga-dev`, com os valores da Task 17. Terceira vez que esta spec
+  pede dois projetos, e a mais fácil de esquecer: diferente da action URL, **este defeito não quebra o
+  fluxo** — o e-mail chega, o link funciona, e ninguém percebe até reparar no endereço do remetente.
+- [ ] Task 19: O remetente nos templates. Objetivo: nome público e endereço de resposta conferidos em
+  `Authentication > Templates`, nos dois projetos, para que o "de" do e-mail diga **Liga Dev** e não o
+  nome do projeto do Firebase. É a metade visível da Task 18: sem ela o e-mail sai pelo nosso servidor
+  com a aparência do antigo.
+
+## Os testes que fecham a fase
+
+- [ ] Task 20: A prova de entrega, **nos dois ambientes**. Objetivo: cadastro novo em preview e em
+  produção, e em cada um deles:
+  - o e-mail chega, e o remetente é `acesso@lenoborges.com.br` — não `noreply@<projeto>.firebaseapp.com`;
+  - ele cai na **caixa de entrada**, e não em Promoções nem em spam;
+  - o cabeçalho original mostra **SPF, DKIM e DMARC em `pass`**. É o que o remetente novo pode quebrar,
+    e é invisível na tela: um `fail` aqui entrega hoje e para de entregar quando o volume subir;
+  - responder ao e-mail chega em `leno@lenoborges.com.br`.
+- [ ] Task 21: O fluxo ponta a ponta continua inteiro. Objetivo: **a Task 15 refeita depois do SMTP**, e
+  não em vez dela. O link do e-mail novo abre `<front>/acesso`, a senha é definida, o `204` volta, e o
+  login com ela funciona. Trocar o servidor de envio não deveria mexer no `oobCode` — e "não deveria" é
+  a razão de a prova existir.
+- [ ] Task 22: `npm run lint` e `npm test`. Objetivo: suíte verde. **Nenhuma linha de código muda nesta
+  fase**, então a suíte é uma trava de que isso é verdade: se algo aqui precisou de código, a fase saiu
+  do que ela se propôs a ser.

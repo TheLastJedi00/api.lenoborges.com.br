@@ -1,5 +1,18 @@
 # Spec 020: A Tela de Senha Volta a Ser Nossa
 
+> ## Alteração de escopo — Fase 05, o SMTP do Firebase Auth
+>
+> **Acrescentada depois de as Fases 01 a 04 estarem mergeadas.** A tela ficou nossa e o e-mail que
+> leva até ela continuou saindo do remetente do Google, o que deixa o cadastro com a identidade
+> partida no passo anterior ao que esta spec consertou: a pessoa recebe um e-mail de um endereço que
+> não reconhece e clica num link que abre uma tela que ela reconhece.
+>
+> **Isto não é o "template de e-mail próprio" que a lista de fora de escopo recusa**, e a diferença é
+> o que torna a fase pequena: o Custom SMTP do Firebase Auth troca o **transporte e o remetente**, e
+> o corpo do e-mail continua sendo o template do Firebase, editado no console. Nada do disparo da
+> spec 014 entra neste fluxo, e nenhuma linha de código muda — é console, nos dois projetos, como a
+> action URL.
+
 ## Objetivo
 Todo membro deste produto tem o **primeiro contato com ele numa página do Google**. O cadastro dispara um
 e-mail do Firebase, o link do e-mail leva a `<projeto>.firebaseapp.com/__/auth/action`, e é lá — em cinza,
@@ -209,6 +222,37 @@ A frase está certa sobre o custo e é a instrução errada a partir desta spec.
 entra na tabela "o que vive no console"** — que passa a ter quatro linhas, e a nova é a que, esquecida,
 quebra o cadastro inteiro em produção enquanto preview funciona.
 
+### 14. O SMTP é do Resend, e o remetente dos e-mails de acesso é separado
+O Firebase manda os e-mails de ação pelo servidor dele, com um remetente `noreply@<projeto>.firebaseapp.com`
+que ninguém reconhece. `Authentication > Templates > SMTP settings` troca isso pelo nosso, e o
+provedor é o que a spec 014 já usa: **Resend**, com o domínio `lenoborges.com.br` já verificado e com
+SPF e DKIM já de pé. Um segundo provedor aqui seria uma segunda reputação de envio a manter, para
+quatro e-mails transacionais.
+
+**O remetente é separado do da comunidade**, e não o `comunidade@lenoborges.com.br` da spec 014:
+
+| Remetente | O que sai por ele | Quem manda |
+|---|---|---|
+| `comunidade@lenoborges.com.br` | Vídeo novo, recado da comunidade | A spec 014, por esta API |
+| `acesso@lenoborges.com.br` | Definir senha, verificar e trocar e-mail | O Firebase, pelo nosso SMTP |
+
+São **dois tipos de e-mail com destinos opostos quando o membro se cansa**: o da comunidade tem
+cabeçalho de descadastro e a pessoa pode sair dele; o de acesso ela nunca pode perder, porque é o que
+devolve a conta para ela. Descadastrar-se da comunidade e parar de receber o link de definir senha
+seria o mesmo endereço carregando as duas coisas — e quem apertasse "marcar como spam" num aviso de
+vídeo levaria junto o e-mail que abre a própria conta.
+
+**A caixa não recebe resposta útil e isso precisa estar dito no `reply-to`**, que continua sendo
+`leno@lenoborges.com.br`: um remetente que ninguém lê é como se perde a mensagem de quem respondeu ao
+e-mail errado pedindo ajuda para entrar.
+
+### 15. O SMTP é por projeto, e é a terceira vez que esta spec diz isto
+Como a action URL e como os índices compostos: **são dois projetos do Firebase**, e configurar só um
+produz um cadastro que funciona em preview e sai do remetente do Google em produção. A diferença para
+a action URL é que este defeito **não quebra o fluxo** — o e-mail chega, o link funciona, e ninguém
+percebe até alguém reparar no endereço do remetente. É mais fácil de esquecer justamente por ser
+menos grave.
+
 ---
 
 ## Endpoints
@@ -228,9 +272,11 @@ Público. `{ oobCode }` → `200 { email }`. Aplica `VERIFY_AND_CHANGE_EMAIL`, `
 
 ## Fora de escopo
 
-- **Template de e-mail próprio, com SMTP nosso.** O corpo do e-mail continua sendo o do Firebase, editado
-  no console. Esta spec troca a **tela**, não a mensagem. Ligar o disparo da spec 014 a este fluxo é
-  outra spec, e ela tem outro assunto.
+- **Template de e-mail próprio, e o disparo da spec 014 neste fluxo.** O corpo do e-mail continua sendo
+  o do Firebase, editado no console, e quem envia continua sendo o Firebase. **O que a Fase 05 troca é
+  só o transporte e o remetente** (decisão 14): o servidor de SMTP passa a ser o nosso, e o endereço
+  passa a ser `acesso@lenoborges.com.br`. Escrever o HTML do e-mail e mandá-lo pelo `MailerService` da
+  spec 014 é outra spec — e ela precisa gerar o link pelo Admin SDK, que é onde ela fica grande.
 - **Firebase Hosting para o action handler.** Não é mais necessário: o handler é o front, no domínio do
   front, que é justamente o que resolve o `firebaseapp.com` no meio do cadastro.
 - **Verificação de e-mail obrigatória.** A API passa a saber aplicar um `VERIFY_EMAIL`, e o produto
