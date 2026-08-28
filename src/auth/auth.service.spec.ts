@@ -655,10 +655,9 @@ describe('AuthService', () => {
 
         await service.checkOobCode('codigo-vivo');
 
-        const body = firebase.identityToolkit.mock.calls[0][1] as Record<
-          string,
-          unknown
-        >;
+        const body = (
+          firebase.identityToolkit.mock.calls[0] as unknown[]
+        )[1] as Record<string, unknown>;
         expect(body).not.toHaveProperty('newPassword');
         expect(Object.keys(body)).toEqual(['oobCode']);
       });
@@ -811,10 +810,9 @@ describe('AuthService', () => {
 
         await service.applyEmailAction('codigo-de-qualquer-modo');
 
-        const body = firebase.identityToolkit.mock.calls[0][1] as Record<
-          string,
-          unknown
-        >;
+        const body = (
+          firebase.identityToolkit.mock.calls[0] as unknown[]
+        )[1] as Record<string, unknown>;
         expect(Object.keys(body)).toEqual(['oobCode']);
       });
 
