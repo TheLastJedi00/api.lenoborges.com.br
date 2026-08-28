@@ -26,42 +26,42 @@ vão precisar da mesma tradução, e duplicá-la é o que faz as duas mensagens 
   indistinguíveis na resposta, porque distinguir informaria a quem colou um código qualquer se ele existiu
   algum dia.
 
-# Fase 02: Os três endpoints [ ]
+# Fase 02: Os três endpoints [x]
 Branch: `feat/020-endpoints-do-oobcode`
 
-- [ ] Task 03: Os DTOs. Arquivos: `src/auth/dto/check-oob.dto.ts`, `src/auth/dto/confirm-password.dto.ts`.
+- [x] Task 03: Os DTOs. Arquivos: `src/auth/dto/check-oob.dto.ts`, `src/auth/dto/confirm-password.dto.ts`.
   Objetivo: `{ oobCode }` e `{ oobCode, newPassword }`, com `@IsString`, `@IsNotEmpty` e o mínimo de 8 no
   `newPassword`. **Nenhum campo `mode`** — o comentário registra a decisão 3: o `mode` chega da URL do
   navegador, é escrito por quem manda o link, e um `switch` sobre ele aqui seria a API deixando o cliente
   escolher qual operação executar sobre uma credencial.
-- [ ] Task 04 (TDD + implementação): `checkOobCode`. Arquivos: `src/auth/auth.service.ts`,
+- [x] Task 04 (TDD + implementação): `checkOobCode`. Arquivos: `src/auth/auth.service.ts`,
   `auth.service.spec.ts`. Objetivo: `accounts:resetPassword` **só com o `oobCode`**, devolvendo
   `{ email }`. O comentário registra a decisão 4 — devolver o e-mail **não** é o oráculo que o `signup`
   evita, porque aqui o requisitante forneceu o `oobCode`, que só chegou por uma caixa de entrada. Falha
   vira `BadRequestException` com a frase da Task 02, e **o código do Google vai para o log**, nunca para a
   resposta.
-- [ ] Task 05 (TDD + implementação): `confirmPassword`. Arquivos: `auth.service.ts`, `.spec.ts`.
+- [x] Task 05 (TDD + implementação): `confirmPassword`. Arquivos: `auth.service.ts`, `.spec.ts`.
   Objetivo: `accounts:resetPassword` com `oobCode` + `newPassword`, devolvendo `void`. Dois ramos de erro
   distintos: código morto usa `translateOobError`, senha recusada usa `translatePasswordError`
   (decisão 6). Teste-trava: **o serviço não chama `signInWithPassword`, não emite cookie e não devolve
   token** (decisão 10) — é o que fica vermelho no dia em que alguém "melhorar" o cadastro logando a
   pessoa direto.
-- [ ] Task 06 (TDD + implementação): `applyEmailAction`. Arquivos: `auth.service.ts`, `.spec.ts`.
+- [x] Task 06 (TDD + implementação): `applyEmailAction`. Arquivos: `auth.service.ts`, `.spec.ts`.
   Objetivo: `accounts:update` com `oobCode`, devolvendo `{ email }`. Serve aos três modos de e-mail, e
   **quem decide qual deles é o próprio `oobCode`** — o comentário registra que o Firebase recusa um código
   de reset usado como código de verificação, e deixar a recusa acontecer lá é ter uma regra em vez de duas.
   O `requestType` que a resposta traz é ignorado (ponto em aberto 5).
-- [ ] Task 07: As rotas. Arquivo: `src/auth/auth.controller.ts`. Objetivo: `POST /auth/password/check`
+- [x] Task 07: As rotas. Arquivo: `src/auth/auth.controller.ts`. Objetivo: `POST /auth/password/check`
   (`10/min`), `POST /auth/password` (`5/min`, `@HttpCode(204)`) e `POST /auth/email-action` (`5/min`),
   **os três públicos, sem guard nenhum** (decisão 7). O comentário registra que os limites não protegem o
   `oobCode`, que tem entropia de sobra: eles impedem que a nossa API vire um alvo barato de reflexão
   contra o Identity Toolkit.
-- [ ] Task 08 (TDD): Spec do controller. Arquivo: `auth.controller.spec.ts`. Objetivo: três teste-trava —
+- [x] Task 08 (TDD): Spec do controller. Arquivo: `auth.controller.spec.ts`. Objetivo: três teste-trava —
   as três rotas **não têm `FirebaseAuthGuard` nem `LegalAcceptanceGuard`** (decisão 8: um `428` aqui
   trancaria a pessoa fora da conta pela porta que ela usa para entrar, e a saída exigiria a senha que ela
   está tentando definir); `POST /auth/password` responde `204` **sem `Set-Cookie`**; e o corpo com um
   campo `mode` extra é rejeitado pelo `whitelist`, e não silenciosamente aceito.
-- [ ] Task 09: Swagger. Arquivo: `auth.controller.ts`. Objetivo: os três com `@ApiOperation` e as
+- [x] Task 09: Swagger. Arquivo: `auth.controller.ts`. Objetivo: os três com `@ApiOperation` e as
   respostas de erro descritas, no mesmo padrão do resto do controller. A descrição do `check` diz por que
   ele devolve o e-mail, com uma frase — é a pergunta que quem lê o `/docs` faz primeiro.
 
