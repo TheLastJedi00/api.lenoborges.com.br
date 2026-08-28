@@ -645,8 +645,18 @@ Um 409 em "já li isso" seria um erro sem nada a consertar.
 Esta é a lista única. As seções acima apontam para cá em vez de repeti-la: uma lista de índices
 copiada em três lugares diverge dos três.
 
-**Criados à mão no console em 2026-08-18**, e é assim que eles existem hoje — não há
-`firestore.indexes.json` no repositório, então nada os versiona e nada os publica junto com o deploy.
+**Agora eles são código.** `firestore.indexes.json` está no repositório e entra pelo `firebase.json`;
+`firebase deploy --only firestore:indexes --project <id>` os publica.
+
+Até 2026-08-28 eles existiam só como criação manual no console de produção, feita em 2026-08-18, e o
+preço apareceu no dia em que alguém abriu o projeto de testes: **`dev-liga-dev` nunca os teve**, e as
+telas da Trilha e do Mural respondiam "não consegui carregar" — as duas únicas telas do produto que
+dependem de consulta ordenada. Nenhum teste falhou, porque o emulador não exige índice; a suíte
+continuou verde enquanto metade do produto não abria.
+
+> **O deploy é sempre com `--project` explícito.** Não há `.firebaserc` e não deve haver um: existem
+> dois projetos parecidos — `dev-liga-dev` e o de produção — e um projeto padrão implícito é a forma
+> mais barata de publicar no lugar errado sem perceber.
 
 | Coleção | Campos | Consulta que o exige |
 |---|---|---|
@@ -1041,3 +1051,137 @@ tabela de índices não ganha linha.
 requisição seguinte de qualquer suite responde `428`. Como isso deixaria a suíte verde mesmo se o guard
 sumisse, `test/legal.e2e-spec.ts` bate no `428` **antes** de aceitar qualquer coisa, e é ele que cobra a
 existência da regra.
+
+## Spec 019 — Vídeos assistidos, XP e o cartão do membro
+
+### O check é do membro, e o produto não tenta adivinhar
+
+A marcação é manual: um check abaixo do player, que o membro clica quando quiser. **Não existe detecção
+de progresso do player** — sem IFrame API, sem `onStateChange`, sem "assistiu 90%".
+
+O palpite erraria dos dois lados (quem assiste no app do YouTube não dispara evento nenhum; quem deixa a
+aba aberta dispara o vídeo inteiro), e carregar a API do YouTube seria carregar um script de terceiro
+que observa o membro — exatamente o que a cláusula 8 da Política de Privacidade diz que este produto não
+faz. O preço está aceito: dá para marcar sem assistir, e não é fraude contra ninguém, porque **XP não
+destrava nada**.
+
+### O XP é definitivo porque o registro é um razão, e não um estado
+
+`profiles/{uid}/watched_videos/{videoId}` guarda dois fatos que parecem um só: `watched` é o check da
+tela, livre para ir e voltar; `firstWatchedAt` é **imutável** e é o fato que concedeu os 10 XP.
+
+**O documento não é apagado nunca**, e é essa a decisão inteira. Se desmarcar apagasse o registro,
+remarcar concederia 10 XP de novo — e o farm seria um duplo clique repetido, sem bug e sem exploração,
+usando a tela exatamente como ela foi desenhada. Daí sai a propriedade que torna o contador conferível:
+
+> **`xp` = `XP_PER_VIDEO` × (número de documentos em `watched_videos`)** — sempre, independente de
+> quantos estão marcados agora.
+
+Um campo `xp` que só soubesse somar não teria com o que ser comparado: uma divergência nele seria
+indetectável. Aqui é uma contagem, e `watched-video.service.spec.ts` a executa como teste, contra um
+Firestore em memória (`src/track/testing/fake-firestore.ts`) — um `jest.fn()` prova que `batch.create`
+foi chamado, não que a segunda chamada falhou e que o incremento não aconteceu por causa dela.
+
+A escrita é **um `WriteBatch` com `create()` do razão e `FieldValue.increment` no perfil**: o
+`ALREADY_EXISTS` do `create()` derruba o lote inteiro, e é essa derrubada que impede o incremento. Sem
+transação, sem leitura prévia e sem janela entre conferir e escrever.
+
+> `xp ?? 0` no converter é carga útil: todo documento antecede o campo no dia do deploy, e
+> `undefined + 10` é `NaN` — o painel exibiria `NaN XP` para a base inteira.
+
+### O vídeo precisa existir antes de o XP ser pago
+
+`videoId` chega na URL e é escolhido pelo cliente. **XP é moeda**, e uma rota que cunha moeda a partir de
+uma string do cliente cunha a partir de qualquer string: `PUT /me/watched-videos/qualquer-coisa-1`,
+repetido com sufixos diferentes, seria XP infinito sem tocar em nenhum vídeo. A primeira marcação lê
+`badge_videos/{videoId}` e responde `404` se não achar — **uma leitura, só no primeiro check de cada
+vídeo**, porque remarcar não tem XP a pagar.
+
+É de lá que sai o `badgeId` gravado no razão, e não de um `split` no id: ele é `{badgeId}__{youtubeId}`
+hoje, e quem partir a string assina que será sempre assim.
+
+### A listagem diz o que já foi visto, e sem consulta nenhuma
+
+`GET /badges/:badgeId/videos` ganhou `watched`, vindo de um **`getAll` nos caminhos exatos dos vídeos que
+a resposta já vai listar** — e não de um `where('badgeId','==',…)` na subcoleção. São as mesmas N
+leituras, e três diferenças: nenhum índice (nem automático), nenhum registro de vídeo já removido da
+insígnia, e custo proporcional ao que se mostra e não ao que a pessoa já assistiu ali. Vídeo sem
+documento é `false`; **não existe "não sei"**.
+
+**A lista deixou de ser igual para todo mundo**, e é a primeira do produto assim: um cache de listagem
+colocado sem olhar isso serve o check de uma pessoa para outra, sem falhar em nada.
+
+### `GET /members/:uid`, e o que ele deliberadamente não devolve
+
+O cartão que um membro abre sobre outro: `{ id, name, bio, grade, xp, linkedin, instagram }`. **Sem
+e-mail, sem telefone, sem `tier`, sem `role`, sem `completedAt`, sem `emailOptOut`.**
+
+> **Campo novo no perfil não entra neste DTO por padrão.** Ele entra se alguém decidir que é público, e
+> a decisão é escrita ali. `PublicMemberDto` **não estende `ProfileDto`, não reusa mapeador e não é
+> montado por espalhamento de objeto** — os três atalhos que fazem o campo seguinte vazar sem ninguém
+> ter escolhido. O teste de vazamento compara o conjunto de chaves por igualdade, e nunca por
+> `toMatchObject`, que passa feliz com um campo a mais.
+
+`GET /admin/users/:uid` (spec 015) continua devolvendo tudo, atrás do `AdminGuard`: **são duas rotas com
+propósitos opostos**, e fundi-las com um `if (role === 'admin')` transformaria a diferença entre "o que
+a comunidade vê" e "o que a operação vê" num ramo dentro de uma função.
+
+Exige sessão — uma rota pública com `uid` na URL seria uma base de nomes e bios enumerável. E responde
+`404` quando o perfil não existe **ou quando `completedAt` é nulo**: conta pela metade não tem nome nem
+bio, e `200` com um cartão vazio é pior do que dizer que não há.
+
+### `socialLinksPublic` nasce `false`
+
+O interruptor decide se `linkedin` e `instagram` aparecem no cartão. **O padrão é a decisão**: quem
+preencheu o LinkedIn antes desta spec o preencheu num formulário que só a administração lia, e publicar
+esses links para a comunidade inteira no dia do deploy divulgaria um vínculo que ninguém foi chamado a
+autorizar.
+
+O `?? false` aqui é o oposto do `emailOptOut ?? false`: lá o fallback errado esconderia a base inteira de
+um disparo, aqui ele **publicaria** a base inteira. Os dois falham em silêncio, e por isso os dois têm
+teste-trava.
+
+**Ele não esconde nada do admin**, e isso é dito em voz alta: `GET /admin/users/:uid` continua trazendo
+os dois links, porque a operação já lê telefone e e-mail de todo mundo — um campo escondido dela seria
+teatro, e teatro de privacidade é pior que ausência dela, porque alguém confia nele. O rótulo na tela diz
+o que ele faz de verdade: **visível para os outros membros**, nunca "privado".
+
+`PATCH /me/privacy` é rota própria e não um campo a mais em `PATCH /me/profile`: aquele exige nome,
+telefone e bio e é ele que carimba `completedAt` — um interruptor que exige reenviar o cadastro inteiro é
+um interruptor que ninguém liga.
+
+### `authorUid` no Mural, e `null` quando a pergunta é anônima
+
+`MuralQuestionDto` passou a trazer `authorUid`, para a tela abrir o cartão. O uid não é segredo neste
+produto — é o caminho de `profiles/{uid}` e metade do id da própria pergunta —, e o que protege o dado é
+o `GET /members/:uid` devolver só o que é público.
+
+**A tradução de `ANONYMOUS_AUTHOR_UID` para `null` acontece no service, uma vez.** Mandar o sentinela ao
+front obrigaria a tela a conhecê-lo e compará-lo, e a primeira comparação errada abriria um cartão `404`
+em cima da pergunta de alguém que pediu para ser esquecido.
+
+### Subcoleção `profiles/{uid}/watched_videos/{videoId}`
+
+**Quarta subcoleção do produto, e a quarta vez que a mesma regra vale:** apagar um perfil precisa
+apagá-la explicitamente, junto de `legal_acceptances`, `notification_reads` e dos votos do Mural. Ela
+entra no passo 4 da ordem de exclusão da spec 013.
+
+### O nada de sempre
+
+Nenhum índice composto novo — tudo é leitura por caminho, e a tabela de índices não ganha linha. E
+nenhuma isenção nova no `LegalAcceptanceGuard`: as três rotas desta spec são autenticadas e comuns, então
+quem não aceitou os termos não marca vídeo, não ganha XP e não abre cartão de ninguém — **sem uma linha
+escrita para isso ser verdade**.
+
+### Os documentos legais subiram para a versão `2026-08-28`
+
+O cartão exibe bio e, com o interruptor ligado, redes sociais — e a cláusula 3 da Política falava só de
+nome e pergunta. Os dois documentos ganharam parágrafos sobre o cartão e sobre o registro dos vídeos
+assistidos, e a Política ganhou a linha do interruptor na tabela de direitos.
+
+**Isso custa um novo aceite de toda a base**, pelo desenho da spec 018 — e é o comportamento correto: o
+texto mudou, então a concordância anterior é com um texto que não é mais o texto. Os testes que fixavam
+`'2026-08-27'` passaram a derivar a versão de `LEGAL_DOCUMENTS`: bumpar já custa um aceite da base
+inteira, não pode custar também meia dúzia de testes vermelhos que não dizem nada sobre comportamento.
+Quem guarda o texto contra edição silenciosa continua sendo o teste-trava do `contentHash`, e ele
+continua sendo o único.
