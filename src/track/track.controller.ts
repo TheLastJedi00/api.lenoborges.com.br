@@ -9,6 +9,8 @@ import {
 import { BadgeVideoService } from './badge-video.service';
 import { BadgeVideoListDto } from './dto/badge-video.dto';
 import { FirebaseAuthGuard } from '../auth/guards/firebase-auth.guard';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import type { CurrentUserData } from '../auth/decorators/current-user.decorator';
 
 /**
  * Leitura da trilha, para o membro.
@@ -43,6 +45,7 @@ export class TrackController {
   @ApiResponse({ status: 200, type: BadgeVideoListDto })
   @ApiResponse({ status: 404, description: 'Insígnia inexistente.' })
   async listVideos(
+    @CurrentUser() user: CurrentUserData,
     @Param('badgeId') badgeId: string,
     @Query('kind') kind?: string,
   ): Promise<BadgeVideoListDto> {
@@ -51,6 +54,6 @@ export class TrackController {
     // trilha parecer vazia.
     const aba = kind === 'aula' || kind === 'resposta' ? kind : undefined;
 
-    return this.videos.listByBadge(badgeId, aba);
+    return this.videos.listByBadge(badgeId, user.id, aba);
   }
 }

@@ -58,11 +58,17 @@ export class AdminTrackController {
   })
   @ApiResponse({ status: 200, type: BadgeVideoListDto })
   async list(
+    @CurrentUser() user: CurrentUserData,
     @Param('badgeId') badgeId: string,
     @Query('kind') kind?: string,
   ): Promise<BadgeVideoListDto> {
+    // O `uid` do próprio admin: o `watched` da resposta é o check **dele**, e
+    // não tem uso nesta tela. Passá-lo — em vez de um ramo que devolvesse
+    // `false` para todo mundo — mantém um caminho único em `listByBadge`, e um
+    // ramo a menos é um ramo a menos para envelhecer sozinho.
     return this.videos.listByBadge(
       badgeId,
+      user.id,
       kind === 'aula' || kind === 'resposta' ? kind : undefined,
     );
   }

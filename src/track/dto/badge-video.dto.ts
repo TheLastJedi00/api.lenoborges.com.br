@@ -104,6 +104,17 @@ export class BadgeVideoDto {
     description: 'Posição dentro da insígnia E da aba, de 0 a n-1',
   })
   order: number;
+
+  @ApiProperty({
+    example: false,
+    description:
+      'Se **quem pediu esta lista** já marcou o vídeo como assistido (spec ' +
+      '019). É o único campo desta resposta que muda de membro para membro — a ' +
+      'lista deixou de ser igual para todo mundo, e um cache colocado sem olhar ' +
+      'isto serve o check de uma pessoa para outra sem falhar em nada. Vídeo ' +
+      'sem registro é `false`: não existe "não sei"',
+  })
+  watched: boolean;
 }
 
 export class BadgeVideoListDto {
