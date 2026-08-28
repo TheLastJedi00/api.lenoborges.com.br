@@ -28,6 +28,25 @@ import { BadgeId } from '../track.constants';
 export type BadgeVideoKind = 'aula' | 'resposta';
 
 /**
+ * A lista em que o video aparece (spec 021).
+ *
+ * **`kind` e a natureza do video, `tab` e o endereco dele.** Ate a spec 021 um
+ * campo so fazia as duas coisas, porque elas andavam juntas: resposta tinha
+ * balao E vivia na aba de respostas. Agora uma resposta posicionada na trilha
+ * **continua sendo resposta** -- continua com a pergunta fotografada, continua
+ * em `retrato`, continua abrindo o balao -- e **passa a viver na lista das
+ * aulas**.
+ *
+ * **Nao e um booleano `naTrilha`, e a razao e a consulta.** Com um booleano, a
+ * listagem da trilha viraria `kind == 'aula'` OU `naTrilha == true`, e uma
+ * disjuncao com `orderBy` no Firestore custa indice novo e plano imprevisivel.
+ * Com `tab`, a consulta e a de hoje com outro nome de campo:
+ * `where('badgeId').where('tab').orderBy('order')`. E `naTrilha: false` num
+ * video que esta na trilha de respostas e a frase que confunde a proxima pessoa.
+ */
+export type BadgeVideoTab = 'aula' | 'resposta';
+
+/**
  * A pergunta que o video responde, **fotografada na publicacao** (spec 017).
  *
  * Nao e redundante com o `questionId` ao lado dela, e nao e cache: e a mesma
@@ -77,6 +96,18 @@ export interface BadgeVideo {
    * no meio da sequencia -- e a sequencia deixa de ser sequencia.
    */
   kind: BadgeVideoKind;
+  /**
+   * A lista em que o video vive (spec 021). Nao e a natureza dele -- essa
+   * continua sendo `kind`.
+   *
+   * Toda aula tem `tab: 'aula'`. Uma resposta tem `tab: 'resposta'` por padrao,
+   * e `tab: 'aula'` quando o admin marcou o toggle na publicacao. Os dois campos
+   * divergem em exatamente um caso, e e o que a spec 021 existe para permitir.
+   *
+   * **Toda consulta e toda renormalizacao de ordem sao por `tab`**;
+   * `orientation` continua saindo de `kind`.
+   */
+  tab: BadgeVideoTab;
   /** A pergunta que originou a resposta. Nulo em toda aula. */
   questionId: string | null;
   /**
@@ -102,10 +133,14 @@ export interface BadgeVideo {
   /**
    * Posicao dentro da insignia **e da aba**. Inteiro de 0 a n-1.
    *
-   * A renormalizacao acontece dentro de `(badgeId, kind)`, e nao da insignia
+   * A renormalizacao acontece dentro de `(badgeId, tab)`, e nao da insignia
    * inteira: uma insignia com tres aulas e duas respostas tem duas sequencias
-   * independentes. Renormalizar sem separar por `kind` embaralharia as duas
-   * abas de uma vez -- e e o bug mais provavel desta spec.
+   * independentes. Renormalizar sem separar por `tab` embaralharia as duas
+   * abas de uma vez -- e e o bug mais provavel de toda esta familia.
+   *
+   * O eixo era `(badgeId, kind)` ate a spec 021, e a troca e so de eixo: e a
+   * mesma garantia, sobre a lista certa. Uma resposta posicionada na trilha
+   * ocupa uma posicao **da trilha**, e nao da aba de respostas.
    */
   order: number;
   createdAt: Date;
@@ -119,6 +154,7 @@ interface BadgeVideoDocument extends DocumentData {
   description: string | null;
   youtubeId: string;
   kind: BadgeVideoKind;
+  tab: BadgeVideoTab;
   questionId: string | null;
   question: AnsweredQuestionDocument | null;
   devTierFree: boolean;
@@ -148,6 +184,7 @@ export const badgeVideoConverter: FirestoreDataConverter<BadgeVideo> = {
       description: video.description,
       youtubeId: video.youtubeId,
       kind: video.kind,
+      tab: video.tab,
       questionId: video.questionId,
       question: video.question
         ? {
@@ -178,6 +215,13 @@ export const badgeVideoConverter: FirestoreDataConverter<BadgeVideo> = {
       // filtro por aba devolve lista vazia: a trilha some sem ninguem ter
       // apagado nada.
       kind: data.kind ?? 'aula',
+      // Documento anterior a spec 021 nao tem `tab`, e **le a lista em que ja
+      // estava**: o `kind` dele. Nenhum documento precisa ganhar o campo, e por
+      // isso nao ha script de migracao nem janela com metade da base num
+      // formato so. Sem este fallback, `undefined` chega ao
+      // `where('tab', '==', 'aula')` e a consulta devolve **lista vazia com
+      // 200**: a trilha inteira some sem ninguem ter apagado nada.
+      tab: data.tab ?? data.kind ?? 'aula',
       questionId: data.questionId ?? null,
       // Documento anterior a spec 017 nao tem a foto, e le como null: a tela
       // desenha o balao quando ele existe e nao reserva espaco quando nao.
