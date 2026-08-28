@@ -46,6 +46,23 @@ export class MuralQuestionDto {
   authorName: string;
 
   @ApiProperty({
+    example: 'aBcD1234',
+    nullable: true,
+    description:
+      'O uid do autor, para a tela abrir o cartão dele em `GET /members/:uid` ' +
+      '(spec 019). **`null` quando a pergunta é anônima** — de alguém que ' +
+      'excluiu a conta.\n\n' +
+      'O uid não é segredo neste produto: é o caminho de `profiles/{uid}` e ' +
+      'metade do id desta própria pergunta. O que protege o dado é o ' +
+      '`GET /members/:uid` devolver só o que é público.\n\n' +
+      'O `null` é deliberado e não é economia: mandar o valor sentinela ' +
+      '`__removido__` obrigaria a tela a conhecê-lo e compará-lo, e a primeira ' +
+      'comparação errada abre um cartão 404 em cima da pergunta de alguém que ' +
+      'pediu para ser esquecido',
+  })
+  authorUid: string | null;
+
+  @ApiProperty({
     example: 'Como saber quando usar herança em vez de composição?',
   })
   title: string;

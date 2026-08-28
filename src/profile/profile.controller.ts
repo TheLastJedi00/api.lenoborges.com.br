@@ -2,8 +2,10 @@ import {
   Controller,
   Delete,
   Get,
+  Param,
   Patch,
   Post,
+  Put,
   Body,
   HttpCode,
   HttpStatus,
@@ -24,6 +26,9 @@ import { ChangeEmailDto } from './dto/change-email.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { DeleteAccountDto } from './dto/delete-account.dto';
 import { EmailPreferenceDto } from './dto/email-preference.dto';
+import { PrivacyPreferenceDto } from './dto/privacy-preference.dto';
+import { WatchedVideoService } from '../track/watched-video.service';
+import { SetWatchedDto, WatchedVideoDto } from '../track/dto/set-watched.dto';
 import { CookieService } from '../auth/cookie.service';
 import { ProfileDto } from './dto/profile.dto';
 import { FirebaseAuthGuard } from '../auth/guards/firebase-auth.guard';
@@ -41,6 +46,7 @@ export class ProfileController {
     private readonly profileService: ProfileService,
     private readonly cookieService: CookieService,
     private readonly legalService: LegalService,
+    private readonly watchedVideoService: WatchedVideoService,
   ) {}
 
   @Get()
@@ -206,6 +212,69 @@ export class ProfileController {
     @Body() dto: AcceptLegalDto,
   ): Promise<void> {
     await this.legalService.accept(user.id, dto);
+  }
+
+  /**
+   * Marcar ou desmarcar um vídeo assistido (spec 019).
+   *
+   * Mora aqui porque o prefixo `/me` é deste controller — o serviço é o do
+   * `TrackModule`, do mesmo jeito que o aceite legal mora aqui com o serviço do
+   * `LegalModule`.
+   *
+   * Throttle de 60/min: marcar seis vídeos seguidos ao terminar uma insígnia é
+   * uso normal, e o limite existe contra script.
+   */
+  @Throttle({ default: { limit: 60, ttl: 60000 } })
+  @Put('watched-videos/:videoId')
+  @ApiOperation({
+    summary: 'Marcar ou desmarcar um vídeo como assistido',
+    description:
+      '**Idempotente.** Marcar o que já está marcado responde 200 sem pagar XP ' +
+      'de novo, e desmarcar **não devolve** o XP já pago — o registro do vídeo ' +
+      'não é apagado nunca, e é isso que impede o farm por duplo clique.\n\n' +
+      'A resposta traz o `xp` já atualizado, para a tela não somar nada: ' +
+      'remarcar um vídeo não paga XP, e uma soma no cliente acertaria no ' +
+      'primeiro clique de cada vídeo e erraria em todos os seguintes.',
+  })
+  @ApiResponse({ status: 200, type: WatchedVideoDto })
+  @ApiResponse({ status: 404, description: 'Vídeo não encontrado.' })
+  @ApiResponse({ status: 429, description: 'Limite de requisições excedido.' })
+  async setWatched(
+    @CurrentUser() user: CurrentUserData,
+    @Param('videoId') videoId: string,
+    @Body() dto: SetWatchedDto,
+  ): Promise<WatchedVideoDto> {
+    return this.watchedVideoService.setWatched(user.id, videoId, dto);
+  }
+
+  /**
+   * O interruptor das redes sociais (spec 019, decisão 9).
+   *
+   * Rota própria, e **não um campo a mais em `PATCH /me/profile`**: aquele exige
+   * nome, telefone e bio, e é ele que carimba `completedAt` — um interruptor que
+   * exige reenviar o cadastro inteiro é um interruptor que ninguém liga. Mesmo
+   * desenho do `PATCH /me/emails` logo abaixo, pela mesma razão.
+   */
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @Patch('privacy')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({
+    summary: 'Mostrar ou esconder as redes sociais dos outros membros',
+    description:
+      'Decide se `linkedin` e `instagram` aparecem no cartão que os outros ' +
+      'membros abrem (`GET /members/:uid`). **Nasce desligado.**\n\n' +
+      '**Não esconde nada da administração**: `GET /admin/users/:uid` continua ' +
+      'trazendo os dois links, porque a operação já lê telefone e e-mail de ' +
+      'todo mundo — um campo escondido dela seria teatro de privacidade.',
+  })
+  @ApiResponse({ status: 204, description: 'Preferência registrada.' })
+  @ApiResponse({ status: 404, description: 'Perfil não encontrado.' })
+  @ApiResponse({ status: 429, description: 'Limite de requisições excedido.' })
+  async setPrivacyPreference(
+    @CurrentUser() user: CurrentUserData,
+    @Body() dto: PrivacyPreferenceDto,
+  ): Promise<void> {
+    await this.profileService.setPrivacyPreference(user.id, dto);
   }
 
   @Throttle({ default: { limit: 10, ttl: 60000 } })

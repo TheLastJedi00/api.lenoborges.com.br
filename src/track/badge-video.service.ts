@@ -20,12 +20,14 @@ import {
   BadgeVideoKind,
 } from './entities/badge-video.entity';
 import { MuralRepository } from '../mural/mural.repository';
+import { WatchedVideoRepository } from './watched-video.repository';
 import { NotificationsService } from '../notifications/notifications.service';
 import { EmailCampaignService } from '../emails/email-campaign.service';
 import { videoCampaignId } from '../emails/entities/email-campaign.entity';
 
-function toDto(video: BadgeVideo): BadgeVideoDto {
+function toDto(video: BadgeVideo, watched: boolean): BadgeVideoDto {
   return {
+    watched,
     id: video.id,
     badgeId: video.badgeId,
     title: video.title,
@@ -75,6 +77,8 @@ export class BadgeVideoService {
     private readonly configService: ConfigService,
     /** Lido na publicacao de uma resposta, e em nenhum outro lugar (spec 017). */
     private readonly mural: MuralRepository,
+    /** O razao do que o membro assistiu, lido em toda listagem (spec 019). */
+    private readonly watchedVideos: WatchedVideoRepository,
   ) {}
 
   /**
@@ -87,12 +91,30 @@ export class BadgeVideoService {
    */
   async listByBadge(
     badgeId: string,
+    /**
+     * De quem e a resposta (spec 019).
+     *
+     * **A lista deixou de ser igual para todo mundo**: o `watched` de cada video
+     * e do membro que perguntou. Um cache de lista colocado sem olhar isto serve
+     * o check de uma pessoa para outra, sem falhar em nada.
+     */
+    uid: string,
     kind?: BadgeVideoKind,
   ): Promise<BadgeVideoListDto> {
     const badge = this.assertBadge(badgeId);
     const videos = await this.repository.listByBadge(badge, kind);
 
-    return { badgeId: badge, videos: videos.map(toDto) };
+    // Um `getAll` nos caminhos exatos dos videos que esta resposta ja vai
+    // listar. Ver `findWatchedIds` para por que nao e uma consulta.
+    const watched = await this.watchedVideos.findWatchedIds(
+      uid,
+      videos.map((video) => video.id),
+    );
+
+    return {
+      badgeId: badge,
+      videos: videos.map((video) => toDto(video, watched.has(video.id))),
+    };
   }
 
   async create(
@@ -198,7 +220,9 @@ export class BadgeVideoService {
 
     await this.linkAnswer(created.entry);
 
-    return toDto(created.entry);
+    // Video recem-publicado nao foi assistido por ninguem. O campo existe no
+    // DTO por ser um so; aqui ele e sempre falso.
+    return toDto(created.entry, false);
   }
 
   /**
@@ -353,7 +377,9 @@ export class BadgeVideoService {
         : {}),
     });
 
-    return toDto(updated.entry);
+    // Resposta de edicao do admin: o check e do membro, e nao faz parte do que
+    // esta operacao mexeu.
+    return toDto(updated.entry, false);
   }
 
   /**

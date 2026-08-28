@@ -101,6 +101,16 @@ export class ProfileRepository {
       // `undefined` -- e o que faz o guard responder 428 no primeiro request em
       // vez de estourar, e e ele que trava o onboarding ate os dois aceites.
       legalAcceptances: {},
+      // E nasce sem XP (spec 019). Zero, e nao `undefined`: o incremento do
+      // razao e `FieldValue.increment`, que trata campo ausente como zero, mas
+      // toda leitura ate o primeiro video assistido passaria pelo `?? 0` do
+      // converter em vez de pelo valor gravado -- e o fallback existe para
+      // documento antigo, nao para documento que este metodo acabou de criar.
+      xp: 0,
+      // E nasce com as redes invisiveis para os outros membros (decisao 9). O
+      // padrao e a decisao: ninguem publica o proprio LinkedIn sem ter ligado o
+      // interruptor em Meu Perfil.
+      socialLinksPublic: false,
       ...data,
       createdAt: now,
       updatedAt: now,
@@ -168,6 +178,31 @@ export class ProfileRepository {
       emailOptOut: optOut,
       emailOptOutReason: optOut ? reason : null,
       emailOptOutAt: optOut ? Timestamp.now() : null,
+      updatedAt: Timestamp.now(),
+    });
+
+    return { found: true };
+  }
+
+  /**
+   * O interruptor das redes sociais (spec 019, decisao 9).
+   *
+   * Idempotente, e no mesmo molde do `setEmailOptOut` acima: um campo, uma
+   * escrita, sem exigir o cadastro inteiro de volta.
+   */
+  async setSocialLinksPublic(
+    id: string,
+    isPublic: boolean,
+  ): Promise<{ found: boolean }> {
+    const ref = this.collection.doc(id);
+    const snapshot = await ref.get();
+
+    if (!snapshot.exists) {
+      return { found: false };
+    }
+
+    await ref.update({
+      socialLinksPublic: isPublic,
       updatedAt: Timestamp.now(),
     });
 

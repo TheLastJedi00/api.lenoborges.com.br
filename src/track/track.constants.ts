@@ -59,6 +59,25 @@ export const BADGE_TITLES: Readonly<Record<BadgeId, string>> = {
 };
 
 /**
+ * Quanto vale marcar um video como assistido (spec 019, decisao 7).
+ *
+ * **Um lugar so, e do lado do servidor.** O front recebe o `xp` pronto em toda
+ * resposta que o carrega e **nao conhece este numero** -- e a mesma regra da
+ * `orientation` da spec 017 e da `phase` do Mural: o servidor afirma, a tela
+ * obedece.
+ *
+ * A tentacao do outro lado e somar 10 no signal para a tela responder mais
+ * rapido. Ela erra: **remarcar um video nao paga XP nenhum** (decisao 2), entao
+ * a soma local acerta no primeiro clique de cada video e erra em todos os
+ * seguintes -- e o erro so aparece quando alguem recarrega a pagina e ve o
+ * numero cair.
+ *
+ * O dia em que um video valer 20, ou em que a insignia final valer o dobro, e
+ * este arquivo que muda, e nenhum front precisa ser encontrado.
+ */
+export const XP_PER_VIDEO = 10;
+
+/**
  * Existe para o `badgeId` de uma URL nunca virar dado.
  *
  * A trilha e fixa e desenhada; um `badgeId` livre so serviria para criar video

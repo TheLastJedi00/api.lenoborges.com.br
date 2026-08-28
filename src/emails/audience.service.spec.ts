@@ -26,6 +26,8 @@ function perfil(overrides: Partial<Profile> = {}): Profile {
     emailOptOutReason: null,
     emailOptOutAt: null,
     legalAcceptances: {},
+    xp: 0,
+    socialLinksPublic: false,
     completedAt: new Date('2026-01-01T00:00:00.000Z'),
     waitlistEntryId: null,
     createdAt: new Date('2026-01-01T00:00:00.000Z'),

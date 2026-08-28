@@ -9,7 +9,10 @@ import { MuralRepository } from './mural.repository';
 import { ProfileRepository } from '../profile/profile.repository';
 import { NotificationsService } from '../notifications/notifications.service';
 import { Profile } from '../profile/entities/profile.entity';
-import { MuralQuestion } from './entities/mural-question.entity';
+import {
+  ANONYMOUS_AUTHOR_UID,
+  MuralQuestion,
+} from './entities/mural-question.entity';
 import { TierId } from '../billing/billing.tiers';
 
 // Terca-feira. Semana corrente: 2026-08-16. Em votacao: 2026-08-09.
@@ -32,6 +35,8 @@ function profile(tier: TierId, name: string | null = 'Leno Borges'): Profile {
     emailOptOutReason: null,
     emailOptOutAt: null,
     legalAcceptances: {},
+    xp: 0,
+    socialLinksPublic: false,
     completedAt: new Date(),
     waitlistEntryId: null,
     createdAt: new Date(),
@@ -194,6 +199,51 @@ describe('MuralService', () => {
       const state = await service.getState('uid-1', AGORA);
 
       expect(state.canAsk).toBe(false);
+    });
+  });
+
+  describe('authorUid no DTO (spec 019)', () => {
+    it('pergunta de autor vivo traz o uid, para a tela abrir o cartao', async () => {
+      repository.listByWeek.mockImplementation((weekId: string) =>
+        Promise.resolve(
+          weekId === '2026-08-09'
+            ? [question({ weekId, authorUid: 'uid-7' })]
+            : [],
+        ),
+      );
+
+      const lista = await service.listQuestions('uid-1', 'votacao', AGORA);
+
+      expect(lista[0].authorUid).toBe('uid-7');
+    });
+
+    /**
+     * **A traducao do sentinela acontece no service, uma vez** (decisao 11).
+     *
+     * Mandar `__removido__` para o front obrigaria a tela a conhece-lo e
+     * compara-lo, e a primeira comparacao errada abre um cartao que responde 404
+     * em cima da pergunta de alguem que pediu para ser esquecido. `null` e o
+     * front nao precisar saber que existe um sentinela.
+     */
+    it('teste-trava: pergunta anonimizada traz null, e nunca o sentinela', async () => {
+      repository.listByWeek.mockImplementation((weekId: string) =>
+        Promise.resolve(
+          weekId === '2026-08-09'
+            ? [
+                question({
+                  weekId,
+                  authorUid: ANONYMOUS_AUTHOR_UID,
+                  authorName: 'Membro removido',
+                }),
+              ]
+            : [],
+        ),
+      );
+
+      const lista = await service.listQuestions('uid-1', 'votacao', AGORA);
+
+      expect(lista[0].authorUid).toBeNull();
+      expect(lista[0].authorName).toBe('Membro removido');
     });
   });
 

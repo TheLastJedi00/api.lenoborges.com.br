@@ -2,6 +2,17 @@ import { ConflictException, NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { LegalService } from './legal.service';
 import { LegalAcceptanceRepository } from './legal-acceptance.repository';
+import { LEGAL_DOCUMENTS } from './legal.documents';
+
+/**
+ * A versao vigente sai do proprio registro de documentos, e **nao de um literal**.
+ *
+ * Bumpar a versao ja custa um novo aceite da base inteira (spec 018, decisao 3);
+ * nao pode custar tambem meia duzia de testes vermelhos que nao dizem nada sobre
+ * comportamento. Quem guarda o texto contra edicao silenciosa e o teste-trava do
+ * hash do texto, em legal.documents.spec.ts, e ele continua sendo o unico.
+ */
+const VIGENTE = LEGAL_DOCUMENTS['termos-de-uso'].version;
 
 describe('LegalService', () => {
   let service: LegalService;
@@ -30,7 +41,7 @@ describe('LegalService', () => {
       expect(lista[0]).toEqual({
         id: 'termos-de-uso',
         title: 'Termos de Uso',
-        version: '2026-08-27',
+        version: VIGENTE,
       });
       expect(lista[0]).not.toHaveProperty('sections');
     });
@@ -60,9 +71,9 @@ describe('LegalService', () => {
 
     it('perfil em dia nao deve nada', () => {
       const pending = service.pendingFor({
-        'termos-de-uso': { version: '2026-08-27', acceptedAt: new Date() },
+        'termos-de-uso': { version: VIGENTE, acceptedAt: new Date() },
         'politica-de-privacidade': {
-          version: '2026-08-27',
+          version: VIGENTE,
           acceptedAt: new Date(),
         },
       });
@@ -80,7 +91,7 @@ describe('LegalService', () => {
       const pending = service.pendingFor({
         'termos-de-uso': { version: '2026-01-01', acceptedAt: new Date() },
         'politica-de-privacidade': {
-          version: '2026-08-27',
+          version: VIGENTE,
           acceptedAt: new Date(),
         },
       });
@@ -93,13 +104,13 @@ describe('LegalService', () => {
     it('grava o aceite da versao vigente', async () => {
       await service.accept('uid-1', {
         documentId: 'termos-de-uso',
-        version: '2026-08-27',
+        version: VIGENTE,
       });
 
       expect(repository.record).toHaveBeenCalledWith(
         'uid-1',
         'termos-de-uso',
-        '2026-08-27',
+        VIGENTE,
         expect.any(Date),
       );
     });
@@ -127,7 +138,7 @@ describe('LegalService', () => {
           version: '2026-01-01',
         }),
       ).rejects.toMatchObject({
-        response: { error: 'stale_version', current: '2026-08-27' },
+        response: { error: 'stale_version', current: VIGENTE },
       });
     });
 
@@ -135,7 +146,7 @@ describe('LegalService', () => {
       await expect(
         service.accept('uid-1', {
           documentId: 'contrato-inexistente',
-          version: '2026-08-27',
+          version: VIGENTE,
         }),
       ).rejects.toThrow(NotFoundException);
 
@@ -148,7 +159,7 @@ describe('LegalService', () => {
       await expect(
         service.accept('uid-1', {
           documentId: 'termos-de-uso',
-          version: '2026-08-27',
+          version: VIGENTE,
         }),
       ).resolves.toBeUndefined();
     });

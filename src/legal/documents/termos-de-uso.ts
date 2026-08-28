@@ -22,10 +22,10 @@ import { LegalDocument } from '../entities/legal-document.entity';
 export const TERMOS_DE_USO: LegalDocument = {
   id: 'termos-de-uso',
   title: 'Termos de Uso',
-  version: '2026-08-27',
-  updatedAt: '2026-08-27',
+  version: '2026-08-28',
+  updatedAt: '2026-08-28',
   contentHash:
-    '599fed3ef855baa3343f9e2c9729dea7280ae0cc638f14f2332bdc86b515c34f',
+    '7cdcf91bb90b24e1bd8d7e903f3eac2d37e232f409de56d68629311f0e33be3a',
   sections: [
     {
       heading: '1. Aceitação',
@@ -83,6 +83,7 @@ export const TERMOS_DE_USO: LegalDocument = {
         'As perguntas que você publica no mural são visíveis para os demais membros e podem ser respondidas em vídeo na trilha, com o texto da pergunta e o seu nome de exibição.',
         'Ao publicar, você nos autoriza a exibir, reproduzir e adaptar esse conteúdo dentro da plataforma e nos materiais da comunidade, sem prazo e sem contrapartida financeira. Você continua sendo o autor do que escreveu.',
         'Se você apagar sua conta, suas perguntas permanecem publicadas de forma anônima, sem seu nome — elas carregam votos de outras pessoas e podem já ter sido respondidas em vídeo.',
+        'Seu perfil de membro — nome, biografia, etapa na trilha e pontos de experiência — fica visível para as demais pessoas da comunidade, que o abrem clicando no seu nome no mural. Seus links de redes sociais só aparecem ali se você ligar o interruptor em Meu Perfil, que nasce desligado.',
         'Publique apenas conteúdo que seja seu ou que você tenha o direito de compartilhar.',
       ],
     },

@@ -108,6 +108,35 @@ export interface Profile {
    * projeto.
    */
   legalAcceptances: Record<string, LegalAcceptance>;
+  /**
+   * Pontos de experiencia (spec 019, decisao 3).
+   *
+   * **Denormalizado, e sempre igual a `XP_PER_VIDEO` vezes o numero de
+   * documentos em `watched_videos`** -- nao ao numero de documentos marcados
+   * agora. Quem desmarca perde o check e nao perde o XP, e o documento do razao
+   * fica: e isso que impede o farm por duplo clique.
+   *
+   * Quem escreve e o `WatchedVideoRepository`, com `FieldValue.increment`, no
+   * mesmo lote do `create()` do razao. Nao ha outro caminho de escrita, e a
+   * invariante acima e o que permite conferir este numero -- um contador que so
+   * sabe somar nao tem com o que ser comparado.
+   */
+  xp: number;
+  /**
+   * Se as redes sociais aparecem no cartao que os outros membros abrem
+   * (spec 019, decisao 9).
+   *
+   * **Nasce `false`, e o padrao e a decisao.** Quem preencheu o LinkedIn antes
+   * desta spec o preencheu num formulario onde ninguem, alem da administracao,
+   * podia ve-lo: publicar esses links para a comunidade inteira no dia do deploy
+   * divulgaria um vinculo que nenhuma dessas pessoas foi chamada a autorizar.
+   *
+   * **Nao esconde nada do admin** (decisao 10). `GET /admin/users/:uid` continua
+   * trazendo os dois links, porque a administracao ja le telefone e e-mail de
+   * todo mundo -- um campo escondido dela seria teatro, e teatro de privacidade
+   * e pior que ausencia dela, porque alguem confia nele.
+   */
+  socialLinksPublic: boolean;
   completedAt: Date | null;
   waitlistEntryId: string | null;
   createdAt: Date;
@@ -127,6 +156,8 @@ interface ProfileDocument extends DocumentData {
   emailOptOutReason: EmailOptOutReason | null;
   emailOptOutAt: Timestamp | null;
   legalAcceptances: Record<string, { version: string; acceptedAt: Timestamp }>;
+  xp: number;
+  socialLinksPublic: boolean;
   completedAt: Timestamp | null;
   waitlistEntryId: string | null;
   createdAt: Timestamp;
@@ -181,6 +212,8 @@ export const profileConverter: FirestoreDataConverter<Profile> = {
           ],
         ),
       ),
+      xp: profile.xp,
+      socialLinksPublic: profile.socialLinksPublic,
       completedAt: profile.completedAt
         ? Timestamp.fromDate(profile.completedAt)
         : null,
@@ -234,6 +267,18 @@ export const profileConverter: FirestoreDataConverter<Profile> = {
           ],
         ),
       ),
+      // **O `?? 0` e carga util** (spec 019, decisao 3). Documento antigo nao
+      // tem o campo -- e sao todos, no dia em que ela sobe. Sem ele o valor
+      // chega `undefined`, `undefined + 10` e `NaN`, e o painel passa a exibir
+      // `NaN XP` para a base inteira.
+      xp: data.xp ?? 0,
+      // **O `?? false` aqui e o oposto do `emailOptOut` acima** (spec 019,
+      // decisao 9). La o fallback errado esconderia a base inteira de um
+      // disparo; aqui ele **publicaria** as redes sociais da base inteira. O
+      // padrao e invisivel de proposito: quem preencheu o LinkedIn antes desta
+      // spec o preencheu num formulario que so a administracao lia. Trocar isto
+      // por `?? true` divulga o vinculo de todo mundo sem ninguem ter escolhido.
+      socialLinksPublic: data.socialLinksPublic ?? false,
       // completedAt nulo e o estado normal de quem ainda nao fez o onboarding, e
       // e por ele que profileCompleted e decidido. Um undefined vindo de
       // documento antigo viraria "completou", entao o ?? null e carga util.

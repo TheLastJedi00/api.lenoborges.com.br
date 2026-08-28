@@ -16,10 +16,10 @@ import { LegalDocument } from '../entities/legal-document.entity';
 export const POLITICA_DE_PRIVACIDADE: LegalDocument = {
   id: 'politica-de-privacidade',
   title: 'Política de Privacidade',
-  version: '2026-08-27',
-  updatedAt: '2026-08-27',
+  version: '2026-08-28',
+  updatedAt: '2026-08-28',
   contentHash:
-    '8a18b1a54bc72288a9d634139a9af76b8a30b97e83876e671f45757d81334011',
+    '217d5b7b3f051843f65dbcbc88d000e9f07bb00b0658e01362626c4f7b49f3e3',
   sections: [
     {
       heading: '1. Quem trata seus dados',
@@ -33,6 +33,7 @@ export const POLITICA_DE_PRIVACIDADE: LegalDocument = {
       paragraphs: [
         'Você nos fornece: e-mail, nome, telefone, biografia e, se quiser, links de LinkedIn e Instagram; perguntas e votos publicados no mural.',
         'Coletamos automaticamente: dados de uso da plataforma — páginas acessadas, vídeos abertos, progresso na trilha, data e hora de acesso, tipo de dispositivo e navegador; e dados de entrega dos e-mails que enviamos, como envio, falha e descadastro.',
+        'Registramos também os vídeos que você marca como assistidos e os pontos de experiência que eles somam. A marcação é sempre sua: nós não medimos o que você assiste dentro do player, não sabemos quanto de cada vídeo você viu e não usamos nenhum recurso de rastreamento do site de vídeos para isso.',
         'Não coletamos sua senha, dados de cartão, documento de identidade nem localização precisa.',
       ],
     },
@@ -41,6 +42,7 @@ export const POLITICA_DE_PRIVACIDADE: LegalDocument = {
       paragraphs: [
         'Criar e manter sua conta e dar acesso ao conteúdo contratado.',
         'Exibir seu nome e sua pergunta no mural para os demais membros.',
+        'Exibir seu cartão de membro para as demais pessoas da comunidade: ao clicar no seu nome no mural, quem já é membro vê seu nome, sua biografia, sua etapa na trilha e seus pontos de experiência. Seus links de LinkedIn e Instagram só aparecem ali se você ligar o interruptor "Mostrar minhas redes para os outros membros", em Meu Perfil — ele nasce desligado. Seu telefone e seu e-mail nunca aparecem nesse cartão.',
         'Enviar ao e-mail cadastrado comunicações programadas da comunidade: novidades, novos vídeos, avisos e informações sobre a Liga Dev. É uma consequência do cadastro, e você pode sair da lista a qualquer momento — o link de descadastro vai no rodapé de todo e-mail, e o interruptor está em Meu Perfil.',
         'Analytics: usamos os dados de uso, de forma agregada, para entender como a plataforma é usada, quais conteúdos funcionam e onde as pessoas travam, e para decidir o que construir. Esse uso orienta o produto; ele não produz decisão automatizada sobre você.',
         'Cumprir obrigações legais e apurar violações dos Termos de Uso.',
@@ -64,6 +66,7 @@ export const POLITICA_DE_PRIVACIDADE: LegalDocument = {
       heading: '6. Com quem compartilhamos',
       paragraphs: [
         'Compartilhamos o mínimo necessário com fornecedores que operam partes do produto: provedor de autenticação e banco de dados, que hospeda sua conta e seus dados de perfil; provedor de envio de e-mail, que recebe seu endereço e seu nome para entregar as mensagens; provedor de hospedagem, que processa os acessos à aplicação; e a plataforma de mensagens usada pelo grupo da comunidade, sob os termos dela.',
+        'Parte do seu perfil também fica visível para as demais pessoas da comunidade, e não só para fornecedores: é o cartão de membro descrito na cláusula 3. O que aparece ali está listado lá, e as redes sociais dependem de você ligar o interruptor.',
         'Não vendemos seus dados. Não os cedemos para publicidade de terceiros. Podemos divulgá-los por ordem judicial ou requisição de autoridade competente.',
         'Parte desses fornecedores opera fora do Brasil, o que implica transferência internacional dos dados, feita com as salvaguardas contratuais oferecidas por eles.',
       ],
@@ -92,7 +95,7 @@ export const POLITICA_DE_PRIVACIDADE: LegalDocument = {
       heading: '10. Seus direitos',
       paragraphs: [
         'A Lei Geral de Proteção de Dados garante a você confirmar a existência de tratamento, acessar seus dados, corrigir dados incompletos ou desatualizados, pedir anonimização ou eliminação, saber com quem compartilhamos, e revogar consentimento.',
-        'Você exerce boa parte deles sozinho, na hora: ver e corrigir seus dados, trocar e-mail ou senha e apagar sua conta ficam em Meu Perfil; sair da lista de e-mails fica em Meu Perfil ou no link do rodapé de qualquer e-mail que enviamos.',
+        'Você exerce boa parte deles sozinho, na hora: ver e corrigir seus dados, trocar e-mail ou senha, mostrar ou esconder suas redes sociais dos outros membros e apagar sua conta ficam em Meu Perfil; sair da lista de e-mails fica em Meu Perfil ou no link do rodapé de qualquer e-mail que enviamos.',
         'Para qualquer pedido que não esteja nessa lista, escreva para comunidade@lenoborges.com.br. Respondemos no prazo legal.',
       ],
     },
