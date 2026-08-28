@@ -13,7 +13,10 @@ import { ChangeEmailDto } from './dto/change-email.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { DeleteAccountDto } from './dto/delete-account.dto';
 import { EmailPreferenceDto } from './dto/email-preference.dto';
+import { PrivacyPreferenceDto } from './dto/privacy-preference.dto';
 import { ProfileDto } from './dto/profile.dto';
+import { PublicMemberDto } from './dto/public-member.dto';
+import { WatchedVideoRepository } from '../track/watched-video.repository';
 import { LegalService } from '../legal/legal.service';
 import { LegalAcceptanceRepository } from '../legal/legal-acceptance.repository';
 import type { Profile } from './entities/profile.entity';
@@ -77,6 +80,8 @@ export class ProfileService {
     @Inject(forwardRef(() => LegalService))
     private readonly legalService: LegalService,
     private readonly legalAcceptanceRepository: LegalAcceptanceRepository,
+    @Inject(forwardRef(() => WatchedVideoRepository))
+    private readonly watchedVideoRepository: WatchedVideoRepository,
   ) {}
 
   /**
@@ -105,6 +110,14 @@ export class ProfileService {
       profileCompleted: profile.completedAt !== null,
       role,
       tier: profile.tier,
+      // O XP (spec 019). Vem daqui, e nao da resposta de sessao: uma segunda
+      // fonte para o mesmo valor diverge no primeiro check dado antes do
+      // refresh, e o painel passaria a mostrar dois numeros conforme a rota.
+      xp: profile.xp,
+      // A posicao do interruptor. Sem ele no DTO, a tela de Meu Perfil chuta a
+      // posicao inicial do switch -- e chuta ligado, que e o unico chute que
+      // publica dado de alguem.
+      socialLinksPublic: profile.socialLinksPublic,
       // **Do mesmo `pendingFor` que o guard usa** (spec 018, decisao 9). Nunca
       // calcular de outro jeito aqui: este campo e o corpo do 428 tem de dizer a
       // mesma coisa, ou o painel abre bloqueado por algo que ja foi aceito.
@@ -138,6 +151,67 @@ export class ProfileService {
     }
 
     return this.toDto(profile.entry, email, role);
+  }
+
+  /**
+   * O cartao que um membro abre sobre outro (spec 019, decisao 8).
+   *
+   * **O mapeamento e campo a campo, de proposito.** Nao ha espalhamento de
+   * objeto, nao ha reuso do `toDto` acima, e nao ha classe base compartilhada:
+   * os tres seriam o caminho pelo qual o proximo campo do perfil -- telefone,
+   * e-mail, `emailOptOut` -- vaza para a comunidade inteira sem ninguem ter
+   * escolhido. Campo novo entra aqui por decisao escrita, e nao por
+   * conveniencia.
+   *
+   * **404 tambem quando o onboarding nao terminou.** Perfil sem `completedAt` e
+   * uma conta pela metade, sem nome e sem bio; um cartao dela seria um cartao
+   * vazio, e responder 200 com nada e pior do que responder que nao ha. De
+   * quebra, fecha a enumeracao de contas em criacao.
+   *
+   * **O corte das redes acontece aqui, no servidor** (decisao 9). Um front que
+   * recebesse o link e decidisse nao desenha-lo ja o teria entregado a quem
+   * abrisse a aba de rede.
+   */
+  async findPublicMember(uid: string): Promise<PublicMemberDto> {
+    const profile = await this.repository.findById(uid);
+    if (!profile.found || !profile.entry || !profile.entry.completedAt) {
+      throw new NotFoundException('Membro não encontrado.');
+    }
+
+    const member = profile.entry;
+    const showLinks = member.socialLinksPublic;
+
+    return {
+      id: member.id,
+      name: member.name,
+      bio: member.bio,
+      grade: member.grade,
+      xp: member.xp,
+      linkedin: showLinks ? member.linkedin : null,
+      instagram: showLinks ? member.instagram : null,
+    };
+  }
+
+  /**
+   * O interruptor das redes sociais (spec 019, decisao 9).
+   *
+   * Mesmo desenho do `setEmailPreference`: uma rota propria, um campo so, e a
+   * gravacao no clique. **Nao passa pelo `PATCH /me/profile`**, que exige nome,
+   * telefone e bio -- um interruptor que exige reenviar o cadastro inteiro e um
+   * interruptor que ninguem liga.
+   */
+  async setPrivacyPreference(
+    userId: string,
+    dto: PrivacyPreferenceDto,
+  ): Promise<void> {
+    const { found } = await this.repository.setSocialLinksPublic(
+      userId,
+      dto.socialLinksPublic,
+    );
+
+    if (!found) {
+      throw new NotFoundException('Perfil não encontrado.');
+    }
   }
 
   /**
@@ -306,7 +380,11 @@ export class ProfileService {
     // votos do Mural e de `notification_reads` (spec 018, decisao 11). O aceite
     // e dado pessoal, a pessoa pediu para ser esquecida, e o contrato que ele
     // comprova terminou junto com a conta.
+    // E o razao do que ela assistiu (spec 019, decisao 13): historico de
+    // comportamento ligado a um `uid`. A pessoa pediu para ser esquecida, e o
+    // que ela assistiu vai junto.
     await this.legalAcceptanceRepository.removeAll(userId);
+    await this.watchedVideoRepository.removeAll(userId);
     await this.repository.remove(userId);
 
     // 5. A inscricao na lista de espera, que e nome, telefone e e-mail crus.

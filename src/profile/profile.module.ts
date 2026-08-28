@@ -6,6 +6,8 @@ import { WaitlistModule } from '../waitlist/waitlist.module';
 import { AuthModule } from '../auth/auth.module';
 import { MuralModule } from '../mural/mural.module';
 import { LegalModule } from '../legal/legal.module';
+import { WatchedVideoModule } from '../track/watched-video.module';
+import { MembersController } from './members.controller';
 
 /**
  * O `forwardRef` no `AuthModule` e a spec 013 chegando: as tres operacoes de
@@ -23,6 +25,13 @@ import { LegalModule } from '../legal/legal.module';
  * e o guard de la precisa do `ProfileRepository` para ler o mapa de aceites. E o
  * mesmo desenho do `AuthModule`, pela mesma razao -- as duas metades sao donas
  * de coisas diferentes e nenhuma delas deve duplicar a outra.
+ *
+ * O `TrackModule` (spec 019) e o quarto, e o ciclo tem o mesmo formato dos
+ * outros tres: `PUT /me/watched-videos/:videoId` mora no `ProfileController`
+ * porque o prefixo `/me` e dele, com o `WatchedVideoService` de la; e a exclusao
+ * de conta precisa do `WatchedVideoRepository` para apagar a subcolecao do
+ * razao. Do outro lado, o `BadgeVideoService` le o `xp` pelo `ProfileRepository`
+ * depois de marcar.
  */
 @Module({
   imports: [
@@ -30,8 +39,9 @@ import { LegalModule } from '../legal/legal.module';
     forwardRef(() => AuthModule),
     forwardRef(() => MuralModule),
     forwardRef(() => LegalModule),
+    WatchedVideoModule,
   ],
-  controllers: [ProfileController],
+  controllers: [ProfileController, MembersController],
   providers: [ProfileRepository, ProfileService],
   exports: [ProfileRepository, ProfileService],
 })

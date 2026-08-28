@@ -112,6 +112,25 @@ export class ProfileDto {
   pendingLegal: LegalDocumentSummaryDto[];
 
   @ApiProperty({
+    example: 340,
+    description:
+      'Pontos de experiência: 10 por vídeo assistido, uma vez por vídeo, para ' +
+      'sempre (spec 019). **Desmarcar não devolve XP.** Vem calculado daqui — a ' +
+      'tela não multiplica nada, porque remarcar um vídeo não paga XP e uma ' +
+      'soma no cliente erraria em todo vídeo remarcado',
+  })
+  xp: number;
+
+  @ApiProperty({
+    example: false,
+    description:
+      'Se as redes sociais deste membro aparecem no cartão que os outros abrem. ' +
+      '**Nasce desligado.** É o que deixa o interruptor de Meu Perfil abrir já ' +
+      'na posição certa — sem este campo a tela chuta, e chuta ligado',
+  })
+  socialLinksPublic: boolean;
+
+  @ApiProperty({
     type: 'object',
     additionalProperties: { $ref: '#/components/schemas/LegalAcceptanceDto' },
     description:
