@@ -71,17 +71,37 @@ Três consequências, e as três são o motivo da escolha:
 - **O nome diz o que é.** `naTrilha: false` num vídeo que está na trilha de respostas é a frase que confunde
   a próxima pessoa. `tab` responde a única pergunta que o código faz: em qual lista este vídeo aparece.
 
-### 2. O padrão é o comportamento de hoje, e ele mora no converter
+### 2. O padrão mora no converter — e ele **não** dispensa a migração
 `tab: data.tab ?? data.kind ?? 'aula'`.
 
-Nenhum documento no banco tem `tab` no dia em que isto sobe, e **nenhum precisa ganhar**: um vídeo antigo lê
-`tab` igual ao `kind` dele, que é exatamente onde ele estava. Sem script de migração, sem janela em que
-metade da base está num formato e metade no outro, e sem o risco maior — um `undefined` chegando ao
-`where('tab', '==', 'aula')`, que devolve **lista vazia com 200**: a trilha inteira some sem ninguém ter
-apagado nada.
+> **Esta decisão estava errada, e foi corrigida em 2026-08-28 depois de verificação contra o Firestore
+> real.** O texto original dizia que nenhum documento precisava ganhar o campo, porque o fallback do
+> converter daria a ele o valor certo. **Não dá.** O fallback roda na **leitura de um documento que a
+> consulta já devolveu**, e `where('tab', '==', 'aula')` **não enxerga documento que não tem o campo
+> `tab`** — ele nunca é devolvido, logo nunca é lido, logo nunca ganha o padrão.
+>
+> O sintoma é exatamente o que o parágrafo original dizia estar evitando: a trilha responde **200 com
+> lista vazia**, sem erro em log nenhum. Medido no projeto `dev-liga-dev` com dois vídeos gravados
+> antes desta spec: `where('kind','==','aula')` devolveu 1 documento e `where('tab','==','aula')`
+> devolveu 0.
+>
+> É a mesma armadilha que o README já descrevia para o `promotedTo` da spec 016, e ela pegou esta spec
+> pelo outro lado: não pelo `== null`, mas pela ausência do campo.
 
-É a mesma armadilha que o `kind: data.kind ?? 'aula'` da spec 010 evitou, e a terceira vez que este
-repositório a encontra. Ela tem teste-trava.
+**O que vale, então, são as duas coisas juntas:**
+
+1. **O backfill é obrigatório**, e roda **antes de o código novo receber tráfego**, nos **dois
+   projetos**: `npm run tab:backfill` (com `--dry-run` para conferir antes). Ele grava
+   `tab = kind ?? 'aula'` em todo documento sem o campo — a lista em que o vídeo já estava, então
+   **nenhum vídeo muda de lugar** — e é idempotente.
+2. **O fallback do converter continua no lugar**, e continua tendo teste-trava. Ele deixou de ser a
+   migração e passou a ser o cinto de segurança: um documento escrito por um caminho que ninguém
+   previu ainda **lê** a lista certa. O que ele não faz é tornar esse documento **consultável**.
+
+A distinção que faltava na primeira versão desta decisão, e que vale escrever por extenso: **o
+converter conserta a leitura, e a consulta acontece antes dela.** Todo default de converter deste
+repositório protege contra um campo ausente num documento lido; nenhum protege contra um `where` sobre
+o campo que falta.
 
 ### 3. A aba de destino é escolhida na publicação, e só nela
 Sem `PATCH` para mover um vídeo de lista depois. O toggle existe no formulário, uma vez, e o conserto de um
@@ -153,8 +173,9 @@ lá — e ele está, com o mesmo link.
 |---|---|---|---|
 | `tab` | `'aula' \| 'resposta'` | não | A lista em que o vídeo vive. Não é a natureza dele — essa continua sendo `kind` |
 
-Documento anterior a esta spec não tem o campo e **lê `tab` igual ao `kind`** (decisão 2). Nenhuma escrita de
-migração.
+**Documento anterior a esta spec precisa ganhar o campo por escrita** (`npm run tab:backfill`, nos dois
+projetos, antes do tráfego). O fallback do converter cobre a leitura, e não a consulta — ver a decisão 2,
+que foi corrigida.
 
 ---
 
@@ -183,6 +204,18 @@ Nenhuma rota nova, nenhum guard novo, nenhuma coleção nova.
   pergunta a uma aula, e inventar um por heurística de título é o tipo de mágica que erra em silêncio. As
   setas resolvem.
 - **Filtrar a pauta do Mural pelo que já virou vídeo.** Continua sendo o ponto em aberto da spec 016.
+
+---
+
+## Verificado no ambiente real (2026-08-28)
+
+O índice `badgeId + tab + order` foi publicado em `dev-liga-dev` e a consulta da spec passou a
+responder. Foi essa verificação que derrubou a primeira versão da decisão 2 — e ela merece ficar
+registrada como método, porque **nenhum teste desta spec teria pego o defeito**: o emulador não exige
+índice, e o mock do repositório devolve o que o teste mandou devolver. **A pergunta "o `where` enxerga
+os documentos que já estão no banco?" só tem resposta contra um banco com documentos dentro.**
+
+Pendente quando isto foi escrito: o índice em produção e o backfill nos dois projetos.
 
 ---
 

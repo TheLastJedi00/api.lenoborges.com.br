@@ -91,9 +91,9 @@ inteira.
   nenhuma consulta filtra por `kind` depois desta spec. Publicar com
   `firebase deploy --only firestore:indexes`, e **publicar antes de o código novo receber tráfego** — sem o
   índice, a consulta responde erro com o link para criá-lo, e o emulador não avisa porque não exige índice
-  nenhum. **Pendente:** o arquivo está trocado, mas `firebase deploy --only firestore:indexes` não foi
-  rodado aqui. Publicar nos **dois projetos** — produção e `dev-liga-dev` — antes de o código novo
-  receber tráfego.
+  nenhum. **Publicado em `dev-liga-dev` em 2026-08-28**, e o índice antigo foi preservado — o CLI só o
+  apaga com `--force`, e preservá-lo é o certo enquanto produção ainda roda o código que consulta por
+  `kind`. **Pendente: publicar em produção** (`--project liga-dev-40ca2`).
 - [x] Task 05 (TDD + implementação, **escrito e não executado**): O e2e do caminho inteiro. Arquivo: `test/track.e2e-spec.ts` (ou o
   arquivo e2e da trilha). Objetivo: publicar uma resposta com `tab: 'aula'` numa insígnia que já tem aulas, e
   provar as três coisas de uma vez: (a) `GET /badges/:id/videos?tab=aula` a devolve, no fim; (b)
@@ -104,6 +104,15 @@ inteira.
   a frase da decisão 1 e a do fallback do converter; a linha da tabela de índices compostos troca `kind` por
   `tab`; e a seção da spec 010 ganha a emenda de uma linha — **o padrão continua sendo duas listas, e ele
   passa a poder ser dispensado por vídeo, na publicação.**
+- [x] Task 08: O backfill de `tab` (**acrescentada em 2026-08-28, depois da verificação contra o
+  Firestore real**). Arquivos: `scripts/backfill-tab.ts`, `package.json`. Objetivo: escrever
+  `tab = kind ?? 'aula'` em todo documento de `badge_videos` que não tem o campo, em lotes e de forma
+  idempotente, com `--dry-run`. **Ela existe porque a decisão 2 da spec estava errada:** o fallback do
+  converter conserta a leitura, e `where('tab','==','aula')` não devolve documento sem o campo — a
+  trilha responderia 200 com lista vazia, que é exatamente o defeito que a decisão dizia estar
+  evitando. Rodar nos **dois projetos** antes de o código novo receber tráfego. Simulado em
+  `dev-liga-dev`; **a execução ficou pendente**.
+
 - [x] Task 07: O `CLAUDE.md`. Arquivo: `CLAUDE.md`. Objetivo: uma linha na lista de decisões arquiteturais,
   no lugar certo — perto da linha de `badge_videos` e da de `orientation`. Ela diz o que a próxima pessoa
   precisa saber antes de tocar em qualquer consulta de vídeo: **`kind` é a natureza e `tab` é a lista; toda

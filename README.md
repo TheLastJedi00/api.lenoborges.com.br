@@ -675,12 +675,22 @@ coisas, porque elas andavam juntas: resposta tinha balão *e* vivia na aba de re
 resposta posicionada na trilha **continua sendo resposta** — mantém a pergunta fotografada, o balão e
 o `retrato` — e **passa a viver na lista das aulas**. Os dois campos divergem em exatamente esse caso.
 
-**Nenhum documento no banco ganha o campo, e nenhum precisa.** O converter lê
-`tab = data.tab ?? data.kind ?? 'aula'`, então todo vídeo anterior a esta spec lê a lista em que já
-estava. Sem esse fallback, `undefined` chega ao `where('tab', '==', 'aula')` e a consulta devolve
-**lista vazia com `200`**: a trilha inteira some sem ninguém ter apagado nada, e sem erro em log
-nenhum. É a terceira vez que este repositório encontra essa armadilha — `kind` (010) e `devTierFree`
-(009) foram as duas primeiras, e as três têm teste-trava.
+**Todo documento anterior a esta spec precisa ganhar o campo, por escrita:** `npm run tab:backfill`,
+nos **dois projetos**, **antes de o código novo receber tráfego**. Ele grava `tab = kind ?? 'aula'` —
+a lista em que o vídeo já estava, então nenhum vídeo muda de lugar — em lotes e de forma idempotente,
+com `--dry-run` para conferir antes.
+
+**O fallback do converter (`tab = data.tab ?? data.kind ?? 'aula'`) continua no lugar, e não substitui
+o backfill.** A distinção custou uma verificação contra o Firestore real e vale escrever por extenso:
+**o converter conserta a LEITURA de um documento que a consulta já devolveu, e a consulta acontece
+antes dela.** `where('tab', '==', 'aula')` **não enxerga documento que não tem o campo `tab`** — ele
+nunca é devolvido, logo nunca é lido, logo nunca ganha o padrão. Sem o backfill, a trilha responde
+**`200` com lista vazia**: some inteira, sem ninguém ter apagado nada e sem erro em log nenhum.
+
+É a mesma armadilha do `promotedTo` da spec 016, descrita mais abaixo nesta página, pelo outro lado:
+lá era `== null`, aqui é a ausência do campo. E o fallback tem teste-trava porque continua sendo o
+cinto de segurança da leitura — como os de `kind` (010) e `devTierFree` (009) —, e não porque ele
+resolva a consulta.
 
 **Não é um booleano `naTrilha`, e a razão é a consulta.** Com ele, listar a trilha viraria
 `kind == 'aula'` **ou** `naTrilha == true`, e uma disjunção com `orderBy` no Firestore custa índice
@@ -795,7 +805,14 @@ pergunta mora **dentro** do documento do vídeo, o `orientation` é derivado e n
 **A spec 021 troca a quarta linha de campo, e não acrescenta linha nenhuma.** `badgeId` + `kind` +
 `order` sai e `badgeId` + `tab` + `order` entra — é substituição, porque nenhuma consulta filtra por
 `kind` depois dela. **Publique o índice antes de o código novo receber tráfego**: sem ele a consulta
-responde erro com o link para criá-lo, e o emulador não avisa porque não exige índice nenhum.
+responde erro com o link para criá-lo, e o emulador não avisa porque não exige índice nenhum. O índice
+novo **demora alguns minutos construindo** depois do deploy, e enquanto constrói a consulta ainda falha
+— com uma mensagem própria, que diz que ele está sendo criado.
+
+**Apague o índice antigo só depois de o código novo estar no ar.** O `firebase deploy` não apaga
+índice que sumiu do arquivo a menos que receba `--force`, e esse padrão é o certo aqui: enquanto a
+versão publicada ainda consulta por `kind`, apagar `badgeId + kind + order` derruba a trilha em
+produção.
 
 A terceira linha é fácil de perder de vista, e ela já tinha sido perdida uma vez: a aba é opcional em
 `listByBadge`, então **`badgeId` + `order` é uma consulta de verdade**, não um prefixo da de baixo. O

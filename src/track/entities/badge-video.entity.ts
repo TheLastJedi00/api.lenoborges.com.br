@@ -216,11 +216,18 @@ export const badgeVideoConverter: FirestoreDataConverter<BadgeVideo> = {
       // apagado nada.
       kind: data.kind ?? 'aula',
       // Documento anterior a spec 021 nao tem `tab`, e **le a lista em que ja
-      // estava**: o `kind` dele. Nenhum documento precisa ganhar o campo, e por
-      // isso nao ha script de migracao nem janela com metade da base num
-      // formato so. Sem este fallback, `undefined` chega ao
-      // `where('tab', '==', 'aula')` e a consulta devolve **lista vazia com
-      // 200**: a trilha inteira some sem ninguem ter apagado nada.
+      // estava**: o `kind` dele.
+      //
+      // **Isto e o cinto de seguranca da LEITURA, e nao a migracao.** O
+      // `where('tab', '==', 'aula')` nao enxerga documento sem o campo -- ele
+      // nunca e devolvido, logo nunca chega aqui, logo nunca ganha o padrao.
+      // Quem torna a base consultavel e o `scripts/backfill-tab.ts`, e sem ele
+      // a trilha responde **lista vazia com 200**: some inteira, sem ninguem
+      // ter apagado nada. A decisao 2 da spec dizia o contrario e foi corrigida
+      // depois de medir contra o Firestore real.
+      //
+      // O que este fallback ainda garante: um documento escrito por um caminho
+      // que ninguem previu le a lista certa em vez de `undefined`.
       tab: data.tab ?? data.kind ?? 'aula',
       questionId: data.questionId ?? null,
       // Documento anterior a spec 017 nao tem a foto, e le como null: a tela
