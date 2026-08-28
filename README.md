@@ -56,18 +56,25 @@ Este é o ponto que o código não conta e que costuma surpreender quem lê só 
 
 O cadastro (`POST /auth/signup`) cria o usuário com uma senha aleatória descartada na mesma linha, e
 dispara o e-mail de definição de senha pelo Firebase. **O corpo do e-mail continua sendo o do
-Firebase**, editado no console; o que mudou na [spec 020](specs/020%20-%20A%20Tela%20de%20Senha%20e%20o%20oobCode/context.md)
-foi para onde o link dele leva: a tela é nossa, no domínio do front, e o `oobCode` chega nesta API.
+Firebase**, editado no console; o que a [spec 020](specs/020%20-%20A%20Tela%20de%20Senha%20e%20o%20oobCode/context.md)
+construiu foi o destino do link: a tela é nossa, no domínio do front, e o `oobCode` chega nesta API.
 
 ```
 signup -> e-mail do Firebase -> <front>/acesso -> POST /auth/password -> <front>/?entrar=1
 ```
 
+> **Este fluxo está construído e não está ligado.** A seta do meio depende da *action URL* do console,
+> e **o Firebase recusa alterá-la**, nos dois projetos, com `EMAIL_TEMPLATE_UPDATE_NOT_ALLOWED` — cinco
+> causas foram testadas e derrubadas em 2026-08-28 (tabela no `context.md` da spec 020). Até que o link
+> passe a ser gerado pelo Admin SDK nesta API, **o link do e-mail continua abrindo a tela do Google** em
+> `<projeto>.firebaseapp.com/__/auth/action`, e `/acesso` e os três endpoints abaixo existem sem
+> tráfego. Nada aqui está quebrado — está desligado por fora.
+
 Três valores parecidos, e trocá-los é o erro fácil:
 
 | Valor | Quem define | O que é |
 |---|---|---|
-| **Action URL** | Console do Firebase, uma vez por projeto | Para onde **o link do e-mail** leva: `<front>/acesso` |
+| **Action URL** | Console do Firebase, uma vez por projeto | Para onde **o link do e-mail** leva. Deveria ser `<front>/acesso`; **é `<projeto>.firebaseapp.com/__/auth/action` e não pode ser trocada** (ver o aviso acima) |
 | **`continueUrl`** | Esta API, em cada `sendOobCode` | Para onde a **tela** manda a pessoa quando termina: `<front>/?entrar=1` |
 | **`mode`** | Query da URL, escrita por quem manda o link | Só escolhe qual tela o front desenha. **Não** escolhe qual operação a API executa |
 
@@ -89,8 +96,8 @@ teste pega, porque funciona em preview e quebra em produção.
 
 | Onde | O quê | Por que importa |
 |---|---|---|
-| Authentication > Templates > **customize action URL** | `https://liga.lenoborges.com.br/acesso` em produção e `https://ligapreview.lenoborges.com.br/acesso` em `dev-liga-dev` | É para onde o link do e-mail leva. **São dois projetos.** Esquecer um faz o cadastro funcionar em preview e mandar o membro de produção para a tela do Google — verde em todo teste. |
-| Authentication > Templates > **SMTP settings** | `smtp.resend.com`, porta 587, usuário `resend`, senha = API key própria do Resend | Sem ele o e-mail sai de `noreply@<projeto>.firebaseapp.com`, e o cadastro fica com a identidade partida no passo anterior à tela. **Este defeito não quebra o fluxo** — o e-mail chega e o link funciona — e por isso é o mais fácil de esquecer num dos dois projetos. |
+| Authentication > Templates > **customize action URL** | ~~`https://liga.lenoborges.com.br/acesso` / `https://ligapreview.lenoborges.com.br/acesso`~~ **não configurável** | O Firebase recusa a troca com `EMAIL_TEMPLATE_UPDATE_NOT_ALLOWED`, no console e na API `admin/v2/.../config`, nos dois projetos. **Não tente de novo**: permissão, domínio, SMTP próprio, upgrade para Identity Platform e proteção de enumeração de e-mail já foram testados e nenhum é a causa (spec 020). Quem resolve é gerar o link pelo Admin SDK. |
+| Authentication > Templates > **SMTP settings** | ~~`smtp.resend.com`, porta 587, usuário `resend`~~ **desligado** | Ficou em `DEFAULT`: com a action URL travada, o SMTP próprio entregaria um e-mail do remetente certo cujo link abre a tela do Google. Os valores continuam gravados no `dev-liga-dev`, então religar é trocar o método — mas só vale junto com o link gerado por nós. |
 | Authentication > Settings > Password policy | **Mínimo de 8 caracteres** | É o piso real, e nasce em 6. O front voltou a exigir 8 (spec 020), e isso torna a divergência mais fácil de não notar: se alguém baixar o mínimo aqui, a única coisa que recusa 6 caracteres passa a ser um `Validators.minLength` no navegador. |
 | Authentication > Templates | Nome público do projeto e remetente | Aparecem no e-mail e na tela onde a senha é digitada. |
 | Authentication > Sign-in method | Provedor Email/Password ligado | Sem ele, nada do fluxo funciona. |

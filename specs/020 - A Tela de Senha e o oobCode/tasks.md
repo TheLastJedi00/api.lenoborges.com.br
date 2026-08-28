@@ -1,3 +1,18 @@
+> # Spec 020 — ENCERRADA em 2026-08-28
+>
+> | Fase | Estado |
+> |---|---|
+> | 00 — Marcar a spec superada | **entregue** |
+> | 01 — A tradução compartilhada | **entregue** |
+> | 02 — Os três endpoints | **entregue** |
+> | 03 — O console e a documentação | **encerrada sem as Tasks 10 e 11** — o Firebase recusa a action URL |
+> | 04 — Fechar | **encerrada sem a Task 15** — a prova à mão depende da Task 10 |
+> | 05 — O SMTP do Firebase Auth | **encerrada sem executar** — conserta a metade visível de um problema cuja outra metade o console não deixa consertar |
+>
+> As tasks abertas ficam com `[ ]` e com o motivo escrito ao lado, e **não são pendências desta
+> spec**: nenhuma delas é código, e nenhuma delas é possível pelo console. Elas são requisitos da
+> spec que gerar o link pelo Admin SDK.
+
 # Fase 00: Marcar a spec superada [x]
 
 Feita junto com o levantamento, e não durante a execução: a regra 6 do `clauderc.md` é que a spec antiga
@@ -65,7 +80,7 @@ Branch: `feat/020-endpoints-do-oobcode`
   respostas de erro descritas, no mesmo padrão do resto do controller. A descrição do `check` diz por que
   ele devolve o e-mail, com uma frase — é a pergunta que quem lê o `/docs` faz primeiro.
 
-# Fase 03: O console e a documentação [ ]
+# Fase 03: O console e a documentação [ ] — **ENCERRADA sem as Tasks 10 e 11**
 
 > **Tasks 12 e 13 feitas.** As Tasks 10 e 11 são configuração do console do Firebase, em dois
 > projetos, e não têm representação em código — ficam abertas até serem feitas à mão. **Sem a Task 10
@@ -99,7 +114,7 @@ Sem código. É a fase que, esquecida, faz tudo o mais funcionar em preview e qu
   front continua sem falar com o Firebase**; e a nota de que `POST /auth/password` não cria sessão
   (decisão 10), que é a "melhoria" que alguém tentará fazer.
 
-# Fase 04: Fechar [ ]
+# Fase 04: Fechar [ ] — **ENCERRADA sem a Task 15**
 
 > **Task 14 feita.** A Task 15 é a prova à mão contra o projeto de preview, e depende da Task 10 e do
 > front da 020 rodando.
@@ -116,7 +131,7 @@ Branch: `feat/020-fechamento`
     e-mail novo. **Nenhuma linha de código deste repositório mudou para isso acontecer** (decisão 12), e é
     exatamente por isso que ele precisa ser testado à mão.
 
-# Fase 05: O SMTP do Firebase Auth [ ] — **EM ABERTO, bloqueada de fora**
+# Fase 05: O SMTP do Firebase Auth [ ] — **ENCERRADA SEM EXECUTAR**
 Branch: `feat/020-smtp-do-firebase-auth`
 
 > ## Estado em 2026-08-28: bloqueada, e o `dev-liga-dev` foi devolvido ao envio padrão

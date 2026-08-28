@@ -1,5 +1,15 @@
 # Spec 020: A Tela de Senha Volta a Ser Nossa
 
+> **ENCERRADA em 2026-08-28.** As Fases 01, 02 e 04 estão entregues: a tradução compartilhada, os três
+> endpoints públicos, a `/acesso` do front e as duas suítes verdes (618 aqui, 562 no front). As Fases
+> 03 e 05 **não serão feitas nesta spec** — a Task 10 depende de uma configuração que o Firebase
+> recusa, e a Fase 05 existia para consertar a metade visível do mesmo problema. O bloco de estado
+> abaixo tem a medição.
+>
+> **O objetivo desta spec não foi alcançado**, e o que falta não é código nosso: o link do e-mail
+> continua abrindo a tela do Google. Quem o alcança é a spec que gera o link pelo Admin SDK, e ela
+> aproveita tudo o que foi construído aqui sem alterar uma linha.
+
 > ## Alteração de escopo — Fase 05, o SMTP do Firebase Auth
 >
 > **Acrescentada depois de as Fases 01 a 04 estarem mergeadas.** A tela ficou nossa e o e-mail que

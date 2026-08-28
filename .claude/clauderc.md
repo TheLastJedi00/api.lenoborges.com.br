@@ -52,13 +52,23 @@ destino só, a primeira da lista**, e é dela que sai o `continueUrl` do `AuthSe
 
 | Projeto | Front que ele atende | Action URL (spec 020) | `continueUrl` |
 |---|---|---|---|
-| produção | `liga.lenoborges.com.br` | `https://liga.lenoborges.com.br/acesso` | `https://liga.lenoborges.com.br/?entrar=1` |
-| `dev-liga-dev` | `ligapreview.lenoborges.com.br` | `https://ligapreview.lenoborges.com.br/acesso` | `https://ligapreview.lenoborges.com.br/?entrar=1` |
+| produção | `liga.lenoborges.com.br` | **travada** em `https://<projeto>.firebaseapp.com/__/auth/action` | `https://liga.lenoborges.com.br/?entrar=1` |
+| `dev-liga-dev` | `ligapreview.lenoborges.com.br` | **travada** em `https://dev-liga-dev.firebaseapp.com/__/auth/action` | `https://ligapreview.lenoborges.com.br/?entrar=1` |
 
-O **SMTP também é por projeto** (spec 020, Fase 05): `Authentication > Templates > SMTP settings`,
-apontando para `smtp.resend.com` com o remetente `acesso@lenoborges.com.br` — separado do
-`comunidade@` da spec 014, porque o e-mail que devolve a conta para a pessoa não pode morar no mesmo
-endereço de que ela pode se descadastrar.
+**A action URL não é configurável, e isto está fechado.** O Firebase recusa a troca com
+`EMAIL_TEMPLATE_UPDATE_NOT_ALLOWED`, no console e na API, nos dois projetos. Cinco causas foram
+testadas e derrubadas em 2026-08-28 — permissão, domínio, falta de SMTP próprio, projeto fora do
+Identity Platform e proteção de enumeração de e-mail. **Não repita esses testes**; a tabela está no
+`context.md` da spec 020. O caminho que resolve é gerar o link pelo Admin SDK
+(`generatePasswordResetLink`, `generateVerifyAndChangeEmailLink`) e enviá-lo pelo `MailerService` da
+spec 014 — e ele torna esta linha de console desnecessária em vez de bloqueada.
+
+O **SMTP também é por projeto** (spec 020, Fase 05) e ficou **desligado** (`method = DEFAULT`) pelo
+mesmo motivo: sem o link apontando para a nossa tela, ele entregaria um e-mail do remetente certo
+cujo link abre a tela do Google. Os valores seguem gravados no `dev-liga-dev` — `smtp.resend.com`,
+587, STARTTLS, remetente `acesso@lenoborges.com.br`, separado do `comunidade@` da spec 014 porque o
+e-mail que devolve a conta para a pessoa não pode morar no mesmo endereço de que ela pode se
+descadastrar.
 
 **Action URL e `continueUrl` são valores diferentes e é fácil trocá-los:** a action URL é do console e diz
 para onde **o link do e-mail** leva; o `continueUrl` é desta API, vai em cada `sendOobCode`, e diz para
