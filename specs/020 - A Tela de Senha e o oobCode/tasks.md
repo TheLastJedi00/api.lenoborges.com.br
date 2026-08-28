@@ -10,17 +10,17 @@ receba o bloco de `Deprecated` apontando para a nova.
   concluir a redefinição continua marcando `emailVerified`); e que a **spec 006 não volta** — é a única
   linha da tabela "o que sai do projeto" que continua sem objeto.
 
-# Fase 01: A tradução compartilhada [ ]
+# Fase 01: A tradução compartilhada [x]
 Branch: `feat/020-traducao-de-senha`
 
 Refatoração pura, sem endpoint novo e sem mudança de comportamento. Existe primeiro porque dois fluxos
 vão precisar da mesma tradução, e duplicá-la é o que faz as duas mensagens divergirem.
 
-- [ ] Task 01: Mover a `translatePasswordError`. Arquivos: `src/auth/password-errors.ts` (novo),
+- [x] Task 01: Mover a `translatePasswordError`. Arquivos: `src/auth/password-errors.ts` (novo),
   `src/profile/profile.service.ts`. Objetivo: a função sai de `profile.service.ts` para um módulo próprio,
   sem mudar uma palavra das mensagens. **`POST /me/password` continua se comportando exatamente igual** —
   os testes existentes daquele fluxo são a trava, e nenhum deles pode precisar de edição.
-- [ ] Task 02 (TDD): A tradução do código morto. Arquivo: `password-errors.spec.ts`. Objetivo:
+- [x] Task 02 (TDD): A tradução do código morto. Arquivo: `password-errors.spec.ts`. Objetivo:
   `translateOobError` na mesma casa — `EXPIRED_OOB_CODE`, `INVALID_OOB_CODE` e `OPERATION_NOT_ALLOWED`
   devolvem **a mesma frase** (decisão 5), e o teste-trava é justamente esse: expirado e inválido são
   indistinguíveis na resposta, porque distinguir informaria a quem colou um código qualquer se ele existiu
