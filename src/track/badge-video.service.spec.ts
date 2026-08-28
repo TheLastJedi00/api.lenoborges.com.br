@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { BadgeVideoService } from './badge-video.service';
 import { BadgeVideoRepository } from './badge-video.repository';
+import { CreateBadgeVideoDto } from './dto/create-badge-video.dto';
 import { NotificationsService } from '../notifications/notifications.service';
 import { EmailCampaignService } from '../emails/email-campaign.service';
 import { ConfigService } from '@nestjs/config';
@@ -886,6 +887,113 @@ describe('BadgeVideoService', () => {
 
       expect(repository.create).toHaveBeenCalledWith(
         expect.objectContaining({ kind: 'aula', devTierFree: false }),
+      );
+    });
+  });
+
+  /**
+   * A aba de destino (spec 021).
+   *
+   * `kind` e a natureza do video e `tab` e a lista em que ele vive. Os dois
+   * divergem em exatamente um caso -- a resposta posicionada na trilha -- e e
+   * esse caso que a spec inteira existe para permitir.
+   */
+  describe('a aba de destino (spec 021)', () => {
+    function publicar(dto: Partial<CreateBadgeVideoDto>) {
+      return service.create(
+        'logica',
+        {
+          title: 'Herança e composição, na prática',
+          youtubeUrl: 'https://youtu.be/dQw4w9WgXcQ',
+          ...dto,
+        } as CreateBadgeVideoDto,
+        'admin-1',
+      );
+    }
+
+    /**
+     * **O caso que a spec existe para permitir.** Vem primeiro de proposito: um
+     * teste que so cobrisse o 400 deixaria alguem "endurecer" a validacao para
+     * exigir `tab === kind` e matar a funcionalidade sem quebrar nada.
+     */
+    it('aceita resposta com tab de aula, e grava a resposta na trilha', async () => {
+      repository.create.mockResolvedValue({
+        entry: video('logica__dQw4w9WgXcQ', 0, 'resposta', 'aula'),
+      });
+
+      await publicar({ kind: 'resposta', questionId: '2026-08-09__uid-1', tab: 'aula' });
+
+      expect(repository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ kind: 'resposta', tab: 'aula' }),
+      );
+    });
+
+    /**
+     * **O terceiro estado incoerente da familia que a spec 017 abriu** --
+     * resposta sem pergunta e aula com pergunta sao os outros dois. A aba de
+     * respostas e a lista das perguntas respondidas; uma aula ali e um video sem
+     * balao numa lista de baloes.
+     */
+    it('recusa aula na aba de respostas, e nao grava nada', async () => {
+      await expect(publicar({ kind: 'aula', tab: 'resposta' })).rejects.toThrow(
+        BadRequestException,
+      );
+
+      expect(repository.create).not.toHaveBeenCalled();
+    });
+
+    // Sem `tab` no corpo o servidor deriva, e o cliente que nao conhece esta
+    // spec continua funcionando sem enviar nada. E o que permite subir a API
+    // antes do front.
+    it('deriva tab do kind quando o corpo nao manda tab', async () => {
+      repository.create.mockResolvedValue({
+        entry: video('logica__dQw4w9WgXcQ', 0),
+      });
+
+      await publicar({});
+
+      expect(repository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ kind: 'aula', tab: 'aula' }),
+      );
+
+      repository.create.mockClear();
+      repository.create.mockResolvedValue({
+        entry: video('logica__dQw4w9WgXcQ', 0, 'resposta'),
+      });
+
+      await publicar({ kind: 'resposta', questionId: '2026-08-09__uid-1' });
+
+      expect(repository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ kind: 'resposta', tab: 'resposta' }),
+      );
+    });
+
+    /**
+     * **O bug mais provavel desta fase, e ele nao estoura.** Contar pela lista
+     * do `kind` poria a resposta em `order: 1` -- a posicao dela na aba de
+     * respostas -- dentro de uma trilha que ja tem tres aulas. Dois videos com o
+     * mesmo `order` na mesma lista ordenam por sorte do Firestore, e a trilha
+     * embaralha em silencio.
+     */
+    it('teste-trava: o novo video entra no fim da lista do tab, e nao da do kind', async () => {
+      // Tres aulas na trilha, uma resposta na aba. A resposta nova vai para a
+      // trilha, entao a unica contagem certa e a das tres aulas.
+      repository.listByBadge.mockImplementation((_badgeId, tab) =>
+        Promise.resolve(
+          tab === 'aula'
+            ? [video('logica__a', 0), video('logica__b', 1), video('logica__c', 2)]
+            : [video('logica__r', 0, 'resposta')],
+        ),
+      );
+      repository.create.mockResolvedValue({
+        entry: video('logica__dQw4w9WgXcQ', 3, 'resposta', 'aula'),
+      });
+
+      await publicar({ kind: 'resposta', questionId: '2026-08-09__uid-1', tab: 'aula' });
+
+      expect(repository.listByBadge).toHaveBeenCalledWith('logica', 'aula');
+      expect(repository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ order: 3 }),
       );
     });
   });

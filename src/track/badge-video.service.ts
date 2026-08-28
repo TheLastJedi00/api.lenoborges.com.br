@@ -18,6 +18,7 @@ import {
   AnsweredQuestion,
   BadgeVideo,
   BadgeVideoKind,
+  BadgeVideoTab,
 } from './entities/badge-video.entity';
 import { MuralRepository } from '../mural/mural.repository';
 import { WatchedVideoRepository } from './watched-video.repository';
@@ -136,6 +137,11 @@ export class BadgeVideoService {
 
     const kind = dto.kind ?? 'aula';
 
+    // Sem `tab` no corpo, a lista e a natureza -- que e o comportamento de
+    // sempre. **O cliente que nao conhece a spec 021 continua funcionando sem
+    // enviar nada**, e e isso que permite subir a API antes do front.
+    const tab: BadgeVideoTab = dto.tab ?? kind;
+
     // `questionId` so faz sentido em resposta. Aula com pergunta e resposta sem
     // pergunta sao os dois estados incoerentes, e o 400 e mais barato que um
     // dado torto que ninguem sabe interpretar depois.
@@ -155,12 +161,30 @@ export class BadgeVideoService {
       );
     }
 
+    // O terceiro estado incoerente da familia (spec 021, decisao 4): a aba de
+    // respostas e a lista das perguntas respondidas, e uma aula ali e um video
+    // sem balao numa lista de baloes.
+    //
+    // O caminho contrario -- `kind: 'resposta'` com `tab: 'aula'` -- e o que a
+    // spec inteira existe para permitir, e nao valida nada.
+    if (kind === 'aula' && tab === 'resposta') {
+      throw new BadRequestException(
+        'Aula não entra na aba de Perguntas Frequentes. Só vídeo de resposta vive lá.',
+      );
+    }
+
     const question = await this.snapshotQuestion(dto.questionId);
 
-    // A ordem e por (badgeId, kind): o novo video entra no fim da ABA dele, e
+    // A ordem e por (badgeId, tab): o novo video entra no fim da LISTA dele, e
     // nao no fim da insignia. Contar a insignia inteira faria a primeira
     // resposta nascer na posicao 3 de uma lista que tem um item so.
-    const existing = await this.repository.listByBadge(badge, kind);
+    //
+    // **E `tab`, nao `kind`.** Numa insignia com tres aulas e uma resposta na
+    // aba, uma resposta publicada na trilha contada pelo `kind` nasceria em
+    // `order: 1` -- a posicao dela na outra lista. Dois videos com o mesmo
+    // `order` na mesma lista ordenam por sorte do Firestore, e a trilha
+    // embaralha em silencio: o bug nao estoura em lugar nenhum.
+    const existing = await this.repository.listByBadge(badge, tab);
 
     let created: { entry: BadgeVideo };
 
@@ -171,6 +195,7 @@ export class BadgeVideoService {
         description: dto.description?.length ? dto.description : null,
         youtubeId: youtube.id,
         kind,
+        tab,
         questionId: dto.questionId ?? null,
         question,
         devTierFree: dto.devTierFree ?? false,

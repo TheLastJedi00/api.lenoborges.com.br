@@ -51,6 +51,26 @@ export class CreateBadgeVideoDto {
 
   @ApiProperty({
     required: false,
+    example: 'aula',
+    enum: ['aula', 'resposta'],
+    description:
+      'A **lista** em que o vídeo vai viver, que não é a mesma coisa que `kind` ' +
+      '— `kind` é a natureza do vídeo, `tab` é o endereço dele.\n\n' +
+      '- **Sem valor, `tab = kind`**: quem não conhece esta spec continua ' +
+      'publicando como sempre.\n' +
+      '- `kind: resposta` com `tab: aula` é a **resposta posicionada na ' +
+      'trilha** — ela mantém a pergunta, o balão e o `retrato`, e passa a ' +
+      'aparecer na sequência das aulas.\n' +
+      '- `kind: aula` com `tab: resposta` é **400**: a aba de respostas é a ' +
+      'lista das perguntas respondidas, e uma aula ali é um vídeo sem balão ' +
+      'numa lista de balões.',
+  })
+  @IsOptional()
+  @IsIn(['aula', 'resposta'])
+  tab?: 'aula' | 'resposta';
+
+  @ApiProperty({
+    required: false,
     example: '2026-08-09__9b1deb4d',
     description:
       'A pergunta do Mural que este vídeo responde. **Só é aceito com ' +
