@@ -57,4 +57,57 @@ describe('profileConverter.fromFirestore', () => {
     expect(profile.instagram).toBeNull();
     expect(profile.completedAt).toBeNull();
   });
+
+  /**
+   * O fallback mais caro de perder da spec 018. Documento antigo nao tem
+   * `legalAcceptances` -- e sao todos, no dia em que ela sobe. Sem o `?? {}` o
+   * valor chega `undefined`, o `LegalAcceptanceGuard` tenta indexa-lo e a base
+   * inteira toma 500 em toda rota, no primeiro request depois do deploy.
+   */
+  it('teste-trava: documento sem legalAcceptances e lido como mapa vazio', () => {
+    const profile = profileConverter.fromFirestore(snapshot(antigo));
+
+    expect(profile.legalAcceptances).toEqual({});
+  });
+
+  it('o aceite volta com a data em Date, e nao em Timestamp', () => {
+    const quando = new Date('2026-03-12T14:02:00.000Z');
+    const profile = profileConverter.fromFirestore(
+      snapshot({
+        ...antigo,
+        legalAcceptances: {
+          'termos-de-uso': {
+            version: '2026-08-27',
+            acceptedAt: Timestamp.fromDate(quando),
+          },
+        },
+      }),
+    );
+
+    // A data do aceite e a prova; `Timestamp` cru vazando no DTO e a prova
+    // ilegivel -- o front receberia `{_seconds, _nanoseconds}` e a tela de
+    // Contratos mostraria "Invalid Date".
+    expect(profile.legalAcceptances['termos-de-uso']).toEqual({
+      version: '2026-08-27',
+      acceptedAt: quando,
+    });
+  });
+
+  it('toFirestore devolve o aceite em Timestamp', () => {
+    const quando = new Date('2026-03-12T14:02:00.000Z');
+    const documento = profileConverter.toFirestore({
+      ...profileConverter.fromFirestore(snapshot(antigo)),
+      legalAcceptances: {
+        'termos-de-uso': { version: '2026-08-27', acceptedAt: quando },
+      },
+    });
+
+    const gravado = documento.legalAcceptances as Record<
+      string,
+      { version: string; acceptedAt: Timestamp }
+    >;
+    expect(gravado['termos-de-uso'].acceptedAt).toEqual(
+      Timestamp.fromDate(quando),
+    );
+  });
 });

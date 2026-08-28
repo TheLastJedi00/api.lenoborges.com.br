@@ -31,6 +31,7 @@ function profile(id: string, grade = 3): Profile {
     emailOptOut: false,
     emailOptOutReason: null,
     emailOptOutAt: null,
+    legalAcceptances: {},
     completedAt: new Date(),
     waitlistEntryId: null,
     createdAt: new Date(),

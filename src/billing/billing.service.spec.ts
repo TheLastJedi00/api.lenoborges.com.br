@@ -13,6 +13,7 @@ const perfil: Profile = {
   emailOptOut: false,
   emailOptOutReason: null,
   emailOptOutAt: null,
+  legalAcceptances: {},
   completedAt: new Date(),
   waitlistEntryId: null,
   createdAt: new Date(),
