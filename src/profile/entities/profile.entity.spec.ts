@@ -93,6 +93,41 @@ describe('profileConverter.fromFirestore', () => {
     });
   });
 
+  /**
+   * Spec 019, decisao 3. Documento antigo nao tem `xp` -- e sao todos, no dia em
+   * que ela sobe. Sem o `?? 0` o valor chega `undefined`, `undefined + 10` e
+   * `NaN`, e o painel exibe `NaN XP` para a base inteira.
+   */
+  it('teste-trava: documento sem xp e lido como zero', () => {
+    const profile = profileConverter.fromFirestore(snapshot(antigo));
+
+    expect(profile.xp).toBe(0);
+  });
+
+  /**
+   * Spec 019, decisao 9. **O padrao e invisivel, e mudar isto publica as redes
+   * de quem nunca foi perguntado.**
+   *
+   * Quem preencheu o LinkedIn antes desta spec o preencheu num formulario que so
+   * a administracao lia. Um `?? true` aqui divulgaria, no dia do deploy, o
+   * vinculo entre cada membro e a conta dele numa rede social -- sem erro, sem
+   * alarme, e sem ninguem ter escolhido.
+   */
+  it('teste-trava: documento sem socialLinksPublic e lido como false', () => {
+    const profile = profileConverter.fromFirestore(snapshot(antigo));
+
+    expect(profile.socialLinksPublic).toBe(false);
+  });
+
+  it('os dois campos gravados voltam como estao', () => {
+    const profile = profileConverter.fromFirestore(
+      snapshot({ ...antigo, xp: 340, socialLinksPublic: true }),
+    );
+
+    expect(profile.xp).toBe(340);
+    expect(profile.socialLinksPublic).toBe(true);
+  });
+
   it('toFirestore devolve o aceite em Timestamp', () => {
     const quando = new Date('2026-03-12T14:02:00.000Z');
     const documento = profileConverter.toFirestore({

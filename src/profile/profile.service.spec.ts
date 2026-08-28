@@ -14,6 +14,7 @@ import { FirebaseService } from '../auth/firebase.service';
 import { Profile } from './entities/profile.entity';
 import { LegalService } from '../legal/legal.service';
 import { LegalAcceptanceRepository } from '../legal/legal-acceptance.repository';
+import { WatchedVideoRepository } from '../track/watched-video.repository';
 
 describe('ProfileService', () => {
   let service: ProfileService;
@@ -22,6 +23,7 @@ describe('ProfileService', () => {
     update: jest.Mock;
     remove: jest.Mock;
     setEmailOptOut: jest.Mock;
+    setSocialLinksPublic: jest.Mock;
   };
   let firebase: {
     identityToolkit: jest.Mock;
@@ -37,6 +39,7 @@ describe('ProfileService', () => {
   let authService: { reauthenticate: jest.Mock; continueUrl: string };
   let legalService: { pendingFor: jest.Mock };
   let legalAcceptanceRepository: { removeAll: jest.Mock };
+  let watchedVideoRepository: { removeAll: jest.Mock };
 
   beforeEach(async () => {
     repository = {
@@ -44,6 +47,7 @@ describe('ProfileService', () => {
       update: jest.fn(),
       remove: jest.fn(),
       setEmailOptOut: jest.fn().mockResolvedValue({ found: true }),
+      setSocialLinksPublic: jest.fn().mockResolvedValue({ found: true }),
     };
 
     ordem = [];
@@ -68,6 +72,8 @@ describe('ProfileService', () => {
     waitlistRepository = { remove: registra('waitlist.remove') };
     legalService = { pendingFor: jest.fn().mockReturnValue([]) };
     legalAcceptanceRepository = { removeAll: registra('legal.removeAll') };
+    watchedVideoRepository = { removeAll: registra('watched.removeAll') };
+    watchedVideoRepository = { removeAll: registra('watched.removeAll') };
     repository.remove = registra('profile.remove');
     authService = {
       reauthenticate: jest.fn().mockResolvedValue('id-token-fresco'),
@@ -89,6 +95,10 @@ describe('ProfileService', () => {
         {
           provide: LegalAcceptanceRepository,
           useValue: legalAcceptanceRepository,
+        },
+        {
+          provide: WatchedVideoRepository,
+          useValue: watchedVideoRepository,
         },
       ],
     }).compile();
@@ -158,6 +168,11 @@ describe('ProfileService', () => {
         // A subcolecao de aceites sai antes do perfil, pelo mesmo motivo que
         // 'notification_reads': subcolecao nao some com o pai (spec 018).
         'legal.removeAll',
+        // E o razao do que a pessoa assistiu, pela quarta vez que este produto
+        // esbarra na mesma regra (spec 019, decisao 13). E historico de
+        // comportamento ligado a um `uid`: quem pediu para ser esquecido leva
+        // junto o que assistiu.
+        'watched.removeAll',
         'profile.remove',
         'waitlist.remove',
         'deleteUser',
@@ -379,6 +394,145 @@ describe('ProfileService', () => {
 
       await expect(
         service.getProfile('user-unknown', 'u@test.com', null),
+      ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('findPublicMember (spec 019)', () => {
+    const membro = {
+      id: 'uid-2',
+      name: 'Ana Prado',
+      phone: '47988887777',
+      bio: 'Migrando de suporte para dev.',
+      grade: 3,
+      xp: 340,
+      tier: 'ultra-tier',
+      emailOptOut: true,
+      linkedin: 'https://www.linkedin.com/in/ana-prado',
+      instagram: 'https://www.instagram.com/anaprado',
+      socialLinksPublic: false,
+      completedAt: new Date('2026-05-02T10:00:00.000Z'),
+      legalAcceptances: {},
+    };
+
+    /**
+     * **O teste de vazamento, e o mais importante deste bloco.**
+     *
+     * A comparacao e por igualdade do conjunto de chaves, e **nao por
+     * `toMatchObject`** -- aquele passa feliz quando um campo a mais aparece. O
+     * dia em que alguem acrescentar `phone` ao perfil e a um mapeador
+     * compartilhado, e este teste que fica vermelho.
+     */
+    it('teste-trava: a resposta tem exatamente sete campos', async () => {
+      repository.findById.mockResolvedValue({ found: true, entry: membro });
+
+      const cartao = await service.findPublicMember('uid-2');
+
+      expect(Object.keys(cartao).sort()).toEqual([
+        'bio',
+        'grade',
+        'id',
+        'instagram',
+        'linkedin',
+        'name',
+        'xp',
+      ]);
+    });
+
+    it('teste-trava: nao vaza telefone, tier nem preferencia de e-mail', async () => {
+      repository.findById.mockResolvedValue({ found: true, entry: membro });
+
+      const cartao = (await service.findPublicMember(
+        'uid-2',
+      )) as unknown as Record<string, unknown>;
+
+      expect(cartao.phone).toBeUndefined();
+      expect(cartao.email).toBeUndefined();
+      expect(cartao.tier).toBeUndefined();
+      expect(cartao.emailOptOut).toBeUndefined();
+    });
+
+    /**
+     * O padrao e invisivel (decisao 9), e o corte acontece **no servidor**: um
+     * front que recebesse o link e decidisse nao desenha-lo ja o teria entregado
+     * a quem abrisse a aba de rede.
+     */
+    it('teste-trava: com o interruptor desligado, as redes vem nulas', async () => {
+      repository.findById.mockResolvedValue({ found: true, entry: membro });
+
+      const cartao = await service.findPublicMember('uid-2');
+
+      expect(cartao.linkedin).toBeNull();
+      expect(cartao.instagram).toBeNull();
+      // E o resto continua vindo: esconder a rede nao esconde a pessoa.
+      expect(cartao.name).toBe('Ana Prado');
+      expect(cartao.xp).toBe(340);
+    });
+
+    it('com o interruptor ligado, as redes vem', async () => {
+      repository.findById.mockResolvedValue({
+        found: true,
+        entry: { ...membro, socialLinksPublic: true },
+      });
+
+      const cartao = await service.findPublicMember('uid-2');
+
+      expect(cartao.linkedin).toBe('https://www.linkedin.com/in/ana-prado');
+      expect(cartao.instagram).toBe('https://www.instagram.com/anaprado');
+    });
+
+    /**
+     * Conta pela metade nao tem nome nem bio, e um cartao vazio com 200 e pior
+     * do que um 404. De quebra, fecha a enumeracao de contas em criacao.
+     */
+    it('teste-trava: onboarding incompleto e 404', async () => {
+      repository.findById.mockResolvedValue({
+        found: true,
+        entry: { ...membro, completedAt: null },
+      });
+
+      await expect(service.findPublicMember('uid-2')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('perfil inexistente e 404', async () => {
+      repository.findById.mockResolvedValue({ found: false, entry: null });
+
+      await expect(service.findPublicMember('uid-3')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+  });
+
+  describe('setPrivacyPreference (spec 019)', () => {
+    it('liga o interruptor pelo caminho de escrita proprio', async () => {
+      repository.setSocialLinksPublic.mockResolvedValue({ found: true });
+
+      await service.setPrivacyPreference('uid-1', { socialLinksPublic: true });
+
+      expect(repository.setSocialLinksPublic).toHaveBeenCalledWith(
+        'uid-1',
+        true,
+      );
+    });
+
+    it('desliga tambem', async () => {
+      repository.setSocialLinksPublic.mockResolvedValue({ found: true });
+
+      await service.setPrivacyPreference('uid-1', { socialLinksPublic: false });
+
+      expect(repository.setSocialLinksPublic).toHaveBeenCalledWith(
+        'uid-1',
+        false,
+      );
+    });
+
+    it('perfil inexistente e 404', async () => {
+      repository.setSocialLinksPublic.mockResolvedValue({ found: false });
+
+      await expect(
+        service.setPrivacyPreference('uid-x', { socialLinksPublic: true }),
       ).rejects.toThrow(NotFoundException);
     });
   });

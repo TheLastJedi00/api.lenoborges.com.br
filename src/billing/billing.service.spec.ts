@@ -14,6 +14,8 @@ const perfil: Profile = {
   emailOptOutReason: null,
   emailOptOutAt: null,
   legalAcceptances: {},
+  xp: 0,
+  socialLinksPublic: false,
   completedAt: new Date(),
   waitlistEntryId: null,
   createdAt: new Date(),

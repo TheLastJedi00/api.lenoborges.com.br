@@ -10,6 +10,7 @@ import { EmailCampaignService } from '../emails/email-campaign.service';
 import { ConfigService } from '@nestjs/config';
 import { BadgeVideo, BadgeVideoKind } from './entities/badge-video.entity';
 import { MuralRepository } from '../mural/mural.repository';
+import { WatchedVideoRepository } from './watched-video.repository';
 import { MuralQuestion } from '../mural/entities/mural-question.entity';
 
 function video(
@@ -60,11 +61,18 @@ describe('BadgeVideoService', () => {
     >
   >;
   let mural: jest.Mocked<Pick<MuralRepository, 'findById' | 'update'>>;
+  let watchedVideos: jest.Mocked<
+    Pick<WatchedVideoRepository, 'findWatchedIds'>
+  >;
 
   beforeEach(() => {
     mural = {
       findById: jest.fn().mockResolvedValue({ found: true, entry: PERGUNTA }),
       update: jest.fn().mockResolvedValue({ entry: PERGUNTA }),
+    };
+
+    watchedVideos = {
+      findWatchedIds: jest.fn().mockResolvedValue(new Set<string>()),
     };
 
     repository = {
@@ -98,6 +106,7 @@ describe('BadgeVideoService', () => {
         getOrThrow: () => 'https://edu.lenoborges.com.br',
       } as unknown as ConfigService,
       mural as unknown as MuralRepository,
+      watchedVideos as unknown as WatchedVideoRepository,
     );
   });
 
@@ -210,17 +219,68 @@ describe('BadgeVideoService', () => {
      * das treze estarao assim -- e por isso e 200, nao 404.
      */
     it('devolve lista vazia sem erro para insignia sem conteudo', async () => {
-      await expect(service.listByBadge('angular')).resolves.toEqual({
+      await expect(
+        service.listByBadge('angular', 'uid-de-quem-pediu'),
+      ).resolves.toEqual({
         badgeId: 'angular',
         videos: [],
       });
     });
 
+    it('marca como assistido o que o razao daquele membro diz', async () => {
+      repository.listByBadge.mockResolvedValue([
+        video('logica__aaa11111111', 0),
+        video('logica__bbb22222222', 1),
+      ]);
+      watchedVideos.findWatchedIds.mockResolvedValue(
+        new Set(['logica__aaa11111111']),
+      );
+
+      const lista = await service.listByBadge('logica', 'uid-1');
+
+      expect(lista.videos.map((v) => [v.id, v.watched])).toEqual([
+        ['logica__aaa11111111', true],
+        ['logica__bbb22222222', false],
+      ]);
+    });
+
+    /**
+     * **A lista deixou de ser igual para todo mundo** (spec 019). E barato, e
+     * obvio, e e o erro que um cache de listagem mal colocado produz sem falhar
+     * em nada: o check de uma pessoa servido para outra.
+     */
+    it('teste-trava: o razao consultado e o de quem pediu a lista', async () => {
+      repository.listByBadge.mockResolvedValue([
+        video('logica__aaa11111111', 0),
+      ]);
+
+      await service.listByBadge('logica', 'uid-1');
+      await service.listByBadge('logica', 'uid-2');
+
+      expect(watchedVideos.findWatchedIds).toHaveBeenNthCalledWith(1, 'uid-1', [
+        'logica__aaa11111111',
+      ]);
+      expect(watchedVideos.findWatchedIds).toHaveBeenNthCalledWith(2, 'uid-2', [
+        'logica__aaa11111111',
+      ]);
+    });
+
+    /** Video sem registro e `false`. Nao existe "nao sei" nesta resposta. */
+    it('video sem registro no razao sai como nao assistido', async () => {
+      repository.listByBadge.mockResolvedValue([
+        video('logica__aaa11111111', 0),
+      ]);
+
+      const lista = await service.listByBadge('logica', 'uid-1');
+
+      expect(lista.videos[0].watched).toBe(false);
+    });
+
     // 404 aqui significa "essa insignia nao existe", que e bug ou URL adulterada.
     it('recusa badgeId que nao e da trilha', async () => {
-      await expect(service.listByBadge('insignia-inventada')).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(
+        service.listByBadge('insignia-inventada', 'uid-de-quem-pediu'),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 

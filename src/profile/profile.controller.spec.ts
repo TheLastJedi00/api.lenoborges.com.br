@@ -5,6 +5,7 @@ import { CookieService } from '../auth/cookie.service';
 import { FirebaseAuthGuard } from '../auth/guards/firebase-auth.guard';
 import { CurrentUserData } from '../auth/decorators/current-user.decorator';
 import { LegalService } from '../legal/legal.service';
+import { WatchedVideoService } from '../track/watched-video.service';
 
 describe('ProfileController', () => {
   let controller: ProfileController;
@@ -45,6 +46,10 @@ describe('ProfileController', () => {
         },
         { provide: CookieService, useValue: cookieService },
         { provide: LegalService, useValue: legalService },
+        {
+          provide: WatchedVideoService,
+          useValue: { setWatched: jest.fn() },
+        },
       ],
     })
       .overrideGuard(FirebaseAuthGuard)
