@@ -453,9 +453,9 @@ describe('BadgeVideoService', () => {
     /**
      * **O bug mais provavel da spec 010, e a razao deste teste existir.**
      *
-     * A ordem e por `(badgeId, kind)`: uma insignia com tres aulas e duas
+     * A ordem e por `(badgeId, tab)`: uma insignia com tres aulas e duas
      * respostas tem duas sequencias independentes. Reordenar sem filtrar por
-     * `kind` embaralharia as duas abas de uma vez, e a que ninguem tocou
+     * `tab` embaralharia as duas abas de uma vez, e a que ninguem tocou
      * apareceria fora de ordem sem explicacao.
      */
     it('reordena dentro da aba, sem enxergar a outra', async () => {
@@ -477,6 +477,37 @@ describe('BadgeVideoService', () => {
 
       expect(repository.listByBadge).toHaveBeenCalledWith('logica', 'resposta');
       expect(repository.reorder).toHaveBeenCalledWith(['logica__rrrrrrrrrrr']);
+    });
+
+    /**
+     * **Teste-trava da spec 021.** A lista da trilha pode conter uma resposta
+     * posicionada nela, e essa lista e valida. Escrita contra `kind`, a
+     * validacao recusaria exatamente o caso que a spec existe para permitir --
+     * e o sintoma seria 400 em toda seta clicada.
+     */
+    it('teste-trava: a trilha com uma resposta dentro e uma lista valida', async () => {
+      repository.listByBadge.mockImplementation((_badge, tab) =>
+        Promise.resolve(
+          tab === 'aula'
+            ? [
+                video('logica__aaaaaaaaaaa', 0),
+                video('logica__rrrrrrrrrrr', 1, 'resposta', 'aula'),
+              ]
+            : [],
+        ),
+      );
+
+      await service.reorder(
+        'logica',
+        { videoIds: ['logica__rrrrrrrrrrr', 'logica__aaaaaaaaaaa'] },
+        'aula',
+      );
+
+      expect(repository.listByBadge).toHaveBeenCalledWith('logica', 'aula');
+      expect(repository.reorder).toHaveBeenCalledWith([
+        'logica__rrrrrrrrrrr',
+        'logica__aaaaaaaaaaa',
+      ]);
     });
 
     it('recusa misturar ids de abas diferentes', async () => {
@@ -539,6 +570,41 @@ describe('BadgeVideoService', () => {
       await service.remove('logica', 'logica__rrrrrrrrrrr');
 
       expect(repository.listByBadge).toHaveBeenCalledWith('logica', 'resposta');
+    });
+
+    /**
+     * **Teste-trava da spec 021.** A lista renormalizada e a do `tab`, e nunca
+     * a do `kind`. Apagar uma resposta que estava no meio da TRILHA e o caso
+     * em que os dois campos divergem: renormalizar pelo `kind` mexeria na aba
+     * de respostas, que ninguem tocou, e deixaria a trilha com um buraco.
+     */
+    it('teste-trava: apagar a resposta do meio da trilha renormaliza a trilha, e nao a aba', async () => {
+      repository.findById.mockResolvedValue({
+        found: true,
+        entry: video('logica__rrrrrrrrrrr', 1, 'resposta', 'aula'),
+      });
+      repository.listByBadge.mockImplementation((_badge, tab) =>
+        Promise.resolve(
+          tab === 'aula'
+            ? [video('logica__aaaaaaaaaaa', 0), video('logica__ccccccccccc', 2)]
+            : [video('logica__outra', 0, 'resposta')],
+        ),
+      );
+
+      await service.remove('logica', 'logica__rrrrrrrrrrr');
+
+      expect(repository.listByBadge).toHaveBeenCalledWith('logica', 'aula');
+      expect(repository.listByBadge).not.toHaveBeenCalledWith(
+        'logica',
+        'resposta',
+      );
+      // As aulas restantes voltam a 0..n-1, e nenhum video da aba de respostas
+      // entra no lote: renormalizar as duas de uma vez e o jeito de embaralhar
+      // as duas com uma escrita so.
+      expect(repository.reorder).toHaveBeenCalledWith([
+        'logica__aaaaaaaaaaa',
+        'logica__ccccccccccc',
+      ]);
     });
   });
 
@@ -906,7 +972,7 @@ describe('BadgeVideoService', () => {
           title: 'Herança e composição, na prática',
           youtubeUrl: 'https://youtu.be/dQw4w9WgXcQ',
           ...dto,
-        } as CreateBadgeVideoDto,
+        },
         'admin-1',
       );
     }
@@ -921,7 +987,11 @@ describe('BadgeVideoService', () => {
         entry: video('logica__dQw4w9WgXcQ', 0, 'resposta', 'aula'),
       });
 
-      await publicar({ kind: 'resposta', questionId: '2026-08-09__uid-1', tab: 'aula' });
+      await publicar({
+        kind: 'resposta',
+        questionId: '2026-08-09__uid-1',
+        tab: 'aula',
+      });
 
       expect(repository.create).toHaveBeenCalledWith(
         expect.objectContaining({ kind: 'resposta', tab: 'aula' }),
@@ -981,7 +1051,11 @@ describe('BadgeVideoService', () => {
       repository.listByBadge.mockImplementation((_badgeId, tab) =>
         Promise.resolve(
           tab === 'aula'
-            ? [video('logica__a', 0), video('logica__b', 1), video('logica__c', 2)]
+            ? [
+                video('logica__a', 0),
+                video('logica__b', 1),
+                video('logica__c', 2),
+              ]
             : [video('logica__r', 0, 'resposta')],
         ),
       );
@@ -989,7 +1063,11 @@ describe('BadgeVideoService', () => {
         entry: video('logica__dQw4w9WgXcQ', 3, 'resposta', 'aula'),
       });
 
-      await publicar({ kind: 'resposta', questionId: '2026-08-09__uid-1', tab: 'aula' });
+      await publicar({
+        kind: 'resposta',
+        questionId: '2026-08-09__uid-1',
+        tab: 'aula',
+      });
 
       expect(repository.listByBadge).toHaveBeenCalledWith('logica', 'aula');
       expect(repository.create).toHaveBeenCalledWith(
