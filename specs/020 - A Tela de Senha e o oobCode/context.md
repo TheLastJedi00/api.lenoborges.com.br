@@ -13,6 +13,51 @@
 > spec 014 entra neste fluxo, e nenhuma linha de código muda — é console, nos dois projetos, como a
 > action URL.
 
+> ## Estado em 2026-08-28: o Firebase recusa a action URL, e as Fases 03 e 05 param
+>
+> **A Task 10 não pode ser feita.** `Authentication > Templates > customize action URL` é recusada no
+> console e na API `admin/v2/projects/dev-liga-dev/config`, com o mesmo erro em toda tentativa:
+>
+> ```
+> PATCH ...?updateMask=notification.sendEmail.callbackUri
+> {"notification":{"sendEmail":{"callbackUri":"https://ligapreview.lenoborges.com.br/acesso"}}}
+> 400 EMAIL_TEMPLATE_UPDATE_NOT_ALLOWED (INVALID_ARGUMENT)
+> ```
+>
+> **Cinco explicações foram testadas contra o `dev-liga-dev`, e as cinco caíram.** Está medido, não
+> suposto:
+>
+> | Hipótese | Teste | Resultado |
+> |---|---|---|
+> | Permissão, ou campo errado | gravar no `callbackUri` o valor que já estava lá | **passa** — logo não é permissão nem campo |
+> | O domínio não está autorizado | `callbackUri` = `https://dev-liga-dev.web.app/acesso` | recusado, e é domínio **do próprio Firebase** |
+> | Falta o SMTP próprio | `method` = `CUSTOM_SMTP`, e o `callbackUri` de novo | o `method` passa; o `callbackUri` é recusado |
+> | O projeto não é Identity Platform | upgrade feito, `subtype` = `IDENTITY_PLATFORM` | recusado igual |
+> | Proteção de enumeração de e-mail | `enableImprovedEmailPrivacy` = `false`, e o `callbackUri` de novo | recusado igual |
+>
+> **A recusa não é sobre o valor, é sobre o campo.** `notification.sendEmail.method` e o bloco `smtp`
+> gravam; o `callbackUri` e o assunto de qualquer template não gravam. É a superfície de *template de
+> e-mail* inteira, travada neste projeto, e o nome do erro é exatamente isso.
+> `EMAIL_TEMPLATE_UPDATE_NOT_ALLOWED` não aparece em documentação, fórum ou issue pública — **não há o
+> que ler**, e é por isso que a investigação para aqui em vez de continuar por tentativa.
+>
+> **O que ficou ligado e o que ficou desligado:** o `dev-liga-dev` está em `IDENTITY_PLATFORM` — o
+> upgrade não se desfaz e não custa nada nesta escala —, com `method = DEFAULT`, `callbackUri`
+> original, `enableImprovedEmailPrivacy = true` e os quatro templates intactos. **Produção continua
+> `FIREBASE_AUTH` e intocada, e não deve ser upgradada**: o teste já foi feito no preview e não
+> comprou nada.
+>
+> **A saída não é o console, e ela torna estas duas fases desnecessárias em vez de bloqueadas.** Os
+> três endpoints, a `/acesso` e as duas suítes verdes continuam de pé sem ninguém chegando neles.
+> Quem destrava é **gerar o link no Admin SDK**: `generatePasswordResetLink` e
+> `generateVerifyAndChangeEmailLink` devolvem a URL com o `oobCode`, o link vira
+> `<front>/acesso?mode=…&oobCode=…` montado em código, e o e-mail sai pelo `MailerService` da spec
+> 014, com o `acesso@` da decisão 14. Some a Task 10, some a Fase 05 inteira, e some a última
+> configuração que podia funcionar em preview e quebrar em produção.
+>
+> É o primeiro item da lista de **fora de escopo** abaixo, recusado por ser grande. **Ele deixou de
+> ser opcional**, e é uma spec própria.
+
 ## Objetivo
 Todo membro deste produto tem o **primeiro contato com ele numa página do Google**. O cadastro dispara um
 e-mail do Firebase, o link do e-mail leva a `<projeto>.firebaseapp.com/__/auth/action`, e é lá — em cinza,
@@ -332,6 +377,11 @@ O `LegalAcceptanceGuard` **não** alcança estas rotas, e a decisão 8 diz por q
    repertório: **o cadastro funciona em preview e manda o membro de produção para a tela do
    Google** — verde em todo teste, quebrado só para quem paga. É a mesma classe de armadilha dos
    índices do Firestore, que existiam em produção e não em `dev-liga-dev` (README).
+
+   **Fechado em 2026-08-28, e não do jeito previsto: o Firebase recusa a troca**, nos dois projetos,
+   com `EMAIL_TEMPLATE_UPDATE_NOT_ALLOWED` (bloco de estado no topo). O ponto deixa de ser "lembrar
+   de configurar os dois" e passa a ser **"não existe configuração a fazer"** — o link só aponta para
+   a nossa tela quando for esta API quem o monta.
 2. **O domínio do front precisa estar em Authorized domains**, e ele já está — é o mesmo `continueUrl` de
    sempre. Fica escrito porque `UNAUTHORIZED_DOMAIN` já custou um deploy inteiro a este projeto (fix.md
    da 007, Fix 2), e o sintoma foi cadastro respondendo `202` com ninguém recebendo nada.

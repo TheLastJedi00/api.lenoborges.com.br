@@ -81,6 +81,9 @@ Sem código. É a fase que, esquecida, faz tudo o mais funcionar em preview e qu
   `https://liga.lenoborges.com.br/acesso` no projeto de produção. **Os dois, e não um** (ponto em aberto 1):
   configurar só um produz um cadastro que funciona em preview e manda o membro de produção para a tela do
   Google, verde em todo teste.
+  **Impossível pelo console: o Firebase recusa a troca com `EMAIL_TEMPLATE_UPDATE_NOT_ALLOWED`** —
+  ver o bloco de estado no topo do `context.md`. A task fica aberta e sem dono aqui; quem a resolve é
+  a spec que gera o link pelo Admin SDK.
 - [ ] Task 11: Conferir a política de senha. Objetivo: `Authentication > Settings > Password policy`
   continua com mínimo de 8. Não muda nada nesta spec — a task existe porque a decisão 6 acabou de pôr um
   segundo piso no front, e um segundo piso é o que faz ninguém conferir o primeiro.
@@ -113,8 +116,44 @@ Branch: `feat/020-fechamento`
     e-mail novo. **Nenhuma linha de código deste repositório mudou para isso acontecer** (decisão 12), e é
     exatamente por isso que ele precisa ser testado à mão.
 
-# Fase 05: O SMTP do Firebase Auth [ ]
+# Fase 05: O SMTP do Firebase Auth [ ] — **EM ABERTO, bloqueada de fora**
 Branch: `feat/020-smtp-do-firebase-auth`
+
+> ## Estado em 2026-08-28: bloqueada, e o `dev-liga-dev` foi devolvido ao envio padrão
+>
+> **Por enquanto o e-mail volta a ser o padrão do Firebase, sem SMTP.** O `dev-liga-dev` está com
+> `notification.sendEmail.method = DEFAULT`; o bloco `smtp` continua gravado no projeto (host
+> `smtp.resend.com`, porta 587, STARTTLS, remetente `acesso@lenoborges.com.br`), então religar é
+> trocar o método de volta, e não recadastrar a credencial. **A fase não foi abandonada — foi
+> parada com o motivo escrito.**
+>
+> **O que bloqueia é a Fase 03, e não esta.** A action URL do `dev-liga-dev` continua em
+> `https://dev-liga-dev.firebaseapp.com/__/auth/action`, e trocá-la é recusado tanto pelo console
+> quanto pela API `admin/v2/projects/dev-liga-dev/config`:
+>
+> ```
+> PATCH ...?updateMask=notification.sendEmail.callbackUri
+> {"notification":{"sendEmail":{"callbackUri":"https://ligapreview.lenoborges.com.br/acesso"}}}
+> 400 EMAIL_TEMPLATE_UPDATE_NOT_ALLOWED (INVALID_ARGUMENT)
+> ```
+>
+> **Não é permissão e não é o campo**, e isso foi medido e não suposto: gravar no mesmo
+> `callbackUri` o valor que já estava lá passa, e gravar em `autodeleteAnonymousUsers` também. O que
+> a API recusa é **o valor novo**. A suspeita que sobra é o domínio: `dnsInfo.customDomainState`
+> está `NOT_STARTED`, e estar em `authorizedDomains` — `ligapreview.lenoborges.com.br` está — não é
+> a mesma autorização que o fluxo de domínio personalizado para e-mails de autenticação.
+>
+> **O teste foi feito no mesmo dia, e com ele caíram cinco hipóteses** — a tabela está no bloco de
+> estado do `context.md`. O `web.app` com caminho customizado é recusado; ligar o `CUSTOM_SMTP` não
+> muda nada; o upgrade para `IDENTITY_PLATFORM` não muda nada; desligar a proteção de enumeração de
+> e-mail não muda nada. **Não é o domínio, não é o caminho, não é o transporte e não é o tipo do
+> projeto** — é a superfície de template de e-mail inteira, travada neste projeto, sem documentação
+> pública que explique por quê.
+>
+> **Não há ordem para retomar, porque não se retoma pelo console.** A Fase 03 depende da Task 10, que
+> o Firebase recusa, e esta fase existia para consertar a metade visível de um problema cuja outra
+> metade o console não deixa consertar. A saída é gerar o link no Admin SDK e mandá-lo pelo
+> `MailerService` da spec 014 — o que torna esta fase **desnecessária**, e não bloqueada.
 
 **Alteração de escopo, acrescentada depois de as Fases 01 a 04 estarem mergeadas** — ver o bloco no topo
 do `context.md`. A tela ficou nossa e o e-mail que leva até ela continuou saindo do remetente do Google.
@@ -133,7 +172,11 @@ do Firebase** — o que muda é o transporte e o remetente (decisão 14).
   senha = a API key. Porta **587 com STARTTLS** (465 é SMTPS implícito, e serve igual — 587 é o que o
   console do Firebase assume). Uma chave separada é o que permite revogar o envio do Firebase sem
   derrubar o disparo da spec 014, que é justamente o caso em que alguém vai querer revogar às pressas.
-- [ ] Task 18: **Configurar o SMTP nos dois projetos.** Objetivo: `Authentication > Templates > SMTP
+- [ ] Task 18: **Configurar o SMTP nos dois projetos.** **Feita no `dev-liga-dev` em 2026-08-28 e
+  desfeita no mesmo dia** (`method` de volta para `DEFAULT`, valores preservados); produção intocada.
+  Na primeira tentativa a porta estava `2465` com `START_TLS` — par inválido, e o Firebase engole falha
+  de SMTP em silêncio: nada chegou e nada apareceu no Resend. Corrigida para 587 depois, sem novo teste
+  de entrega antes da reversão. Objetivo: `Authentication > Templates > SMTP
   settings` em produção **e** em `dev-liga-dev`, com os valores da Task 17. Terceira vez que esta spec
   pede dois projetos, e a mais fácil de esquecer: diferente da action URL, **este defeito não quebra o
   fluxo** — o e-mail chega, o link funciona, e ninguém percebe até reparar no endereço do remetente.
@@ -141,6 +184,9 @@ do Firebase** — o que muda é o transporte e o remetente (decisão 14).
   `Authentication > Templates`, nos dois projetos, para que o "de" do e-mail diga **Liga Dev** e não o
   nome do projeto do Firebase. É a metade visível da Task 18: sem ela o e-mail sai pelo nosso servidor
   com a aparência do antigo.
+  **Não feita**: em 2026-08-28 os templates do `dev-liga-dev` ainda tinham `senderLocalPart: noreply` e
+  `replyTo: noreply`, e o `senderLocalPart` **sobrepõe** a parte local do remetente do SMTP — com ele
+  assim, o `acesso@` da Task 18 não chegaria a aparecer no "de" nem com o envio ligado.
 
 ## Os testes que fecham a fase
 
