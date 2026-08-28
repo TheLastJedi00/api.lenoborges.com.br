@@ -2,10 +2,21 @@ import { ExecutionContext } from '@nestjs/common';
 import { LegalAcceptanceGuard } from './legal-acceptance.guard';
 import { LegalService } from './legal.service';
 import { LegalAcceptanceRequiredException } from './legal-acceptance-required.exception';
+import { LEGAL_DOCUMENTS } from './legal.documents';
+
+/**
+ * A versao vigente sai do proprio registro de documentos, e **nao de um literal**.
+ *
+ * Bumpar a versao ja custa um novo aceite da base inteira (spec 018, decisao 3);
+ * nao pode custar tambem meia duzia de testes vermelhos que nao dizem nada sobre
+ * comportamento. Quem guarda o texto contra edicao silenciosa e o teste-trava do
+ * hash do texto, em legal.documents.spec.ts, e ele continua sendo o unico.
+ */
+const VIGENTE = LEGAL_DOCUMENTS['termos-de-uso'].version;
 
 const EM_DIA = {
-  'termos-de-uso': { version: '2026-08-27', acceptedAt: new Date() },
-  'politica-de-privacidade': { version: '2026-08-27', acceptedAt: new Date() },
+  'termos-de-uso': { version: VIGENTE, acceptedAt: new Date() },
+  'politica-de-privacidade': { version: VIGENTE, acceptedAt: new Date() },
 };
 
 describe('LegalAcceptanceGuard', () => {
@@ -165,7 +176,7 @@ describe('LegalAcceptanceGuard', () => {
 
   it('o corpo do 428 lista o que falta', async () => {
     perfilCom({
-      'termos-de-uso': { version: '2026-08-27', acceptedAt: new Date() },
+      'termos-de-uso': { version: VIGENTE, acceptedAt: new Date() },
     });
 
     await expect(
@@ -177,7 +188,7 @@ describe('LegalAcceptanceGuard', () => {
           {
             id: 'politica-de-privacidade',
             title: 'Política de Privacidade',
-            version: '2026-08-27',
+            version: VIGENTE,
           },
         ],
       },
