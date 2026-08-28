@@ -65,44 +65,46 @@ no fim dela, e é reordenada pelas setas como qualquer aula — tudo isso ainda 
   `(badgeId, kind)` passa a dizer `(badgeId, tab)`, mantendo a frase que importa — renormalizar sem separar
   por lista embaralha as duas de uma vez, e é o bug mais provável de toda essa família.
 
-# Fase 03: A API
+# Fase 03: A API [x]
 Branch: `feat/021-api-tab`
 
 Ao fim desta fase o front tem como pedir a aba certa e como ligar o toggle, e o Swagger conta a história
 inteira.
 
-- [ ] Task 01: O `tab` no corpo da publicação. Arquivo: `src/track/dto/create-badge-video.dto.ts`. Objetivo:
+- [x] Task 01: O `tab` no corpo da publicação. Arquivo: `src/track/dto/create-badge-video.dto.ts`. Objetivo:
   `tab?: 'aula' | 'resposta'` com `@IsOptional() @IsIn([...])`, e a descrição de Swagger dizendo as três
   coisas que quem integra precisa: sem valor, `tab = kind`; `kind: 'resposta'` com `tab: 'aula'` é a resposta
   posicionada na trilha; e `kind: 'aula'` com `tab: 'resposta'` é 400.
-- [ ] Task 02: O `tab` na resposta. Arquivo: `src/track/dto/badge-video.dto.ts`. Objetivo: o campo no
+- [x] Task 02: O `tab` na resposta. Arquivo: `src/track/dto/badge-video.dto.ts`. Objetivo: o campo no
   `BadgeVideoDto`, com a descrição separando-o de `kind` na mesma frase da decisão 1 — **`kind` é a natureza,
   `tab` é a lista** — e dizendo que os dois divergem exatamente num caso, a resposta posicionada na trilha. O
   `toDto` do service passa a copiar o campo. **`orientation` continua derivando de `kind`** e a descrição dela
   não muda: a resposta na trilha continua sendo `retrato`, e é o cliente que decide não pintar o player ali.
-- [ ] Task 03: `?kind=` vira `?tab=` nas três rotas. Arquivos: `src/track/track.controller.ts`,
+- [x] Task 03: `?kind=` vira `?tab=` nas três rotas. Arquivos: `src/track/track.controller.ts`,
   `src/track/admin-track.controller.ts`. Objetivo: o `@ApiQuery` e o `@Query` mudam de nome nas três, com as
   tolerâncias de hoje preservadas — valor desconhecido é ausente na leitura, e `'aula'` na reordenação. O
   comentário registra a decisão 7: **sem o rename, `?kind=aula` passaria a devolver vídeos cujo `kind` é
   `resposta`**, e um parâmetro que mente sobre o campo que nomeia custa uma tarde a quem for depurar isso
   meses depois. Sem alias do nome antigo — o front é o único cliente e as duas specs entram juntas.
-- [ ] Task 04: O índice troca de campo. Arquivo: `firestore.indexes.json`. Objetivo: `badgeId + kind + order`
+- [x] Task 04: O índice troca de campo. Arquivo: `firestore.indexes.json`. Objetivo: `badgeId + kind + order`
   sai e `badgeId + tab + order` entra; o `badgeId + order` da administração fica. É substituição, não adição:
   nenhuma consulta filtra por `kind` depois desta spec. Publicar com
   `firebase deploy --only firestore:indexes`, e **publicar antes de o código novo receber tráfego** — sem o
   índice, a consulta responde erro com o link para criá-lo, e o emulador não avisa porque não exige índice
-  nenhum.
-- [ ] Task 05 (TDD + implementação): O e2e do caminho inteiro. Arquivo: `test/track.e2e-spec.ts` (ou o
+  nenhum. **Pendente:** o arquivo está trocado, mas `firebase deploy --only firestore:indexes` não foi
+  rodado aqui. Publicar nos **dois projetos** — produção e `dev-liga-dev` — antes de o código novo
+  receber tráfego.
+- [x] Task 05 (TDD + implementação, **escrito e não executado**): O e2e do caminho inteiro. Arquivo: `test/track.e2e-spec.ts` (ou o
   arquivo e2e da trilha). Objetivo: publicar uma resposta com `tab: 'aula'` numa insígnia que já tem aulas, e
   provar as três coisas de uma vez: (a) `GET /badges/:id/videos?tab=aula` a devolve, no fim; (b)
   `GET /badges/:id/videos?tab=resposta` **não** a devolve; (c) o `PATCH .../order?tab=aula` com a lista
   incluindo o id dela responde 200 — a lista de uma aba com uma resposta dentro é uma lista válida, e é
   exatamente o que a validação recusaria se alguém a escrevesse contra `kind`.
-- [ ] Task 06: O README. Arquivo: `README.md`. Objetivo: a seção da coleção `badge_videos` ganha o `tab` com
+- [x] Task 06: O README. Arquivo: `README.md`. Objetivo: a seção da coleção `badge_videos` ganha o `tab` com
   a frase da decisão 1 e a do fallback do converter; a linha da tabela de índices compostos troca `kind` por
   `tab`; e a seção da spec 010 ganha a emenda de uma linha — **o padrão continua sendo duas listas, e ele
   passa a poder ser dispensado por vídeo, na publicação.**
-- [ ] Task 07: O `CLAUDE.md`. Arquivo: `CLAUDE.md`. Objetivo: uma linha na lista de decisões arquiteturais,
+- [x] Task 07: O `CLAUDE.md`. Arquivo: `CLAUDE.md`. Objetivo: uma linha na lista de decisões arquiteturais,
   no lugar certo — perto da linha de `badge_videos` e da de `orientation`. Ela diz o que a próxima pessoa
   precisa saber antes de tocar em qualquer consulta de vídeo: **`kind` é a natureza e `tab` é a lista; toda
   consulta e toda renormalização são por `tab`, e `orientation` continua saindo de `kind`.** E diz o fallback
