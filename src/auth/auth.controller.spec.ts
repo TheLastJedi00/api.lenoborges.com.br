@@ -1,6 +1,12 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { Request, Response } from 'express';
-import { UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  UnauthorizedException,
+  ValidationPipe,
+} from '@nestjs/common';
+import { CheckOobDto } from './dto/check-oob.dto';
+import { ConfirmPasswordDto } from './dto/confirm-password.dto';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { CookieService } from './cookie.service';
@@ -12,6 +18,9 @@ describe('AuthController', () => {
     login: jest.Mock;
     refresh: jest.Mock;
     logout: jest.Mock;
+    checkOobCode: jest.Mock;
+    confirmPassword: jest.Mock;
+    applyEmailAction: jest.Mock;
   };
   let cookieService: {
     setRefreshToken: jest.Mock;
@@ -25,6 +34,9 @@ describe('AuthController', () => {
       login: jest.fn(),
       refresh: jest.fn(),
       logout: jest.fn(),
+      checkOobCode: jest.fn(),
+      confirmPassword: jest.fn(),
+      applyEmailAction: jest.fn(),
     };
 
     cookieService = {
@@ -61,15 +73,6 @@ describe('AuthController', () => {
 
     expect(result).toEqual({ status: 'confirmation_sent' });
     expect(authService.signup).toHaveBeenCalledWith(dto);
-  });
-
-  it('nao expoe rota de definir senha', () => {
-    // A ausencia e o comportamento, entao ela e testada: o Firebase hospeda a
-    // propria tela e o oobCode nunca chega nesta API. Se alguem reintroduzir o
-    // endpoint sem reabrir a decisao 3 da spec 007, este teste avisa.
-    expect(
-      (controller as unknown as Record<string, unknown>).setPassword,
-    ).toBeUndefined();
   });
 
   it('should perform login, set cookie and return session on POST /auth/login', async () => {
@@ -152,5 +155,106 @@ describe('AuthController', () => {
 
     expect(authService.logout).toHaveBeenCalledWith('rt-to-logout');
     expect(cookieService.clearRefreshToken).toHaveBeenCalledWith(res);
+  });
+  /**
+   * Spec 020: as tres rotas do oobCode.
+   *
+   * Os testes daqui sao quase todos de **ausencia** -- de guard, de cookie, de
+   * campo aceito -- e ausencia e a coisa mais facil de desfazer por engano:
+   * ninguem apaga um guard, mas qualquer um acrescenta.
+   */
+  describe('oobCode (spec 020)', () => {
+    /** Os metadados de guard que o Nest grava no handler e na classe. */
+    function guardsDe(handler: string): unknown[] {
+      const doMetodo = (Reflect.getMetadata(
+        '__guards__',
+        (controller as unknown as Record<string, () => unknown>)[handler],
+      ) ?? []) as unknown[];
+      const daClasse = (Reflect.getMetadata('__guards__', AuthController) ??
+        []) as unknown[];
+
+      return [...daClasse, ...doMetodo];
+    }
+
+    it('teste-trava: as tres rotas nao tem guard nenhum', () => {
+      // Decisao 8. Um FirebaseAuthGuard aqui quebraria o cadastro inteiro, e um
+      // LegalAcceptanceGuard responderia 428 a quem esta tentando definir a
+      // senha -- e a saida do 428 e aceitar os termos, que exige logar, que
+      // exige a senha que a pessoa esta tentando definir.
+      expect(guardsDe('checkOobCode')).toEqual([]);
+      expect(guardsDe('confirmPassword')).toEqual([]);
+      expect(guardsDe('applyEmailAction')).toEqual([]);
+    });
+
+    it('POST /auth/password/check devolve o e-mail dono do link', async () => {
+      authService.checkOobCode.mockResolvedValue({ email: 'f@email.com' });
+
+      const result = await controller.checkOobCode({ oobCode: 'codigo' });
+
+      expect(result).toEqual({ email: 'f@email.com' });
+      expect(authService.checkOobCode).toHaveBeenCalledWith('codigo');
+    });
+
+    it('teste-trava: POST /auth/password responde 204 e NAO grava cookie', async () => {
+      // Decisao 10: sessao nasce no login, num caminho so. O handler nem
+      // recebe a Response -- nao ha por onde um Set-Cookie sair daqui.
+      authService.confirmPassword.mockResolvedValue(undefined);
+
+      const result = await controller.confirmPassword({
+        oobCode: 'codigo',
+        newPassword: 'senha-nova-forte',
+      });
+
+      expect(result).toBeUndefined();
+      expect(cookieService.setRefreshToken).not.toHaveBeenCalled();
+      expect(
+        Reflect.getMetadata(
+          '__httpCode__',
+          (controller as unknown as Record<string, () => unknown>)
+            .confirmPassword,
+        ),
+      ).toBe(204);
+    });
+
+    it('POST /auth/email-action aplica a acao e devolve o e-mail', async () => {
+      authService.applyEmailAction.mockResolvedValue({
+        email: 'novo@email.com',
+      });
+
+      const result = await controller.applyEmailAction({ oobCode: 'codigo' });
+
+      expect(result).toEqual({ email: 'novo@email.com' });
+      expect(authService.applyEmailAction).toHaveBeenCalledWith('codigo');
+    });
+
+    it('teste-trava: um campo mode no corpo e rejeitado, nao ignorado', async () => {
+      // Decisao 3: o mode chega da URL do navegador, escrito por quem manda o
+      // link. Os DTOs nao o declaram, e o ValidationPipe do main.ts roda com
+      // whitelist e forbidNonWhitelisted -- entao o corpo que o traga volta
+      // 400, em vez de passar com o campo silenciosamente descartado.
+      const pipe = new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: true,
+        transform: true,
+      });
+
+      await expect(
+        pipe.transform(
+          { oobCode: 'codigo', mode: 'verifyEmail' },
+          { type: 'body', metatype: CheckOobDto },
+        ),
+      ).rejects.toThrow(BadRequestException);
+
+      await expect(
+        pipe.transform(
+          {
+            oobCode: 'codigo',
+            newPassword: 'senha-nova-forte',
+            mode: 'resetPassword',
+          },
+          { type: 'body', metatype: ConfirmPasswordDto },
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
   });
 });

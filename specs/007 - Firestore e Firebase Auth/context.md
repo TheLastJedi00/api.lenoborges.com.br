@@ -138,6 +138,35 @@ emitidos. Um ID token continua válido até expirar, em no máximo uma hora, a n
 Fase 04 decide isso com o trade-off explícito.
 
 ### 3. O Firebase tem tela própria de definir senha, e ela é usada — `/definir-senha` morre
+
+> ## ⚠️ DEPRECATED em 2026-08-28 pela [spec 020](../020%20-%20A%20Tela%20de%20Senha%20e%20o%20oobCode/context.md)
+>
+> **Esta decisão inteira está superada.** A tela hospedada pelo Google sai, o `customize action URL`
+> passa a ser configurado, e o `oobCode` volta a chegar nesta API por três endpoints públicos —
+> `POST /auth/password/check`, `POST /auth/password` e `POST /auth/email-action`.
+>
+> **A análise de custo desta decisão continua correta, e é ela que a 020 cita para se justificar.** O
+> que mudou não foi o cálculo: foi a proporção do produto. Em 007 havia uma landing e um painel; hoje
+> há diálogo de aceite legal, tela de descadastro, cartão de membro e uma identidade visual inteira, e
+> o terceiro custo listado abaixo — *"a identidade visual se interrompe"* — passou a ser o mais caro
+> dos três.
+>
+> Continua valendo desta decisão, e a 020 não mexe em nada disso:
+>
+> - **O e-mail continua sendo enviado pelo Firebase**, com o template do console. A 020 troca a tela
+>   para onde o link leva, nunca a mensagem.
+> - **O `continueUrl` continua sendo `<FRONTEND_URL>/?entrar=1`**, e pelo mesmo motivo. Ele **não**
+>   vira o endereço da tela nova — action URL e `continueUrl` são valores diferentes, e trocá-los faz
+>   um laço (decisão 11 da 020).
+> - **A política de senha continua morando no console** e continua sem representação em código. O
+>   front volta a exigir 8 caracteres, e isso é cortesia, não garantia — exatamente a armadilha que o
+>   segundo custo listado abaixo descreve.
+> - **A semântica de confirmação de e-mail é a mesma**: concluir a redefinição marca `emailVerified`,
+>   e quem provou receber o e-mail provou ser dono dele.
+>
+> A tabela logo abaixo — *"o que sai do projeto por causa desta decisão"* — vira a tabela do que
+> volta, reescrita na decisão 1 da 020 com os nomes novos. A única linha que **não** volta é a spec
+> 006: ela configurava o Supabase Auth como código, o fornecedor mudou, e nada na 020 a ressuscita.
 O Firebase envia o e-mail e **hospeda a tela onde a senha é digitada**, em
 `<projeto>.firebaseapp.com/__/auth/action?mode=resetPassword&oobCode=...`. Não há SMTP a contratar,
 não há template de e-mail a versionar, e o limite de envio é folgado, ao contrário dos dois por hora
