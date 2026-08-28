@@ -308,14 +308,23 @@ assinatura existir.
 
 ### `GET /badges/:badgeId/videos`
 - Header: `Authorization: Bearer <accessToken>`
-- Query: `kind` (`aula` ou `resposta`, opcional) — a aba. Sem ele, as duas
-- Resposta: `200` `{ badgeId, videos: [{ id, badgeId, title, description, youtubeId, kind, questionId,
+- Query: `tab` (`aula` ou `resposta`, opcional) — a aba. Sem ele, as duas
+- Resposta: `200` `{ badgeId, videos: [{ id, badgeId, title, description, youtubeId, kind, tab, questionId,
   question, orientation, devTierFree, order }] }`
 
 **`orientation` é derivada e não gravada** (spec 017). Vale `retrato` (9:16, o Short) nas respostas e
 `paisagem` (16:9) nas aulas, e **o cliente consome sem recalcular** — é a mesma forma da `phase` do
 Mural. Derivar de `kind` do lado da tela faria a mesma regra existir em template, folha de estilo e
 teste, e o dia em que uma resposta for gravada em paisagem o conserto exigiria deploy de front.
+
+**`orientation` sai de `kind`, e não de `tab`** (spec 021): a resposta que o admin posicionou na
+trilha continua sendo `retrato`, porque a proporção é da gravação e não da lista. Quem decide não
+pintar um 9:16 no meio de uma coluna de 16:9 é a tela — no front ela vira um cartão de pergunta com
+um botão, e o vídeo abre num modal.
+
+**O parâmetro chamava-se `?kind=` até a spec 021, e não há alias do nome antigo.** Depois dela
+`?kind=aula` devolveria vídeos cujo `kind` é `resposta` — um parâmetro que mente sobre o campo que
+nomeia. O front é o único cliente e as duas specs entram juntas.
 
 **`question` é uma foto da pergunta**, tirada no momento da publicação: `{ id, title, authorName,
 askedAt }`, com `askedAt` em ISO 8601. É o que a tela usa para desenhar o balão acima do player sem uma
@@ -340,9 +349,9 @@ Todas passam por `FirebaseAuthGuard` e depois `AdminGuard`, nessa ordem. Membro 
 | `GET` | `/admin/users/:id` | Um membro inteiro: perfil, acesso, estado de e-mail e datas |
 | `POST` | `/admin/users/:id/email` | Escreve e envia um e-mail para aquele membro (campanha `direto`) |
 | `PATCH` | `/admin/users/:id` | Altera `grade` e `tier`, em requisições separadas |
-| `GET` | `/admin/badges/:badgeId/videos?kind` | Vídeos da insígnia. **Sem `kind`, as duas abas juntas** |
+| `GET` | `/admin/badges/:badgeId/videos?tab` | Vídeos da insígnia. **Sem `tab`, as duas abas juntas** |
 | `POST` | `/admin/badges/:badgeId/videos` | Publica; recebe URL (**Shorts inclusive**), grava o ID; entra no fim da ordem da aba |
-| `PATCH` | `/admin/badges/:badgeId/videos/order` | Reordena em lote atômico |
+| `PATCH` | `/admin/badges/:badgeId/videos/order?tab` | Reordena uma aba em lote atômico. Sem `tab`, Aulas |
 | `PATCH` | `/admin/badges/:badgeId/videos/:videoId` | Edita título e descrição |
 | `DELETE` | `/admin/badges/:badgeId/videos/:videoId` | Remove e renormaliza a ordem |
 
@@ -396,7 +405,7 @@ nomeado quando o membro não pode receber.
 - `title` (string) — **o título da plataforma**, obrigatório. Não é o do YouTube
 - `description` (string ou null)
 - `youtubeId` (string) — só o ID, nunca a URL
-- `order` (number) — posição dentro da insígnia, inteiro de 0 a n-1
+- `order` (number) — posição dentro da insígnia **e da lista**, inteiro de 0 a n-1
 - `createdAt`, `updatedAt` (Timestamp)
 
 O caminho composto é o que garante que **o mesmo vídeo não entra duas vezes na mesma insígnia** — o
@@ -417,7 +426,7 @@ serve Short sem tratamento especial. O que muda na tela é só a proporção do 
 `orientation` derivado no DTO.
 
 **Esta é a primeira consulta do sistema que não é por caminho**, e por isso a primeira que precisa de
-índice composto no Firestore de produção. A spec 010 acrescentou o filtro por `kind`, e com ele um
+índice composto no Firestore de produção. A spec 010 acrescentou o filtro por aba, e com ele um
 segundo índice — os dois estão em [Índices compostos que produção
 exige](#índices-compostos-que-produção-exige), que é a lista única.
 
@@ -614,7 +623,12 @@ o relógio.
 
 **A ordem passa a ser por `(badgeId, kind)`**, e a renormalização 0..n-1 acontece dentro da aba. Uma
 insígnia com três aulas e duas respostas tem duas sequências independentes — renormalizar sem separar
-por `kind` embaralha as duas de uma vez, e é o erro mais provável de quem mexer nisso.
+a lista embaralha as duas de uma vez, e é o erro mais provável de quem mexer nisso.
+
+> **Emenda da spec 021.** O eixo dessa ordem passou a ser `(badgeId, tab)`. É a mesma garantia, sobre
+> a lista certa: `kind` deixou de ser o endereço do vídeo. E o padrão continua sendo duas listas —
+> "aula se assiste em ordem, resposta se consulta por assunto" —, mas **ele passa a poder ser
+> dispensado por vídeo, na publicação**, por decisão explícita de quem publica.
 
 **A precedência do `devTierFree` é total**: quando existir gate de conteúdo, ele começa por essa flag
 e sai. Existe porque o Mural cria uma armadilha — a melhor pergunta da semana pode ser sobre Angular,
@@ -649,6 +663,44 @@ que até aqui nada nunca escreveu. Essa escrita vem **por último** e falha em s
 ela roda, o vídeo já está gravado, já foi notificado e já foi anunciado, e um `500` aqui perderia o
 trabalho do admin por causa de um ponteiro. Nada do lado do aluno quebra quando ela falha, porque **o
 balão vem da foto e não do vínculo.**
+
+### A resposta que vive na trilha (spec 021)
+
+`badge_videos` ganha **um** campo:
+
+- `tab` (`'aula' | 'resposta'`) — **a lista em que o vídeo vive**
+
+**`kind` é a natureza do vídeo; `tab` é o endereço dele.** Até esta spec um campo fazia as duas
+coisas, porque elas andavam juntas: resposta tinha balão *e* vivia na aba de respostas. Agora uma
+resposta posicionada na trilha **continua sendo resposta** — mantém a pergunta fotografada, o balão e
+o `retrato` — e **passa a viver na lista das aulas**. Os dois campos divergem em exatamente esse caso.
+
+**Nenhum documento no banco ganha o campo, e nenhum precisa.** O converter lê
+`tab = data.tab ?? data.kind ?? 'aula'`, então todo vídeo anterior a esta spec lê a lista em que já
+estava. Sem esse fallback, `undefined` chega ao `where('tab', '==', 'aula')` e a consulta devolve
+**lista vazia com `200`**: a trilha inteira some sem ninguém ter apagado nada, e sem erro em log
+nenhum. É a terceira vez que este repositório encontra essa armadilha — `kind` (010) e `devTierFree`
+(009) foram as duas primeiras, e as três têm teste-trava.
+
+**Não é um booleano `naTrilha`, e a razão é a consulta.** Com ele, listar a trilha viraria
+`kind == 'aula'` **ou** `naTrilha == true`, e uma disjunção com `orderBy` no Firestore custa índice
+novo e plano imprevisível. Com `tab`, a consulta é a de sempre com outro nome de campo.
+
+A aba de destino é escolhida **na publicação, e só nela**: `POST /admin/badges/:badgeId/videos` aceita
+`tab`, e sem ele vale `tab = kind` — o cliente que não conhece esta spec continua funcionando sem
+enviar nada, e é isso que permite subir a API antes do front. Não há `PATCH` para mover um vídeo de
+lista depois; o conserto de um engano é remover e republicar. Mover depois é renormalizar duas listas
+na mesma transação mais uma tela no painel, e isso só se paga quando existir a primeira reclamação.
+
+`kind: 'aula'` com `tab: 'resposta'` é **`400`** — o terceiro estado incoerente da família que a spec
+017 abriu, junto de resposta sem pergunta e aula com pergunta. A aba de respostas é a lista das
+perguntas respondidas, e uma aula ali é um vídeo sem balão numa lista de balões. O caminho contrário é
+o que a spec existe para permitir, e não valida nada.
+
+**O XP não ganha nada, e isso é verificação e não omissão.** `PUT /me/watched-videos/:videoId` lê
+`badge_videos/{videoId}`, confirma que o vídeo existe e paga os 10 XP uma vez — não olha `kind` nem
+`tab`. Uma resposta posicionada na trilha conta XP sem uma linha escrita, e uma resposta na aba já
+contava. Não existe regra de XP por lista.
 
 ## Notificações Internas (spec 012)
 
@@ -714,8 +766,8 @@ continuou verde enquanto metade do produto não abria.
 |---|---|---|
 | `mural_questions` | `weekId` asc + `voteCount` desc + `createdAt` asc | `listByWeek(byVotes: true)` e `findWinner` |
 | `mural_questions` | `weekId` asc + `createdAt` asc | `listByWeek(byVotes: false)`, a semana em coleta |
-| `badge_videos` | `badgeId` asc + `order` asc | `listByBadge()` **sem** `kind` — a visão da administração |
-| `badge_videos` | `badgeId` asc + `kind` asc + `order` asc | `listByBadge(kind)` — as abas Aulas e Perguntas Frequentes |
+| `badge_videos` | `badgeId` asc + `order` asc | `listByBadge()` **sem** `tab` — a visão da administração |
+| `badge_videos` | `badgeId` asc + `tab` asc + `order` asc | `listByBadge(tab)` — as abas Aulas e Perguntas Frequentes |
 
 **A spec 012 não acrescentou nenhuma linha a esta tabela, e isso é decisão.** A consulta de
 notificações é `orderBy('createdAt', 'desc').limit(50)` — ordenação por um campo só, que o índice de
@@ -737,10 +789,15 @@ com a resposta 200.
 
 **A spec 017 também não acrescenta nenhuma linha**, e pelo motivo mais simples de todos: a foto da
 pergunta mora **dentro** do documento do vídeo, o `orientation` é derivado e não existe no banco, e a
-única leitura nova é `mural_questions/{id}` — caminho direto, que não usa índice. O `?kind=` que o
+única leitura nova é `mural_questions/{id}` — caminho direto, que não usa índice. O filtro de aba que o
 `GET` do admin ganhou usa a quarta linha, que já estava lá.
 
-A terceira linha é fácil de perder de vista, e ela já tinha sido perdida uma vez: `kind` é opcional em
+**A spec 021 troca a quarta linha de campo, e não acrescenta linha nenhuma.** `badgeId` + `kind` +
+`order` sai e `badgeId` + `tab` + `order` entra — é substituição, porque nenhuma consulta filtra por
+`kind` depois dela. **Publique o índice antes de o código novo receber tráfego**: sem ele a consulta
+responde erro com o link para criá-lo, e o emulador não avisa porque não exige índice nenhum.
+
+A terceira linha é fácil de perder de vista, e ela já tinha sido perdida uma vez: a aba é opcional em
 `listByBadge`, então **`badgeId` + `order` é uma consulta de verdade**, não um prefixo da de baixo. O
 Firestore não usa um índice de três campos para servir uma consulta de dois.
 
