@@ -65,7 +65,7 @@ Branch: `feat/020-endpoints-do-oobcode`
   respostas de erro descritas, no mesmo padrão do resto do controller. A descrição do `check` diz por que
   ele devolve o e-mail, com uma frase — é a pergunta que quem lê o `/docs` faz primeiro.
 
-# Fase 03: O console e a documentação [ ]
+# Fase 03: O console e a documentação [ ] (código pronto; Tasks 10 e 11 são do console)
 Branch: `feat/020-console-e-readme`
 
 Sem código. É a fase que, esquecida, faz tudo o mais funcionar em preview e quebrar em produção.
@@ -79,7 +79,7 @@ Sem código. É a fase que, esquecida, faz tudo o mais funcionar em preview e qu
 - [ ] Task 11: Conferir a política de senha. Objetivo: `Authentication > Settings > Password policy`
   continua com mínimo de 8. Não muda nada nesta spec — a task existe porque a decisão 6 acabou de pôr um
   segundo piso no front, e um segundo piso é o que faz ninguém conferir o primeiro.
-- [ ] Task 12: `README.md`. Objetivo: quatro mudanças, e a primeira é a que importa.
+- [x] Task 12: `README.md`. Objetivo: quatro mudanças, e a primeira é a que importa.
   - **Sai a instrução "Não configure customize action URL"**, que a decisão 13 torna errada, e entra a
     quarta linha da tabela "o que vive no console" — com a nota de que são **dois** projetos.
   - A seção "A senha é definida fora desta aplicação" vira "A senha é definida na nossa tela", com o
@@ -87,7 +87,7 @@ Sem código. É a fase que, esquecida, faz tudo o mais funcionar em preview e qu
   - **Some a frase "Não existe `POST /auth/password`"** — ele existe de novo, e uma README que nega um
     endpoint publicado é pior que uma sem seção nenhuma.
   - Os três endpoints na lista de "Endpoints da API", com uma linha cada.
-- [ ] Task 13: `CLAUDE.md`. Objetivo: a frase que resume a decisão 2 — **o `oobCode` chega nesta API, e o
+- [x] Task 13: `CLAUDE.md`. Objetivo: a frase que resume a decisão 2 — **o `oobCode` chega nesta API, e o
   front continua sem falar com o Firebase**; e a nota de que `POST /auth/password` não cria sessão
   (decisão 10), que é a "melhoria" que alguém tentará fazer.
 
