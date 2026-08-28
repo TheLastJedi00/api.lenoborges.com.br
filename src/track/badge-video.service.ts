@@ -34,6 +34,7 @@ function toDto(video: BadgeVideo, watched: boolean): BadgeVideoDto {
     description: video.description,
     youtubeId: video.youtubeId,
     kind: video.kind,
+    tab: video.tab,
     questionId: video.questionId,
     question: video.question
       ? {
@@ -51,6 +52,10 @@ function toDto(video: BadgeVideo, watched: boolean): BadgeVideoDto {
 
 /**
  * A proporcao do player, **derivada e nunca gravada** (decisao 2 da spec 017).
+ *
+ * **Deriva de `kind`, e nunca de `tab` (spec 021).** Uma resposta posicionada
+ * na trilha continua sendo `retrato`, porque a proporcao e da gravacao e nao da
+ * lista. Quem decide nao pintar um 9:16 no meio de uma coluna de 16:9 e a tela.
  *
  * Resposta e Short e Short e 9:16; aula e paisagem. Hoje isso e uma linha, e o
  * ponto de ela morar aqui e o dia em que deixar de ser: uma resposta longa

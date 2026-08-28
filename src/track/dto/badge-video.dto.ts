@@ -55,9 +55,25 @@ export class BadgeVideoDto {
     example: 'aula',
     enum: ['aula', 'resposta'],
     description:
-      'A aba da insígnia. Aula se assiste em ordem; resposta se consulta por assunto',
+      'A **natureza** do vídeo, e não a lista em que ele aparece — essa é ' +
+      '`tab`. Aula se assiste em ordem; resposta tem pergunta, tem balão e é ' +
+      'Short. É de `kind` que `orientation` sai',
   })
   kind: 'aula' | 'resposta';
+
+  @ApiProperty({
+    example: 'aula',
+    enum: ['aula', 'resposta'],
+    description:
+      'A **lista** em que o vídeo aparece. `kind` é a natureza, `tab` é a ' +
+      'lista, e os dois divergem em **exatamente um caso**: a resposta que o ' +
+      'admin posicionou na trilha, com `kind: resposta` e `tab: aula`. ' +
+      'Toda listagem e toda reordenação são por este campo — filtrar por ' +
+      '`kind` devolveria a trilha sem as respostas posicionadas nela. ' +
+      'Vídeo anterior à spec 021 lê `tab` igual ao `kind` dele, que é onde ' +
+      'ele já estava',
+  })
+  tab: 'aula' | 'resposta';
 
   @ApiProperty({
     nullable: true,
@@ -87,7 +103,11 @@ export class BadgeVideoDto {
       '**Derivada no servidor e não gravada**, como a `phase` do Mural — o ' +
       'cliente consome e **não recalcula**. Derivar de `kind` no front faria a ' +
       'regra existir em três lugares, e faria o conserto de uma resposta gravada ' +
-      'em paisagem exigir deploy de front',
+      'em paisagem exigir deploy de front.\n\n' +
+      'Ela sai de `kind`, e **não de `tab`**: a resposta posicionada na ' +
+      'trilha continua sendo `retrato`. Quem decide não pintar um 9:16 no ' +
+      'meio de uma coluna de 16:9 é a tela, e a spec 021 do front a desenha ' +
+      'como pergunta com botão, abrindo o vídeo num modal',
   })
   orientation: 'paisagem' | 'retrato';
 
@@ -101,7 +121,10 @@ export class BadgeVideoDto {
 
   @ApiProperty({
     example: 0,
-    description: 'Posição dentro da insígnia E da aba, de 0 a n-1',
+    description:
+      'Posição dentro da insígnia E da lista, de 0 a n-1. A lista é a de ' +
+      '`tab`: uma resposta posicionada na trilha ocupa uma posição **da ' +
+      'trilha**',
   })
   order: number;
 
