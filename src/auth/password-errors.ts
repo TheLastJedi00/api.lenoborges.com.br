@@ -33,3 +33,28 @@ export function translatePasswordError(error: unknown): string {
 
   return 'Não foi possível trocar a senha.';
 }
+
+/**
+ * Recusa unica de `oobCode` morto (spec 020, decisao 5).
+ *
+ * `EXPIRED_OOB_CODE`, `INVALID_OOB_CODE` e `OPERATION_NOT_ALLOWED` viram **a
+ * mesma frase**, e a indistinguibilidade e o comportamento, nao economia de
+ * texto: distinguir expirado de invalido informaria a quem colou um codigo
+ * qualquer se ele existiu algum dia.
+ *
+ * O caso e comum demais para merecer um erro generico -- o link de quem ja
+ * definiu a senha uma vez esta morto por definicao, e clicar nele duas vezes e
+ * o que a maior parte das pessoas faz -- entao a frase tem saida escrita
+ * dentro dela.
+ *
+ * A funcao **nao recebe o erro de proposito**: nao ha ramo nenhum a escrever
+ * aqui, e receber o codigo do Google seria o convite para um `if` que separa
+ * expirado de invalido. O codigo fica no log de quem chama, onde e diagnostico
+ * e nao oraculo, como ja acontece no `login` e no `changeEmail`.
+ */
+export function translateOobError(): string {
+  return (
+    'Esse link não vale mais. Links de senha valem uma vez só e expiram. ' +
+    'Peça um novo na tela de entrar.'
+  );
+}
