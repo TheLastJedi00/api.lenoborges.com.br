@@ -1436,3 +1436,38 @@ revisa e quem responde num ramo dentro de uma função.
 | Variável | Obrigatória | O que acontece sem ela |
 |---|---|---|
 | `GEMINI_API_KEY` | em produção | A rota de geração responde `503`; o resto da API serve normalmente |
+
+### A gamertag: `nicknames/{nickname}`, única e imutável
+
+O ranking e os jogos não usam o `name` do perfil — usam um `nickname` escolhido pelo membro. A
+unicidade é **o ID do documento**, em minúsculas: criar é um `create()`, e é o `ALREADY_EXISTS` que
+devolve o `409` para quem chegou em segundo lugar. Sem consulta, sem índice, sem corrida.
+
+O caminho alternativo — `where('nickname','==',x)` e depois gravar — tem uma corrida no meio que **não
+aparece em teste nenhum**: dois cadastros simultâneos do mesmo nome são raros o bastante para só
+acontecer em produção, e o resultado são duas gamertags iguais num ranking que não sabe qual é qual.
+
+**`LenoDev` e `lenodev` colidem de propósito.** Duas gamertags que se leem igual num placar são a mesma
+gamertag para quem está olhando; permitir as duas seria autorizar a cópia do nome de outra pessoa
+trocando uma letra de caixa. O que se exibe guarda a capitalização escolhida, e mora em
+`profiles/{uid}.nickname` — que é denormalização para leitura, e nasce `null`.
+
+**A reserva e o campo do perfil vão no mesmo `WriteBatch`**, porque são um fato só: o documento de
+unicidade sem o campo é um nome ocupado por ninguém, e o campo sem o documento é uma gamertag que outra
+pessoa ainda pode pegar.
+
+**Imutável depois de gravado**, e a razão é o placar: um nome que muda faz o histórico de posições
+deixar de se referir a alguém, e trocar deixaria o documento de unicidade antigo órfão, ocupando um nome
+que ninguém mais usa. `PUT /me/nickname` responde `409` nos **dois** casos — "você já tem uma" e "esse
+nome é de outra pessoa" — e é o corpo, nunca o número, que a tela usa para escolher a mensagem.
+
+| Método | Rota | Corpo | Resposta |
+|---|---|---|---|
+| `PUT` | `/me/nickname` | `{ nickname }` | `204` |
+
+O campo entra no `ProfileDto` (é o que trava o input em Meu Perfil) e **não entra no
+`PublicMemberDto`**: aquele DTO é definido pelo que deixa de fora, e a gamertag já é pública por outro
+caminho — o ranking. Há um teste-trava para isso.
+
+`nicknames` **não gera índice**: lê-se só por caminho, o mesmo motivo pelo qual
+`waitlist_entries/{email}` nunca gerou.

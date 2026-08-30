@@ -1,6 +1,7 @@
 import { forwardRef, Module } from '@nestjs/common';
 import { ProfileRepository } from './profile.repository';
 import { ProfileService } from './profile.service';
+import { NicknameRepository } from './nickname.repository';
 import { ProfileController } from './profile.controller';
 import { WaitlistModule } from '../waitlist/waitlist.module';
 import { AuthModule } from '../auth/auth.module';
@@ -42,7 +43,7 @@ import { MembersController } from './members.controller';
     WatchedVideoModule,
   ],
   controllers: [ProfileController, MembersController],
-  providers: [ProfileRepository, ProfileService],
-  exports: [ProfileRepository, ProfileService],
+  providers: [ProfileRepository, ProfileService, NicknameRepository],
+  exports: [ProfileRepository, ProfileService, NicknameRepository],
 })
 export class ProfileModule {}
