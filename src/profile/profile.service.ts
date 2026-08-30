@@ -17,6 +17,8 @@ import { EmailPreferenceDto } from './dto/email-preference.dto';
 import { PrivacyPreferenceDto } from './dto/privacy-preference.dto';
 import { SetNicknameDto } from './dto/nickname.dto';
 import { NicknameRepository } from './nickname.repository';
+import { RankingRepository } from '../games/ranking.repository';
+import { badgeCountOf } from '../games/entities/ranking-entry.entity';
 import { ProfileDto } from './dto/profile.dto';
 import { PublicMemberDto } from './dto/public-member.dto';
 import { WatchedVideoRepository } from '../track/watched-video.repository';
@@ -69,6 +71,7 @@ export class ProfileService {
     @Inject(forwardRef(() => WatchedVideoRepository))
     private readonly watchedVideoRepository: WatchedVideoRepository,
     private readonly nicknameRepository: NicknameRepository,
+    private readonly rankingRepository: RankingRepository,
   ) {}
 
   /**
@@ -239,6 +242,28 @@ export class ProfileService {
 
     if (taken) {
       throw new ConflictException('Esse gamertag já está em uso.');
+    }
+
+    // **A entrada no placar acontece aqui, e nao no primeiro XP** (spec 022,
+    // decisao 20). Escolher a gamertag e o ato que coloca a pessoa no ranking, e
+    // quem ja tinha XP de videos assistidos aparece com ele imediatamente -- em
+    // vez de ficar invisivel ate acertar a proxima questao.
+    //
+    // Num `catch` que engole, pelo mesmo motivo do `catch` da notificacao na
+    // spec 012: a gamertag ja foi reservada e e imutavel, e um 500 aqui daria ao
+    // membro um erro sobre uma escolha que ele nao pode refazer. O placar e
+    // eventualmente consistente por desenho, e o backfill corrige.
+    try {
+      await this.rankingRepository.upsert({
+        uid: userId,
+        nickname: dto.nickname,
+        xp: entry.xp,
+        badgeCount: badgeCountOf(entry.grade),
+      });
+    } catch (error) {
+      this.logger.error(
+        `Falha ao inserir ${userId} no ranking apos a gamertag: ${String(error)}`,
+      );
     }
   }
 

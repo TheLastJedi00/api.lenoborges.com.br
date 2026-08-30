@@ -17,6 +17,7 @@ import { LegalService } from '../legal/legal.service';
 import { LegalAcceptanceRepository } from '../legal/legal-acceptance.repository';
 import { WatchedVideoRepository } from '../track/watched-video.repository';
 import { NicknameRepository } from './nickname.repository';
+import { RankingRepository } from '../games/ranking.repository';
 
 describe('ProfileService', () => {
   let service: ProfileService;
@@ -43,6 +44,7 @@ describe('ProfileService', () => {
   let legalAcceptanceRepository: { removeAll: jest.Mock };
   let watchedVideoRepository: { removeAll: jest.Mock };
   let nicknameRepository: { claim: jest.Mock; release: jest.Mock };
+  let rankingRepository: { upsert: jest.Mock; remove: jest.Mock };
 
   beforeEach(async () => {
     repository = {
@@ -82,6 +84,11 @@ describe('ProfileService', () => {
       claim: jest.fn().mockResolvedValue({ taken: false, entry: null }),
       release: registra('nickname.release'),
     };
+    rankingRepository = {
+      upsert: jest.fn().mockResolvedValue(undefined),
+      release: jest.fn(),
+      remove: registra('ranking.remove'),
+    } as unknown as { upsert: jest.Mock; remove: jest.Mock };
     authService = {
       reauthenticate: jest.fn().mockResolvedValue('id-token-fresco'),
       continueUrl: 'http://localhost:4200/?entrar=1',
@@ -108,6 +115,7 @@ describe('ProfileService', () => {
           useValue: watchedVideoRepository,
         },
         { provide: NicknameRepository, useValue: nicknameRepository },
+        { provide: RankingRepository, useValue: rankingRepository },
       ],
     }).compile();
 

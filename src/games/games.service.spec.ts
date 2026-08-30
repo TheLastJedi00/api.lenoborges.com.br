@@ -11,6 +11,7 @@ import { GamesService } from './games.service';
 import { GymChallengeRepository } from './gym-challenge.repository';
 import { GymQuestionRepository } from './gym-question.repository';
 import { ChallengeConfigRepository } from './challenge-config.repository';
+import { RankingRepository } from './ranking.repository';
 import { MIN_QUESTIONS_PER_DIFFICULTY } from './games.constants';
 import type { Difficulty } from './games.constants';
 import type { AnswerResultDto } from './dto/answer-question.dto';
@@ -21,6 +22,7 @@ export interface Harness {
   challenges: GymChallengeRepository;
   questions: GymQuestionRepository;
   configs: ChallengeConfigRepository;
+  ranking: RankingRepository;
   profiles: { findById: jest.Mock; update: jest.Mock };
   /** Enche o banco de uma insignia ate o desafio existir. */
   seedQuestions: (badgeId: string, perLevel?: number) => Promise<void>;
@@ -33,6 +35,7 @@ export function makeHarness(xp = 0): Harness {
   const challenges = new GymChallengeRepository(firebase);
   const questions = new GymQuestionRepository(firebase);
   const configs = new ChallengeConfigRepository(firebase);
+  const ranking = new RankingRepository(firebase);
 
   firestore.seedProfile('uid-1', xp);
   const profiles = {
@@ -50,6 +53,7 @@ export function makeHarness(xp = 0): Harness {
     questions,
     configs,
     profiles as unknown as ProfileRepository,
+    ranking,
   );
 
   const seedQuestions = async (
@@ -75,6 +79,7 @@ export function makeHarness(xp = 0): Harness {
     challenges,
     questions,
     configs,
+    ranking,
     profiles,
     seedQuestions,
   };

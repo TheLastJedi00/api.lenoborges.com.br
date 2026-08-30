@@ -4,6 +4,7 @@ import {
   DocumentReference,
   FieldValue,
   Timestamp,
+  WriteBatch,
 } from 'firebase-admin/firestore';
 import { FirebaseService } from '../auth/firebase.service';
 import { PROFILE_COLLECTION } from '../profile/profile.repository';
@@ -140,6 +141,21 @@ export class WatchedVideoRepository {
     videoId: string,
     badgeId: string,
     watched: boolean,
+    /**
+     * Escritas que precisam cair **no mesmo lote** -- hoje, a linha do ranking
+     * (spec 022, decisao 11).
+     *
+     * Um gancho, e nao o `RankingRepository` injetado aqui, pela mesma razao
+     * pela qual o `ProfileRepository` nao esta: injeta-lo faria o `TrackModule`
+     * importar o `GamesModule`, e o ciclo de arquivos que isso fecha derruba o
+     * boot sem nenhum teste unitario notar. Quem compoe e o service.
+     *
+     * **O lote e o que garante que o placar nunca fique a frente do perfil.**
+     * Um `commit` que falha nao paga nem um nem outro; duas escritas separadas
+     * criariam um XP no ranking que o perfil nao tem, e nada depois compararia
+     * os dois para descobrir.
+     */
+    extra?: (batch: WriteBatch) => void,
   ): Promise<{ granted: boolean; xp: number }> {
     const ref = this.collectionOf(uid).doc(videoId);
     const now = Timestamp.now();
@@ -156,6 +172,8 @@ export class WatchedVideoRepository {
       xp: FieldValue.increment(XP_PER_VIDEO),
       updatedAt: now,
     });
+
+    extra?.(batch);
 
     try {
       await batch.commit();

@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { BADGE_TITLES } from '../track/track.constants';
@@ -24,6 +25,8 @@ import { GymQuestionRepository } from './gym-question.repository';
 import type { DifficultyCounts } from './gym-question.repository';
 import { ChallengeConfigRepository } from './challenge-config.repository';
 import type { GymChallenge } from './entities/gym-challenge.entity';
+import { badgeCountOf } from './entities/ranking-entry.entity';
+import { RankingRepository } from './ranking.repository';
 import { sample, shuffleAlternatives } from './shuffle';
 import { computeXp } from './xp';
 import { nextGrade } from './grade-progression';
@@ -46,11 +49,14 @@ import type {
  */
 @Injectable()
 export class GamesService {
+  private readonly logger = new Logger(GamesService.name);
+
   constructor(
     private readonly challenges: GymChallengeRepository,
     private readonly questions: GymQuestionRepository,
     private readonly configs: ChallengeConfigRepository,
     private readonly profiles: ProfileRepository,
+    private readonly ranking: RankingRepository,
   ) {}
 
   protected assertBadge(badgeId: string): BadgeId {
@@ -416,6 +422,11 @@ export class GamesService {
         ? computeXp({ serverSeconds, clientElapsedMs: dto.clientElapsedMs })
         : 0;
 
+    // A linha do placar entra **no mesmo lote** do XP do perfil (decisao 11):
+    // um lote que falhasse pela metade deixaria o ranking a frente do perfil, e
+    // nada depois compararia os dois para descobrir.
+    const rankingRow = await this.ranking.findByUid(uid);
+
     await this.challenges.recordAnswer(
       badge,
       uid,
@@ -428,6 +439,14 @@ export class GamesService {
         clientElapsedMs: dto.clientElapsedMs,
       },
       xpAwarded,
+      (batch) =>
+        this.ranking.addXpToBatch(
+          batch,
+          uid,
+          rankingRow.found,
+          xpAwarded,
+          rankingRow.entry?.xp ?? 0,
+        ),
     );
 
     const totalXp = profile.entry.xp + xpAwarded;
@@ -514,6 +533,12 @@ export class GamesService {
 
     const grade = await this.applyGrade(challenge.uid, currentGrade);
 
+    // A contagem de insignias do placar acompanha o `grade`, e e atualizada
+    // aqui e nao no `addXpToBatch`: `badgeCount` muda tres vezes por insignia
+    // conquistada, e `xp` muda a cada questao acertada. Reescrever a linha
+    // inteira a cada resposta seria pagar por um campo que nao mudou.
+    await this.syncRankingBadges(challenge.uid, grade);
+
     return {
       roundComplete: true,
       score,
@@ -521,6 +546,36 @@ export class GamesService {
       badgeUnlocked: true,
       grade,
     };
+  }
+
+  /**
+   * Atualiza `badgeCount` no placar, se o membro estiver nele.
+   *
+   * **Falhar aqui nao pode derrubar a conquista.** A insignia ja foi gravada, o
+   * `grade` ja subiu, e o placar e eventualmente consistente por desenho -- a
+   * proxima resposta certa, ou o proximo backfill, corrige a contagem. E a mesma
+   * decisao do `catch` que engole a falha da notificacao na spec 012: um 500
+   * aqui perderia a conquista do membro por causa de um numero de medalha.
+   */
+  protected async syncRankingBadges(uid: string, grade: number): Promise<void> {
+    try {
+      const row = await this.ranking.findByUid(uid);
+
+      if (!row.found) {
+        return;
+      }
+
+      await this.ranking.upsert({
+        uid,
+        nickname: row.entry!.nickname,
+        xp: row.entry!.xp,
+        badgeCount: badgeCountOf(grade),
+      });
+    } catch (error) {
+      this.logger.error(
+        `Falha ao atualizar as insignias de ${uid} no ranking: ${String(error)}`,
+      );
+    }
   }
 
   /**
