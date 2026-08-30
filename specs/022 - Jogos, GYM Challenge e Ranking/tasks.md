@@ -133,22 +133,22 @@
 - [x] Task 06: `src/games/games.service.ts` — `listChallenges(uid)` e `getChallenge(uid, badgeId)`.
   O `listChallenges` monta as 8 insígnias com um `getAll` nos caminhos exatos, no molde do `watched` da
   spec 019 — não uma consulta por `uid` na coleção.
-- [] Task 07: `src/games/games.controller.ts` — `GET /games/challenges` e `GET /games/challenges/:badgeId`
+- [x] Task 07: `src/games/games.controller.ts` — `GET /games/challenges` e `GET /games/challenges/:badgeId`
   com o guard de sessão padrão. **Sem exemção do `LegalAcceptanceGuard`** (adendo A.4).
-- [] Task 08: `games.controller.spec.ts` das duas rotas.
+- [x] Task 08: `games.controller.spec.ts` das duas rotas.
 
 ---
 
-# Fase 07: Iniciar a rodada []
+# Fase 07: Iniciar a rodada [x]
 
-- [] Task 01: `games.service.spec.ts` — **testes antes** do `startRound`: sorteia 10 da dificuldade da
+- [x] Task 01: `games.service.spec.ts` — **testes antes** do `startRound`: sorteia 10 da dificuldade da
   rodada corrente; embaralha as alternativas e o `correctIndex` **não** sai na resposta; `403` com < 90
   questões; `403` com XP insuficiente; `409` com rodada em andamento não finalizada; refazer rodada já
   aprovada marca `replayed: true` (decisão 21).
-- [] Task 02: `src/games/shuffle.ts` + `shuffle.spec.ts` — Fisher-Yates com a fonte de aleatoriedade
+- [x] Task 02: `src/games/shuffle.ts` + `shuffle.spec.ts` — Fisher-Yates com a fonte de aleatoriedade
   injetável, para o teste ser determinístico. Embaralhar as alternativas **sem** carregar o índice correto
   junto é o defeito que entrega a resposta na ordem.
-- [] Task 03: `GamesService.startRound(uid, badgeId)` — sorteio, embaralhamento e gravação dos 10
+- [x] Task 03: `GamesService.startRound(uid, badgeId)` — sorteio, embaralhamento e gravação dos 10
   documentos do `active_round` num `WriteBatch`, com `servedAt` do servidor.
 - [] Task 04: `src/games/dto/round-question.dto.ts` — `{ index, question, alternatives }`. Nada mais.
 - [] Task 05: `POST /games/challenges/:badgeId/start` com `@Throttle` em `10/min` (decisão 19).
