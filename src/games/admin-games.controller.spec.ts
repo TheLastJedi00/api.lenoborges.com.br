@@ -3,6 +3,7 @@ import { NotFoundException } from '@nestjs/common';
 import { AdminGamesController } from './admin-games.controller';
 import { GymQuestionService } from './gym-question.service';
 import { GeminiService } from './gemini.service';
+import { ChallengeConfigService } from './challenge-config.service';
 import { FirebaseAuthGuard } from '../auth/guards/firebase-auth.guard';
 import { AdminGuard } from '../auth/guards/admin.guard';
 import { GymQuestion } from './entities/gym-question.entity';
@@ -45,6 +46,7 @@ describe('AdminGamesController', () => {
     remove: jest.Mock;
   };
   let gemini: { generate: jest.Mock };
+  let config: { get: jest.Mock; set: jest.Mock };
 
   beforeEach(async () => {
     service = {
@@ -69,11 +71,24 @@ describe('AdminGamesController', () => {
       }),
     };
 
+    const configuracao = {
+      badgeId: 'logica',
+      requiredXp: 200,
+      configured: true,
+      counts: { easy: 1, medium: 0, hard: 0, total: 1, ready: false },
+    };
+
+    config = {
+      get: jest.fn().mockResolvedValue(configuracao),
+      set: jest.fn().mockResolvedValue({ ...configuracao, requiredXp: 350 }),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AdminGamesController],
       providers: [
         { provide: GymQuestionService, useValue: service },
         { provide: GeminiService, useValue: gemini },
+        { provide: ChallengeConfigService, useValue: config },
       ],
     })
       .overrideGuard(FirebaseAuthGuard)
@@ -217,6 +232,35 @@ describe('AdminGamesController', () => {
       ]);
       expect(gravadas.questions).toHaveLength(2);
       expect(gravadas.questions[0].id).toBe('q-1');
+    });
+  });
+
+  describe('challenge-config', () => {
+    it('devolve o XP minimo com a contagem no mesmo corpo', async () => {
+      // A configuracao sem o banco de questoes embaixo nao tem contexto, e a
+      // tela desenha os dois no mesmo bloco (decisao 11).
+      const resposta = await controller.getConfig('logica');
+
+      expect(resposta.requiredXp).toBe(200);
+      expect(resposta.counts.total).toBe(1);
+      expect(resposta.configured).toBe(true);
+    });
+
+    it('salva e devolve o valor novo', async () => {
+      const resposta = await controller.setConfig('logica', {
+        requiredXp: 350,
+      });
+
+      expect(config.set).toHaveBeenCalledWith('logica', 350);
+      expect(resposta.requiredXp).toBe(350);
+    });
+
+    it('propaga o 404 de insignia sem desafio', async () => {
+      config.get.mockRejectedValue(new NotFoundException());
+
+      await expect(controller.getConfig('final-gcp')).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 

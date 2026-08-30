@@ -7,6 +7,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Query,
   UseGuards,
 } from '@nestjs/common';
@@ -30,6 +31,11 @@ import { GenerateQuestionsDto } from './dto/generate-questions.dto';
 import type { GeneratedQuestionsDto } from './dto/generate-questions.dto';
 import { BulkCreatedQuestionsDto } from './dto/generate-questions.dto';
 import { BulkCreateQuestionsDto } from './dto/bulk-create-questions.dto';
+import { ChallengeConfigService } from './challenge-config.service';
+import {
+  ChallengeConfigDto,
+  SetChallengeConfigDto,
+} from './dto/challenge-config.dto';
 import {
   QuestionDto,
   QuestionListDto,
@@ -54,6 +60,7 @@ export class AdminGamesController {
   constructor(
     private readonly questions: GymQuestionService,
     private readonly gemini: GeminiService,
+    private readonly config: ChallengeConfigService,
   ) {}
 
   @Get(':badgeId/questions')
@@ -147,6 +154,35 @@ export class AdminGamesController {
     const entries = await this.questions.createMany(badgeId, dto.questions);
 
     return { questions: entries.map(toQuestionDto) };
+  }
+
+  @Get(':badgeId/challenge-config')
+  @ApiOperation({
+    summary: 'A configuração do desafio, com a contagem de questões',
+    description:
+      'O XP mínimo e o banco de questões vêm juntos porque a tela os desenha ' +
+      'no mesmo bloco: a configuração sem o banco embaixo não tem contexto.',
+  })
+  @ApiResponse({ status: 200, type: ChallengeConfigDto })
+  async getConfig(
+    @Param('badgeId') badgeId: string,
+  ): Promise<ChallengeConfigDto> {
+    return this.config.get(badgeId);
+  }
+
+  @Put(':badgeId/challenge-config')
+  @ApiOperation({
+    summary: 'Define o XP mínimo para participar',
+    description:
+      'Zero é sem exigência, e é o padrão de quem nunca configurou. Salvar ' +
+      'duas vezes é a operação normal da tela.',
+  })
+  @ApiResponse({ status: 200, type: ChallengeConfigDto })
+  async setConfig(
+    @Param('badgeId') badgeId: string,
+    @Body() dto: SetChallengeConfigDto,
+  ): Promise<ChallengeConfigDto> {
+    return this.config.set(badgeId, dto.requiredXp);
   }
 
   @Patch(':badgeId/questions/:questionId')

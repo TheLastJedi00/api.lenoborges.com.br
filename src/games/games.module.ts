@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { GymQuestionRepository } from './gym-question.repository';
 import { GymQuestionService } from './gym-question.service';
 import { GeminiService } from './gemini.service';
+import { ChallengeConfigRepository } from './challenge-config.repository';
+import { ChallengeConfigService } from './challenge-config.service';
 import { AdminGamesController } from './admin-games.controller';
 
 /**
@@ -16,7 +18,17 @@ import { AdminGamesController } from './admin-games.controller';
  */
 @Module({
   controllers: [AdminGamesController],
-  providers: [GymQuestionRepository, GymQuestionService, GeminiService],
-  exports: [GymQuestionRepository, GymQuestionService],
+  providers: [
+    GymQuestionRepository,
+    GymQuestionService,
+    GeminiService,
+    ChallengeConfigRepository,
+    ChallengeConfigService,
+  ],
+  exports: [
+    GymQuestionRepository,
+    GymQuestionService,
+    ChallengeConfigRepository,
+  ],
 })
 export class GamesModule {}
