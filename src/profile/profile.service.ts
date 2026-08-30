@@ -18,6 +18,8 @@ import { PrivacyPreferenceDto } from './dto/privacy-preference.dto';
 import { SetNicknameDto } from './dto/nickname.dto';
 import { NicknameRepository } from './nickname.repository';
 import { RankingRepository } from '../games/ranking.repository';
+import { GymChallengeRepository } from '../games/gym-challenge.repository';
+import { CHALLENGE_BADGE_IDS } from '../games/games.constants';
 import { badgeCountOf } from '../games/entities/ranking-entry.entity';
 import { ProfileDto } from './dto/profile.dto';
 import { PublicMemberDto } from './dto/public-member.dto';
@@ -72,6 +74,7 @@ export class ProfileService {
     private readonly watchedVideoRepository: WatchedVideoRepository,
     private readonly nicknameRepository: NicknameRepository,
     private readonly rankingRepository: RankingRepository,
+    private readonly gymChallengeRepository: GymChallengeRepository,
   ) {}
 
   /**
@@ -438,6 +441,21 @@ export class ProfileService {
     // que ela assistiu vai junto.
     await this.legalAcceptanceRepository.removeAll(userId);
     await this.watchedVideoRepository.removeAll(userId);
+    // E os do GYM Challenge (spec 022, decisao 14). **Quinta e sexta vez que a
+    // regra da subcolecao vale**: `gym_challenges/{badgeId__uid}` carrega
+    // `active_round` dentro, e o `removeAll` de la apaga a subcolecao antes do
+    // pai -- apagar o pai primeiro deixaria dez documentos orfaos por insignia:
+    // invisiveis, cobrados e impossiveis de encontrar depois.
+    await this.gymChallengeRepository.removeAll(userId, CHALLENGE_BADGE_IDS);
+    // A linha do placar, que e gamertag, XP e insignias ligados ao `uid`.
+    await this.rankingRepository.remove(userId);
+    // **E a gamertag volta a ficar livre.** E o unico jeito de o membro que
+    // voltar nao encontrar o proprio nome ocupado por um fantasma: um documento
+    // de unicidade cujo `uid` aponta para um perfil que nao existe mais, e que
+    // ninguem consegue liberar sem mexer no banco a mao.
+    if (profile.entry.nickname) {
+      await this.nicknameRepository.release(profile.entry.nickname);
+    }
     await this.repository.remove(userId);
 
     // 5. A inscricao na lista de espera, que e nome, telefone e e-mail crus.

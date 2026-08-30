@@ -18,6 +18,7 @@ import { LegalAcceptanceRepository } from '../legal/legal-acceptance.repository'
 import { WatchedVideoRepository } from '../track/watched-video.repository';
 import { NicknameRepository } from './nickname.repository';
 import { RankingRepository } from '../games/ranking.repository';
+import { GymChallengeRepository } from '../games/gym-challenge.repository';
 
 describe('ProfileService', () => {
   let service: ProfileService;
@@ -45,6 +46,7 @@ describe('ProfileService', () => {
   let watchedVideoRepository: { removeAll: jest.Mock };
   let nicknameRepository: { claim: jest.Mock; release: jest.Mock };
   let rankingRepository: { upsert: jest.Mock; remove: jest.Mock };
+  let gymChallengeRepository: { removeAll: jest.Mock };
 
   beforeEach(async () => {
     repository = {
@@ -89,6 +91,7 @@ describe('ProfileService', () => {
       release: jest.fn(),
       remove: registra('ranking.remove'),
     } as unknown as { upsert: jest.Mock; remove: jest.Mock };
+    gymChallengeRepository = { removeAll: registra('gym.removeAll') };
     authService = {
       reauthenticate: jest.fn().mockResolvedValue('id-token-fresco'),
       continueUrl: 'http://localhost:4200/?entrar=1',
@@ -116,6 +119,10 @@ describe('ProfileService', () => {
         },
         { provide: NicknameRepository, useValue: nicknameRepository },
         { provide: RankingRepository, useValue: rankingRepository },
+        {
+          provide: GymChallengeRepository,
+          useValue: gymChallengeRepository,
+        },
       ],
     }).compile();
 
@@ -246,6 +253,7 @@ describe('ProfileService', () => {
         linkedin: null,
         instagram: null,
         completedAt: new Date('2026-01-01T00:00:00.000Z'),
+        nickname: 'Fulano_Dev',
         waitlistEntryId: 'fulano@email.com',
       },
     };
@@ -270,6 +278,16 @@ describe('ProfileService', () => {
         // comportamento ligado a um `uid`: quem pediu para ser esquecido leva
         // junto o que assistiu.
         'watched.removeAll',
+        // E os do GYM Challenge, com a subcolecao `active_round` dentro deles
+        // (spec 022, decisao 14). Quinta e sexta vez que a mesma regra vale.
+        'gym.removeAll',
+        // A linha do placar: gamertag, XP e insignias ligados ao uid.
+        'ranking.remove',
+        // **E a gamertag volta a ficar livre.** Sem isto, o membro que voltasse
+        // encontraria o proprio nome ocupado por um fantasma -- um documento de
+        // unicidade cujo uid aponta para um perfil que nao existe mais, e que
+        // ninguem consegue liberar sem mexer no banco a mao.
+        'nickname.release',
         'profile.remove',
         'waitlist.remove',
         'deleteUser',

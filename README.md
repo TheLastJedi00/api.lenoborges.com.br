@@ -1532,3 +1532,44 @@ projetos**, com o `.env` de cada um.
 **O snapshot não é idempotente dentro do mesmo dia, e nem deveria ser**: rodar duas vezes zera a
 variação, porque a segunda execução copia a posição de hoje para ontem. É o comportamento correto de um
 snapshot, e o `--dry-run` existe para conferir antes.
+
+### Excluir a conta: sexta e sétima subcoleção, e a gamertag que volta a ficar livre
+
+A ordem de exclusão da spec 013 cresce, e o **usuário do Auth continua morrendo por último**. Entram,
+antes de `profiles/{uid}`:
+
+- `gym_challenges/{badgeId__uid}` das oito insígnias, **com a subcoleção `active_round` apagada antes do
+  pai** — apagar o pai primeiro deixaria dez documentos órfãos por insígnia: invisíveis, cobrados e
+  impossíveis de encontrar depois. É a quinta e a sexta vez que este produto esbarra na mesma regra,
+  depois dos votos do Mural, de `notification_reads`, de `legal_acceptances` e de `watched_videos`.
+- `ranking/{uid}`, que é gamertag, XP e insígnias ligados ao `uid`.
+- `nicknames/{nickname}` — **a gamertag volta a ficar livre**, e este é o único jeito de o membro que
+  voltar não encontrar o próprio nome ocupado por um fantasma: um documento de unicidade cujo `uid`
+  aponta para um perfil que não existe mais, e que ninguém consegue liberar sem mexer no banco à mão.
+
+`profile.service.spec.ts` compara a **lista de chamadas na ordem**, e é ele que impede a sétima vez.
+
+### As specs que esta emenda
+
+- **008 (Liga Dev)** — emenda fundamental: `grade` deixa de ser exclusivamente manual. A promessa de
+  "jogos e ranking" ganha regra e implementação.
+- **009 (Trilha)** — estendida: a administração ganha a seção de questões, e `BADGE_IDS` segue sendo a
+  fonte de verdade das insígnias.
+- **013 (Meu Perfil)** — a ordem de exclusão cresce em três passos.
+- **019 (Vídeos assistidos e XP)** — emenda: **a invariante "XP = 10 × documentos em `watched_videos`"
+  deixa de valer.** O XP passa a ter duas fontes, e a reconciliação precisa somar as duas — o ponto em
+  aberto 3 daquela spec ("não existe caminho para reconciliar XP") ganha urgência. A decisão 2 de lá
+  continua: o XP do GYM Challenge também é irreversível.
+
+### O deploy desta spec
+
+```bash
+firebase deploy --only firestore:indexes --project dev-liga-dev
+firebase deploy --only firestore:indexes --project <producao>
+
+npm run ranking:backfill   # com o .env de cada projeto, ANTES do tráfego
+```
+
+**Os dois projetos, com `--project` explícito nos dois.** É a lição de 2026-08-28, e ela custou as duas
+telas ordenadas do `dev-liga-dev`. O backfill não é opcional: sem ele o placar responde `200` com lista
+vazia, e nada aparece em log nenhum.

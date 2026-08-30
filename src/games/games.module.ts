@@ -4,10 +4,9 @@ import { GymQuestionService } from './gym-question.service';
 import { GeminiService } from './gemini.service';
 import { ChallengeConfigRepository } from './challenge-config.repository';
 import { ChallengeConfigService } from './challenge-config.service';
-import { GymChallengeRepository } from './gym-challenge.repository';
 import { GamesService } from './games.service';
 import { GamesController } from './games.controller';
-import { RankingModule } from './ranking.module';
+import { GamesDataModule } from './games-data.module';
 import { RankingService } from './ranking.service';
 import { RankingController } from './ranking.controller';
 import { ProfileModule } from '../profile/profile.module';
@@ -24,7 +23,7 @@ import { AdminGamesController } from './admin-games.controller';
  * nenhum deles monta o `AppModule`.
  */
 @Module({
-  imports: [forwardRef(() => ProfileModule), RankingModule],
+  imports: [forwardRef(() => ProfileModule), GamesDataModule],
   controllers: [AdminGamesController, GamesController, RankingController],
   providers: [
     GymQuestionRepository,
@@ -32,7 +31,6 @@ import { AdminGamesController } from './admin-games.controller';
     GeminiService,
     ChallengeConfigRepository,
     ChallengeConfigService,
-    GymChallengeRepository,
     GamesService,
     RankingService,
   ],
@@ -40,9 +38,8 @@ import { AdminGamesController } from './admin-games.controller';
     GymQuestionRepository,
     GymQuestionService,
     ChallengeConfigRepository,
-    GymChallengeRepository,
     GamesService,
-    RankingModule,
+    GamesDataModule,
   ],
 })
 export class GamesModule {}

@@ -9,7 +9,7 @@ import { MuralModule } from '../mural/mural.module';
 import { LegalModule } from '../legal/legal.module';
 import { WatchedVideoModule } from '../track/watched-video.module';
 import { MembersController } from './members.controller';
-import { RankingModule } from '../games/ranking.module';
+import { GamesDataModule } from '../games/games-data.module';
 
 /**
  * O `forwardRef` no `AuthModule` e a spec 013 chegando: as tres operacoes de
@@ -43,13 +43,14 @@ import { RankingModule } from '../games/ranking.module';
     forwardRef(() => LegalModule),
     WatchedVideoModule,
     // **E o quinto que NAO virou ciclo, e isso e a decisao** (spec 022).
-    // Escolher a gamertag coloca a pessoa no placar, e excluir a conta a tira
-    // dele -- este modulo precisa do `RankingRepository`. Pendura-lo no
-    // `GamesModule` obrigaria a importar o `GamesModule` inteiro, que importa
-    // este de volta; o `RankingModule` nao importa nada e corta a volta na raiz.
-    // Ver o comentario dele, e o do `WatchedVideoModule`, que resolveu o mesmo
-    // problema na spec 019 depois de derrubar o boot.
-    RankingModule,
+    // Escolher a gamertag coloca a pessoa no placar, e excluir a conta apaga a
+    // linha do placar e os desafios com a subcolecao dentro -- este modulo
+    // precisa do `RankingRepository` e do `GymChallengeRepository`. Pendura-los
+    // no `GamesModule` obrigaria a importar o `GamesModule` inteiro, que importa
+    // este de volta; o `GamesDataModule` nao importa nada e corta a volta na
+    // raiz. Ver o comentario dele, e o do `WatchedVideoModule`, que resolveu o
+    // mesmo problema na spec 019 depois de derrubar o boot.
+    GamesDataModule,
   ],
   controllers: [ProfileController, MembersController],
   providers: [ProfileRepository, ProfileService, NicknameRepository],
