@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
 import { AdminGamesController } from './admin-games.controller';
 import { GymQuestionService } from './gym-question.service';
+import { GeminiService } from './gemini.service';
 import { FirebaseAuthGuard } from '../auth/guards/firebase-auth.guard';
 import { AdminGuard } from '../auth/guards/admin.guard';
 import { GymQuestion } from './entities/gym-question.entity';
@@ -39,9 +40,11 @@ describe('AdminGamesController', () => {
     list: jest.Mock;
     counts: jest.Mock;
     create: jest.Mock;
+    createMany: jest.Mock;
     update: jest.Mock;
     remove: jest.Mock;
   };
+  let gemini: { generate: jest.Mock };
 
   beforeEach(async () => {
     service = {
@@ -54,13 +57,24 @@ describe('AdminGamesController', () => {
         ready: false,
       }),
       create: jest.fn().mockResolvedValue(questao()),
+      createMany: jest.fn().mockResolvedValue([questao(), questao()]),
       update: jest.fn().mockResolvedValue(questao({ correctIndex: 2 })),
       remove: jest.fn().mockResolvedValue(undefined),
     };
 
+    gemini = {
+      generate: jest.fn().mockResolvedValue({
+        questions: [dto()],
+        discarded: 2,
+      }),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AdminGamesController],
-      providers: [{ provide: GymQuestionService, useValue: service }],
+      providers: [
+        { provide: GymQuestionService, useValue: service },
+        { provide: GeminiService, useValue: gemini },
+      ],
     })
       .overrideGuard(FirebaseAuthGuard)
       .useValue({ canActivate: () => true })
@@ -128,6 +142,81 @@ describe('AdminGamesController', () => {
       const criada = await controller.create('logica', dto());
 
       expect(criada.correctIndex).toBe(0);
+    });
+  });
+
+  describe('POST /admin/badges/:badgeId/questions/generate', () => {
+    it('devolve o rascunho e a contagem de descartadas', async () => {
+      const rascunho = await controller.generate('logica', {
+        prompt: 'laços e condicionais em Java',
+        difficulty: 'easy',
+        count: 10,
+      });
+
+      expect(rascunho.questions).toHaveLength(1);
+      // O admin precisa ver que pediu 10 e revisou 1. Sem o numero, o rascunho
+      // curto parece um limite do produto.
+      expect(rascunho.discarded).toBe(2);
+    });
+
+    it('nao grava nada', async () => {
+      // Rascunho e proposta. O que grava e o bulk, depois que o admin editou e
+      // escolheu -- e essa separacao e o que impede uma questao errada de entrar
+      // no banco por descuido de um modelo.
+      await controller.generate('logica', {
+        prompt: 'laços e condicionais em Java',
+        difficulty: 'easy',
+        count: 10,
+      });
+
+      expect(service.create).not.toHaveBeenCalled();
+      expect(service.createMany).not.toHaveBeenCalled();
+    });
+
+    it('confere a insignia antes de gastar a chamada paga', async () => {
+      // Gerar trinta questoes para uma insignia que nao existe custaria a
+      // chamada inteira para depois responder 404 no bulk.
+      service.counts.mockRejectedValue(new NotFoundException());
+
+      await expect(
+        controller.generate('final-gcp', {
+          prompt: 'laços e condicionais em Java',
+          difficulty: 'easy',
+          count: 10,
+        }),
+      ).rejects.toThrow(NotFoundException);
+
+      expect(gemini.generate).not.toHaveBeenCalled();
+    });
+
+    it('manda o titulo da insignia junto do tema', async () => {
+      await controller.generate('poo', {
+        prompt: 'herança e polimorfismo',
+        difficulty: 'medium',
+        count: 20,
+      });
+
+      expect(gemini.generate).toHaveBeenCalledWith({
+        badgeTitle: 'Insígnia da POO',
+        prompt: 'herança e polimorfismo',
+        difficulty: 'medium',
+        count: 20,
+      });
+    });
+  });
+
+  describe('POST /admin/badges/:badgeId/questions/bulk', () => {
+    it('grava o lote e devolve as questoes com id', async () => {
+      const gravadas = await controller.bulk('logica', {
+        questions: [dto(), dto({ difficulty: 'hard' })],
+      });
+
+      expect(service.createMany).toHaveBeenCalledWith('logica', [
+        dto(),
+        dto({ difficulty: 'hard' }),
+      ]);
+      expect(gravadas.questions).toHaveLength(2);
+      expect(gravadas.questions[0].id).toBe('q-1');
     });
   });
 

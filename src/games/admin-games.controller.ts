@@ -19,10 +19,17 @@ import {
 } from '@nestjs/swagger';
 import { FirebaseAuthGuard } from '../auth/guards/firebase-auth.guard';
 import { AdminGuard } from '../auth/guards/admin.guard';
+import { BADGE_TITLES } from '../track/track.constants';
+import type { BadgeId } from '../track/track.constants';
 import { DIFFICULTIES, Difficulty } from './games.constants';
 import { GymQuestionService } from './gym-question.service';
+import { GeminiService } from './gemini.service';
 import { CreateQuestionDto } from './dto/create-question.dto';
 import { UpdateQuestionDto } from './dto/update-question.dto';
+import { GenerateQuestionsDto } from './dto/generate-questions.dto';
+import type { GeneratedQuestionsDto } from './dto/generate-questions.dto';
+import { BulkCreatedQuestionsDto } from './dto/generate-questions.dto';
+import { BulkCreateQuestionsDto } from './dto/bulk-create-questions.dto';
 import {
   QuestionDto,
   QuestionListDto,
@@ -44,7 +51,10 @@ import {
 @Controller('admin/badges')
 @UseGuards(FirebaseAuthGuard, AdminGuard)
 export class AdminGamesController {
-  constructor(private readonly questions: GymQuestionService) {}
+  constructor(
+    private readonly questions: GymQuestionService,
+    private readonly gemini: GeminiService,
+  ) {}
 
   @Get(':badgeId/questions')
   @ApiOperation({
@@ -88,6 +98,55 @@ export class AdminGamesController {
     @Body() dto: CreateQuestionDto,
   ): Promise<QuestionDto> {
     return toQuestionDto(await this.questions.create(badgeId, dto));
+  }
+
+  @Post(':badgeId/questions/generate')
+  @ApiOperation({
+    summary: 'Gera questões com IA — rascunho, sem gravar nada',
+    description:
+      'Devolve uma proposta para o admin revisar. **Nada é persistido aqui**: ' +
+      'o que grava é o `bulk`, depois que ele editou e escolheu. Questão fora ' +
+      'do formato é descartada em silêncio, e `discarded` diz quantas foram.',
+  })
+  @ApiResponse({ status: 200, description: 'Rascunho de questões' })
+  @ApiResponse({
+    status: 503,
+    description: 'Sem GEMINI_API_KEY, ou a IA não respondeu',
+  })
+  async generate(
+    @Param('badgeId') badgeId: string,
+    @Body() dto: GenerateQuestionsDto,
+  ): Promise<GeneratedQuestionsDto> {
+    // A conferencia do `badgeId` vem antes da chamada paga. Gerar trinta
+    // questoes para uma insignia que nao existe custaria a chamada inteira para
+    // depois responder 404 no `bulk`.
+    await this.questions.counts(badgeId);
+
+    return this.gemini.generate({
+      badgeTitle: BADGE_TITLES[badgeId as BadgeId],
+      prompt: dto.prompt,
+      difficulty: dto.difficulty,
+      count: dto.count,
+    });
+  }
+
+  @Post(':badgeId/questions/bulk')
+  @ApiOperation({
+    summary: 'Grava em lote as questões aprovadas do rascunho',
+    description:
+      'Tudo ou nada, inclusive na conferência do teto de 33 por nível: gravar ' +
+      'as que cabem deixaria o admin com um rascunho parcialmente salvo e ' +
+      'nenhuma forma de saber quais entraram.',
+  })
+  @ApiResponse({ status: 201, type: BulkCreatedQuestionsDto })
+  @ApiResponse({ status: 409, description: 'O lote estoura o teto do nível' })
+  async bulk(
+    @Param('badgeId') badgeId: string,
+    @Body() dto: BulkCreateQuestionsDto,
+  ): Promise<BulkCreatedQuestionsDto> {
+    const entries = await this.questions.createMany(badgeId, dto.questions);
+
+    return { questions: entries.map(toQuestionDto) };
   }
 
   @Patch(':badgeId/questions/:questionId')

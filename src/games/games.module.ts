@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { GymQuestionRepository } from './gym-question.repository';
 import { GymQuestionService } from './gym-question.service';
+import { GeminiService } from './gemini.service';
 import { AdminGamesController } from './admin-games.controller';
 
 /**
@@ -15,7 +16,7 @@ import { AdminGamesController } from './admin-games.controller';
  */
 @Module({
   controllers: [AdminGamesController],
-  providers: [GymQuestionRepository, GymQuestionService],
+  providers: [GymQuestionRepository, GymQuestionService, GeminiService],
   exports: [GymQuestionRepository, GymQuestionService],
 })
 export class GamesModule {}
