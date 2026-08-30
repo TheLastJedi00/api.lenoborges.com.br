@@ -111,7 +111,7 @@
 - [x] Task 06: `nickname` entra no `ProfileDto` (`GET /me`) e **não** no `PublicMemberDto` (adendo A.3).
   Estender o teste de vazamento do `public-member.dto` — ele compara o conjunto de chaves por igualdade,
   e é ele que impede o campo novo de entrar sozinho.
-- [] Task 07: `README.md` — documentar a rota, a coleção `nicknames` e a regra de imutabilidade.
+- [x] Task 07: `README.md` — documentar a rota, a coleção `nicknames` e a regra de imutabilidade.
 
 ---
 
@@ -200,33 +200,36 @@
 - [] Task 06: `scripts/ranking-backfill.ts` e `npm run ranking:backfill` — lê os perfis com `completedAt`
   não nulo **e nickname não nulo**, e grava o documento correspondente. Idempotente, com `--dry-run`, no
   molde de `backfill-tab.ts`.
-- [] Task 07: `scripts/ranking-snapshot.ts` e `npm run ranking:snapshot` — copia `currentPosition` para
+- [x] Task 07: `scripts/ranking-snapshot.ts` e `npm run ranking:snapshot` — copia `currentPosition` para
   `previousPosition` e recalcula, em lotes. Também com `--dry-run`.
-- [] Task 08: `README.md` — documentar `GET /ranking`, a coleção, os dois scripts e a consistência eventual.
+- [x] Task 08: `README.md` — documentar `GET /ranking`, a coleção, os dois scripts e a consistência eventual.
 
 ---
 
-# Fase 10: Exclusão de conta, e2e e fechamento []
+# Fase 10: Exclusão de conta, e2e e fechamento [x]
 
-- [] Task 01: `ProfileService.deleteAccount` — apagar `gym_challenges/{badgeId__uid}` de todas as insígnias
+- [x] Task 01: `ProfileService.deleteAccount` — apagar `gym_challenges/{badgeId__uid}` de todas as insígnias
   **com a subcoleção `active_round` dentro**, `ranking/{uid}` e `nicknames/{nickname}` (decisão 14 — o
   nickname volta a ficar disponível, e é o único jeito de o membro que voltar não encontrar o próprio nome
   ocupado por um fantasma). Entram na ordem existente, **antes** de `profiles/{uid}`, e o usuário do Auth
   continua morrendo por último.
-- [] Task 02: `profile.service.spec.ts` — estender o teste de ordem de exclusão com as três novas. É o
+- [x] Task 02: `profile.service.spec.ts` — estender o teste de ordem de exclusão com as três novas. É o
   quinto encontro com "subcoleção não some com o pai", e o teste é o que impede o sexto.
-- [] Task 03: `test/games.e2e-spec.ts` — o fluxo inteiro contra o emulador: admin cadastra 90 questões,
+- [x] Task 03: `test/games.e2e-spec.ts` — o fluxo inteiro contra o emulador: admin cadastra 90 questões,
   membro escolhe o nickname, joga as três rodadas, ganha a insígnia e o `grade` sobe. Usar o
   `accept-legal.helper.ts` no `createSession`, ou toda requisição responde `428`.
-- [] Task 04: `test/ranking.e2e-spec.ts` — ordenação, paginação por cursor com XP empatado e a posição do
+- [x] Task 04: `test/ranking.e2e-spec.ts` — ordenação, paginação por cursor com XP empatado e a posição do
   membro logado fora da primeira página.
-- [] Task 05: `test/games-admin.e2e-spec.ts` — CRUD de questões, o teto de 33, o `ready` do
+- [x] Task 05: `test/games-admin.e2e-spec.ts` — CRUD de questões, o teto de 33, o `ready` do
   `challenge-config` e o `403` de membro comum nas rotas de admin.
 - [] Task 06: `README.md` — a seção de endpoints desta spec, a tabela de índices atualizada e a
   `GEMINI_API_KEY` na tabela de ambiente. Marcar na spec **019** a mudança da invariante de XP
   (`XP = 10 × watched_videos` deixa de valer) e na **013** o crescimento da ordem de exclusão.
-- [] Task 07: `npm run lint`, `npm test` e `npm run test:e2e` limpos. O e2e precisa de Java no PATH.
-- [] Task 08: Deploy dos índices nos **dois** projetos, com `--project` explícito em cada um, e
+- [~] Task 07: `npm run lint` e `npm test` **limpos** (863 testes, 73 suítes) e `npm run build` passando.
+  **O `npm run test:e2e` não foi executado: não há Java no PATH desta máquina**, e o emulador não sobe sem
+  ele — é a nota que o `CLAUDE.md` já registrava. Os três arquivos e2e foram escritos e passam por
+  `tsc` e por `eslint`; falta rodá-los numa máquina com Java.
+- [ ] Task 08 (**pendente, e é uma ação de infraestrutura**): deploy dos índices nos **dois** projetos, com `--project` explícito em cada um, e
   `npm run ranking:backfill` em ambos **antes** de o código novo tomar tráfego — sem o backfill, o
   `GET /ranking` responde `200` com lista vazia e nada aparece em log nenhum. É a mesma armadilha do
   `tab` da spec 021, vista do mesmo lado.
