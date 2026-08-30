@@ -375,7 +375,7 @@ class FakeCollectionReference<T = Doc> {
 }
 
 interface PendingWrite {
-  kind: 'create' | 'update' | 'delete';
+  kind: 'create' | 'set' | 'update' | 'delete';
   ref: FakeDocumentReference<unknown>;
   data: Doc;
 }
@@ -387,6 +387,17 @@ class FakeWriteBatch {
 
   create(ref: FakeDocumentReference<unknown>, data: unknown): void {
     this.writes.push({ kind: 'create', ref, data: toRaw(ref, data) });
+  }
+
+  /**
+   * `set()` dentro do lote: sobrescreve, e **nao falha em caminho ocupado**.
+   *
+   * E o que o `GymChallengeRepository` usa para o documento de estado, que muda
+   * a cada rodada. A diferenca para o `create()` acima e exatamente a que o
+   * codigo real depende, e por isso o fake nao pode trata-los igual.
+   */
+  set(ref: FakeDocumentReference<unknown>, data: unknown): void {
+    this.writes.push({ kind: 'set', ref, data: toRaw(ref, data) });
   }
 
   update(ref: FakeDocumentReference<unknown>, data: Doc): void {
@@ -424,7 +435,7 @@ class FakeWriteBatch {
     for (const write of this.writes) {
       if (write.kind === 'delete') {
         this.store.delete(write.ref.path);
-      } else if (write.kind === 'create') {
+      } else if (write.kind === 'create' || write.kind === 'set') {
         this.store.set(write.ref.path, write.data);
       } else {
         this.store.set(
