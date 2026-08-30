@@ -1,4 +1,8 @@
-import { NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { FakeFirestore } from '../track/testing/fake-firestore';
 import { FirebaseService } from '../auth/firebase.service';
 import { ProfileRepository } from '../profile/profile.repository';
@@ -265,5 +269,177 @@ describe('GamesService — estado do desafio', () => {
         NotFoundException,
       );
     });
+  });
+});
+
+describe('GamesService — iniciar a rodada', () => {
+  it('sorteia dez questoes da dificuldade da rodada corrente', async () => {
+    const { service, seedQuestions } = makeHarness(500);
+    await seedQuestions('logica');
+
+    const rodada = await service.startRound('uid-1', 'logica');
+
+    expect(rodada.round).toBe(1);
+    expect(rodada.difficulty).toBe('easy');
+    expect(rodada.questions).toHaveLength(10);
+  });
+
+  it('a rodada 2 sorteia das medias', async () => {
+    const { service, challenges, seedQuestions } = makeHarness(500);
+    await seedQuestions('logica');
+    const { entry } = await challenges.get('logica', 'uid-1');
+    await challenges.save({ ...entry, currentRound: 2 });
+
+    await expect(service.startRound('uid-1', 'logica')).resolves.toMatchObject({
+      round: 2,
+      difficulty: 'medium',
+    });
+  });
+
+  it('teste-trava: a resposta nao carrega correctIndex nem questionId', async () => {
+    // Num questionario, a resposta certa no trafego e cola -- e o `questionId`
+    // seria o caminho para ler a questao original por outra rota qualquer.
+    const { service, seedQuestions } = makeHarness(500);
+    await seedQuestions('logica');
+
+    const rodada = await service.startRound('uid-1', 'logica');
+
+    for (const questao of rodada.questions) {
+      expect(Object.keys(questao).sort()).toEqual([
+        'alternatives',
+        'index',
+        'question',
+      ]);
+    }
+    expect(JSON.stringify(rodada)).not.toContain('correctIndex');
+    expect(JSON.stringify(rodada)).not.toContain('correctAlternativeIndex');
+  });
+
+  it('grava a rodada com o indice da correta ja embaralhado', async () => {
+    // O indice fica no servidor: e ele que o `answer` usa para dizer qual era a
+    // certa, sem reler a questao original numa ordem que ja mudou.
+    const { service, challenges, seedQuestions } = makeHarness(500);
+    await seedQuestions('logica');
+
+    await service.startRound('uid-1', 'logica');
+    const { entries } = await challenges.listActiveRound('logica', 'uid-1');
+
+    expect(entries).toHaveLength(10);
+    for (const questao of entries) {
+      expect(questao.correctAlternativeIndex).toBeGreaterThanOrEqual(0);
+      expect(questao.correctAlternativeIndex).toBeLessThanOrEqual(3);
+      expect(questao.answeredAt).toBeNull();
+    }
+  });
+
+  it('403 quando faltam questoes', async () => {
+    const { service, seedQuestions } = makeHarness(500);
+    await seedQuestions('logica', 5);
+
+    await expect(service.startRound('uid-1', 'logica')).rejects.toThrow(
+      ForbiddenException,
+    );
+  });
+
+  it('403 quando falta XP', async () => {
+    const { service, configs, seedQuestions } = makeHarness(100);
+    await seedQuestions('logica');
+    await configs.save('logica', 500);
+
+    await expect(service.startRound('uid-1', 'logica')).rejects.toThrow(
+      ForbiddenException,
+    );
+  });
+
+  it('teste-trava: a insignia sem questoes recusa antes de falar de XP', async () => {
+    // A ordem das recusas importa para a mensagem que o membro le: invertida,
+    // alguem sem XP numa insignia sem questoes seria mandado treinar para algo
+    // que nao vai existir.
+    const { service, configs, seedQuestions } = makeHarness(0);
+    await seedQuestions('logica', 5);
+    await configs.save('logica', 500);
+
+    await expect(service.startRound('uid-1', 'logica')).rejects.toThrow(
+      /ainda não está disponível/,
+    );
+  });
+
+  it('409 quando ja ha rodada aberta', async () => {
+    const { service, seedQuestions } = makeHarness(500);
+    await seedQuestions('logica');
+    await service.startRound('uid-1', 'logica');
+
+    await expect(service.startRound('uid-1', 'logica')).rejects.toThrow(
+      ConflictException,
+    );
+  });
+
+  it('rodada com as dez respondidas nao bloqueia um novo start', async () => {
+    // Uma rodada terminada cuja limpeza falhou. Recusar ali prenderia o membro
+    // numa prova acabada sem nenhuma forma de sair.
+    const { service, challenges, seedQuestions } = makeHarness(500);
+    await seedQuestions('logica');
+    await service.startRound('uid-1', 'logica');
+    const { entries } = await challenges.listActiveRound('logica', 'uid-1');
+    const { entry } = await challenges.get('logica', 'uid-1');
+    await challenges.replaceActiveRound(
+      entry,
+      entries.map((questao) => ({
+        ...questao,
+        answeredAt: new Date(),
+        chosenIndex: 0,
+        correct: true,
+        xpAwarded: 50,
+      })),
+    );
+
+    await expect(service.startRound('uid-1', 'logica')).resolves.toBeDefined();
+  });
+
+  it('replay: true ao refazer uma rodada ja aprovada', async () => {
+    const { service, challenges, seedQuestions } = makeHarness(500);
+    await seedQuestions('logica');
+    const { entry } = await challenges.get('logica', 'uid-1');
+    await challenges.save({
+      ...entry,
+      currentRound: 1,
+      roundResults: { 1: { passed: true, score: 9, completedAt: new Date() } },
+    });
+
+    const rodada = await service.startRound('uid-1', 'logica');
+
+    expect(rodada.replay).toBe(true);
+  });
+
+  it('o flag replaying fica no documento pai, e nao nas questoes', async () => {
+    // E propriedade da RODADA. Gravar em dez lugares o que e verdade uma vez so
+    // abre a chance de nove concordarem e um discordar.
+    const { service, challenges, firestore, seedQuestions } = makeHarness(500);
+    await seedQuestions('logica');
+    const { entry } = await challenges.get('logica', 'uid-1');
+    await challenges.save({
+      ...entry,
+      roundResults: { 1: { passed: true, score: 9, completedAt: new Date() } },
+    });
+
+    await service.startRound('uid-1', 'logica');
+
+    expect(firestore.raw('gym_challenges/logica__uid-1')!.replaying).toBe(true);
+  });
+
+  it('duas rodadas seguidas nao servem exatamente as mesmas questoes', async () => {
+    // Com 30 questoes por nivel e 10 por rodada, a chance de as duas listas
+    // saírem identicas e desprezivel -- e a razao do minimo de 30 (decisao 5).
+    const { service, challenges, seedQuestions } = makeHarness(500);
+    await seedQuestions('logica');
+
+    const primeira = await service.startRound('uid-1', 'logica');
+    await challenges.clearActiveRound('logica', 'uid-1');
+    const segunda = await service.startRound('uid-1', 'logica');
+
+    const a = primeira.questions.map((q) => q.question).join('|');
+    const b = segunda.questions.map((q) => q.question).join('|');
+
+    expect(a).not.toBe(b);
   });
 });

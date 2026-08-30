@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { BADGE_TITLES } from '../track/track.constants';
 import type { BadgeId } from '../track/track.constants';
 import { ProfileRepository } from '../profile/profile.repository';
@@ -6,6 +11,7 @@ import {
   CHALLENGE_BADGE_IDS,
   DIFFICULTIES,
   MIN_QUESTIONS_PER_DIFFICULTY,
+  QUESTIONS_PER_ROUND,
   ROUND_NUMBERS,
   ROUND_DIFFICULTY,
   isChallengeBadgeId,
@@ -16,6 +22,8 @@ import { GymQuestionRepository } from './gym-question.repository';
 import type { DifficultyCounts } from './gym-question.repository';
 import { ChallengeConfigRepository } from './challenge-config.repository';
 import type { GymChallenge } from './entities/gym-challenge.entity';
+import { sample, shuffleAlternatives } from './shuffle';
+import type { StartRoundDto } from './dto/round-question.dto';
 import type {
   ChallengeStateDto,
   ChallengeStatus,
@@ -213,5 +221,116 @@ export class GamesService {
   /** A dificuldade que a rodada corrente sorteia. */
   protected difficultyOf(round: RoundNumber) {
     return ROUND_DIFFICULTY[round];
+  }
+
+  /**
+   * Abre a rodada corrente: sorteia dez questoes e as grava (decisoes 4 e 8).
+   *
+   * A ordem das recusas e do mais estrutural para o mais pessoal, e ela importa
+   * para a mensagem que o membro le: "esse desafio ainda nao existe" vem antes
+   * de "voce nao tem XP", que vem antes de "voce ja tem uma rodada aberta".
+   * Invertida, alguem sem XP numa insignia sem questoes seria mandado treinar
+   * para algo que nao vai existir.
+   */
+  async startRound(uid: string, badgeId: string): Promise<StartRoundDto> {
+    const badge = this.assertBadge(badgeId);
+
+    const [profile, { entry: challenge }, config, counts, activeRound] =
+      await Promise.all([
+        this.profiles.findById(uid),
+        this.challenges.get(badge, uid),
+        this.configs.get(badge),
+        this.questions.countByDifficulty(badge),
+        this.challenges.listActiveRound(badge, uid),
+      ]);
+
+    if (!profile.found || !profile.entry) {
+      throw new NotFoundException('Perfil não encontrado.');
+    }
+
+    if (!this.isReady(counts)) {
+      throw new ForbiddenException(
+        'O GYM Challenge dessa insígnia ainda não está disponível.',
+      );
+    }
+
+    if (profile.entry.xp < config.entry.requiredXp) {
+      throw new ForbiddenException(
+        'Você precisa de mais XP para participar desse desafio.',
+      );
+    }
+
+    // **Rodada aberta e a que tem questao sem responder.** Dez respondidas e uma
+    // rodada terminada cuja limpeza falhou, e recusar ali prenderia o membro
+    // numa prova acabada sem nenhuma forma de sair.
+    const hasOpen =
+      activeRound.entries.length > 0 &&
+      activeRound.entries.some((question) => question.answeredAt === null);
+
+    if (hasOpen) {
+      throw new ConflictException('Você já tem uma rodada em andamento.');
+    }
+
+    const round = challenge.currentRound;
+    const difficulty = ROUND_DIFFICULTY[round];
+    const { entries: pool } = await this.questions.listByBadge(
+      badge,
+      difficulty,
+    );
+
+    const picked = sample(pool, QUESTIONS_PER_ROUND);
+    const servedAt = new Date();
+
+    const questions = picked.map((question, index) => {
+      const { alternatives, correctAlternativeIndex } = shuffleAlternatives(
+        question.alternatives,
+        question.correctIndex,
+      );
+
+      return {
+        index,
+        questionId: question.id,
+        // A **foto** do enunciado: o admin pode editar a questao enquanto o
+        // membro joga, e ninguem ve o texto mudar debaixo do dedo. Mesma ideia
+        // da foto da pergunta do Mural na spec 017.
+        question: question.question,
+        alternatives,
+        // Gravado agora e **nunca devolvido antes da resposta**: ele existe para
+        // o `answer` poder dizer qual era a certa, e para a conferencia nao
+        // depender de reler a questao original numa ordem que ja mudou.
+        correctAlternativeIndex,
+        servedAt,
+        answeredAt: null,
+        chosenIndex: null,
+        correct: null,
+        xpAwarded: null,
+        clientElapsedMs: null,
+      };
+    });
+
+    // Refazer rodada ja aprovada e treino (decisao 21). O flag vive no documento
+    // pai e vale para a rodada inteira.
+    const replay = challenge.roundResults[round]?.passed ?? false;
+
+    await this.challenges.replaceActiveRound(
+      {
+        ...challenge,
+        replaying: replay,
+        startedAt:
+          challenge.startedAt.getTime() === 0 ? servedAt : challenge.startedAt,
+      },
+      questions,
+    );
+
+    return {
+      round,
+      difficulty,
+      replay,
+      questions: questions.map((question) => ({
+        index: question.index,
+        question: question.question,
+        alternatives: question.alternatives,
+      })),
+    };
   }
 }
