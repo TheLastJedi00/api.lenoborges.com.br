@@ -97,18 +97,18 @@
 
 ---
 
-# Fase 05: Nickname (gamertag) []
+# Fase 05: Nickname (gamertag) [x]
 
-- [] Task 01: `src/profile/entities/nickname.entity.ts` — `nicknames/{nickname}` com o ID em minúsculas
+- [x] Task 01: `src/profile/entities/nickname.entity.ts` — `nicknames/{nickname}` com o ID em minúsculas
   (adendo A.1). Comentar que `LenoDev` e `lenodev` colidem de propósito.
-- [] Task 02: `src/profile/entities/profile.entity.ts` — campo `nickname: string | null` com `?? null` no
+- [x] Task 02: `src/profile/entities/profile.entity.ts` — campo `nickname: string | null` com `?? null` no
   converter, no molde do `emailOptOut ?? false`. Atualizar `profile.entity.spec.ts`.
-- [] Task 03: `src/profile/dto/nickname.dto.ts` — `@Matches(/^[A-Za-z0-9_-]{3,20}$/)`.
-- [] Task 04: `src/profile/profile.service.spec.ts` — **testes antes**: grava nos dois lugares no mesmo
+- [x] Task 03: `src/profile/dto/nickname.dto.ts` — `@Matches(/^[A-Za-z0-9_-]{3,20}$/)`.
+- [x] Task 04: `src/profile/profile.service.spec.ts` — **testes antes**: grava nos dois lugares no mesmo
   `WriteBatch`; `409` quando o perfil já tem nickname; `409` quando o `create()` bate `ALREADY_EXISTS`;
   a colisão é case-insensitive. É `create()`, nunca `set()` — `set()` rouba o nome de outra pessoa em silêncio.
-- [] Task 05: `ProfileService.setNickname` e `PUT /me/nickname` no `profile.controller.ts`, respondendo `204`.
-- [] Task 06: `nickname` entra no `ProfileDto` (`GET /me`) e **não** no `PublicMemberDto` (adendo A.3).
+- [x] Task 05: `ProfileService.setNickname` e `PUT /me/nickname` no `profile.controller.ts`, respondendo `204`.
+- [x] Task 06: `nickname` entra no `ProfileDto` (`GET /me`) e **não** no `PublicMemberDto` (adendo A.3).
   Estender o teste de vazamento do `public-member.dto` — ele compara o conjunto de chaves por igualdade,
   e é ele que impede o campo novo de entrar sozinho.
 - [] Task 07: `README.md` — documentar a rota, a coleção `nicknames` e a regra de imutabilidade.
