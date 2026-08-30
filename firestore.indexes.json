@@ -73,20 +73,6 @@
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "difficulty",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "gym_questions",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "badgeId",
-          "order": "ASCENDING"
-        },
-        {
           "fieldPath": "createdAt",
           "order": "ASCENDING"
         }
@@ -102,6 +88,24 @@
         },
         {
           "fieldPath": "uid",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "gym_questions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "badgeId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "difficulty",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
           "order": "ASCENDING"
         }
       ]

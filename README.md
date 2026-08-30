@@ -778,18 +778,26 @@ continuou verde enquanto metade do produto não abria.
 | `mural_questions` | `weekId` asc + `createdAt` asc | `listByWeek(byVotes: false)`, a semana em coleta |
 | `badge_videos` | `badgeId` asc + `order` asc | `listByBadge()` **sem** `tab` — a visão da administração |
 | `badge_videos` | `badgeId` asc + `tab` asc + `order` asc | `listByBadge(tab)` — as abas Aulas e Perguntas Frequentes |
-| `gym_questions` | `badgeId` asc + `difficulty` asc | `listByBadge(badgeId, difficulty)` e a contagem por nível |
+| `gym_questions` | `badgeId` asc + `difficulty` asc + `createdAt` asc | `listByBadge(badgeId, difficulty)` **e** a contagem por nível |
 | `gym_questions` | `badgeId` asc + `createdAt` asc | `listByBadge(badgeId)` **sem** dificuldade — a lista inteira do admin |
 | `ranking` | `xp` desc + `uid` asc | `page()` do ranking, ordenado e paginado por cursor |
 
-**A spec 022 acrescenta três, e a terceira tem um detalhe que custa caro esquecer.** O desempate por
-`uid` no índice do ranking não é enfeite: XP empata com frequência — dois membros que assistiram aos
-mesmos vídeos têm o mesmo número — e um `startAfter` sobre um campo não único **pula ou repete linha**
-na página seguinte. O sintoma é um ranking que perde alguém no meio da rolagem, sem erro e com 200.
+**A spec 022 acrescenta três, e o desempate por `uid` no ranking não é enfeite:** XP empata com
+frequência — dois membros que assistiram aos mesmos vídeos têm o mesmo número — e um `startAfter` sobre
+um campo não único **pula ou repete linha** na página seguinte. O sintoma é um ranking que perde alguém
+no meio da rolagem, sem erro e com 200.
 
 O par de `gym_questions` repete a forma do par de `badge_videos` pela mesma razão: o filtro de
 dificuldade é opcional na listagem do admin, então `badgeId` + `createdAt` é uma consulta de verdade e
 não um prefixo da outra.
+
+> **O primeiro deles tinha dois campos e estava errado, e isso foi descoberto no navegador — não pelos
+> testes.** `listByBadge` com dificuldade faz `where badgeId` + `where difficulty` + `orderBy createdAt`,
+> que são **três** campos; um índice de `badgeId` + `difficulty` serve a contagem e **não** serve a
+> listagem, e a tela do admin respondia `500` com "The query requires an index". Nada nas 863 unidades
+> pegou: o `fake-firestore` não exige índice, e o emulador também não — é exatamente o que esta seção já
+> avisava, agora com um exemplo próprio. O de três campos serve as duas consultas, porque
+> `(badgeId, difficulty)` é prefixo dele, então o de dois campos foi **substituído** em vez de somado.
 
 **A spec 012 não acrescentou nenhuma linha a esta tabela, e isso é decisão.** A consulta de
 notificações é `orderBy('createdAt', 'desc').limit(50)` — ordenação por um campo só, que o índice de
