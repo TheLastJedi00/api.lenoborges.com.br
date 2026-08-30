@@ -176,25 +176,25 @@
   avança enquanto a insígnia da posição `grade + 1` estiver desbloqueada, **e para em 8**. Testes:
   `grade: 1` conquistando Angular não sobe; conquistando POO sobe para 2; quem já tinha de 3 a 8
   desbloqueados sobe até 8 de uma vez; `grade: 8` não vira 9.
-- [] Task 07: `POST /games/challenges/:badgeId/answer` com `@Throttle` em `120/min`, devolvendo
+- [x] Task 07: `POST /games/challenges/:badgeId/answer` com `@Throttle` em `120/min`, devolvendo
   `{ correct, correctAlternativeIndex, xpAwarded, replay, roundComplete?, roundPassed?, badgeUnlocked?, totalXp? }`.
-- [] Task 08: `.spec.ts` do controller para as respostas de meio e de fim de rodada.
+- [x] Task 08: `.spec.ts` do controller para as respostas de meio e de fim de rodada.
 
 ---
 
-# Fase 09: Ranking []
+# Fase 09: Ranking [x]
 
-- [] Task 01: `src/games/entities/ranking-entry.entity.ts` e o converter — a forma vigente do adendo A.1,
+- [x] Task 01: `src/games/entities/ranking-entry.entity.ts` e o converter — a forma vigente do adendo A.1,
   com `nickname` (nunca `name`) e os três campos de posição da decisão 22, todos com `?? null`.
-- [] Task 02: `src/games/ranking.repository.ts` + `.spec.ts` — `page({ limit, after })` ordenando por
+- [x] Task 02: `src/games/ranking.repository.ts` + `.spec.ts` — `page({ limit, after })` ordenando por
   `xp DESC, uid ASC`, mais `upsert` e `getByUid`. O desempate por `uid` é o que impede a paginação de
   pular linha em XP empatado (adendo A.5).
-- [] Task 03: `src/games/ranking.service.spec.ts` — **testes antes**: a página vem ordenada; a posição do
+- [x] Task 03: `src/games/ranking.service.spec.ts` — **testes antes**: a página vem ordenada; a posição do
   membro logado sai correta mesmo fora da página; membro sem nickname **não** aparece (decisão 20);
   a variação é `previousPosition - currentPosition` e é `null` no primeiro dia.
-- [] Task 04: `src/games/ranking.service.ts` e `GET /ranking?limit=&after=`, devolvendo
+- [x] Task 04: `src/games/ranking.service.ts` e `GET /ranking?limit=&after=`, devolvendo
   `{ entries, myPosition, myEntry }`.
-- [] Task 05: Manutenção em tempo de execução — o `WatchedVideoRepository` (spec 019) passa a atualizar
+- [x] Task 05: Manutenção em tempo de execução — o `WatchedVideoRepository` (spec 019) passa a atualizar
   `ranking/{uid}` **no mesmo lote** do incremento de XP. Estender `watched-video.repository.spec.ts`:
   o lote que falha não deixa o ranking à frente do perfil.
 - [] Task 06: `scripts/ranking-backfill.ts` e `npm run ranking:backfill` — lê os perfis com `completedAt`
