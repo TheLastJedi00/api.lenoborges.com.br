@@ -7,57 +7,57 @@
 
 ---
 
-# Fase 01: Fundação — constantes, tipos e ambiente []
+# Fase 01: Fundação — constantes, tipos e ambiente [x]
 
-- [] Task 01: `src/games/games.constants.ts` — criar. `QUESTIONS_PER_ROUND = 10`, `PASSING_SCORE = 7`,
+- [x] Task 01: `src/games/games.constants.ts` — criar. `QUESTIONS_PER_ROUND = 10`, `PASSING_SCORE = 7`,
   `XP_PER_CORRECT_ANSWER = 50`, `FREE_SECONDS = 5`, `MIN_XP_PER_ANSWER = 1`,
   `CLIENT_ELAPSED_TOLERANCE_SECONDS = 2`, `MIN_QUESTIONS_PER_DIFFICULTY = 30`,
   `MAX_QUESTIONS_PER_DIFFICULTY = 33`, `CHALLENGE_BADGE_IDS` (as 8 primeiras de `BADGE_IDS`),
   `ROUND_DIFFICULTY: Record<1 | 2 | 3, Difficulty>`. Cada constante com o comentário do porquê, no molde
   de `XP_PER_VIDEO` em `src/track/track.constants.ts`. **O número 50 nasce e morre aqui.**
-- [] Task 02: `src/games/games.constants.spec.ts` — travar que `CHALLENGE_BADGE_IDS` tem exatamente 8 ids e
+- [x] Task 02: `src/games/games.constants.spec.ts` — travar que `CHALLENGE_BADGE_IDS` tem exatamente 8 ids e
   que todos pertencem a `BADGE_IDS`. É o teste que impede a Elite Four de ganhar desafio por acidente (Q.2).
-- [] Task 03: `src/games/xp.ts` + `xp.spec.ts` — a função pura `computeXp({ serverSeconds, clientElapsedMs })`
+- [x] Task 03: `src/games/xp.ts` + `xp.spec.ts` — a função pura `computeXp({ serverSeconds, clientElapsedMs })`
   da decisão 3. Testes primeiro: 0-5s paga 50; 6s paga 49; 60s paga o piso 1; `clientElapsedMs` menor vence;
   `clientElapsedMs` negativo é descartado; `clientElapsedMs` acima de `serverSeconds + 2` é descartado.
   **Função pura, sem Firestore** — é a regra de negócio mais copiável da spec e a mais fácil de duplicar errado.
-- [] Task 04: `src/config/env.validation.ts` — adicionar `GEMINI_API_KEY` como `@IsString() @IsOptional()`
+- [x] Task 04: `src/config/env.validation.ts` — adicionar `GEMINI_API_KEY` como `@IsString() @IsOptional()`
   e a checagem imperativa dentro de `validate()` exigindo-a em produção, no molde exato do `RESEND_API_KEY`
   (adendo A.6). `env.validation.spec.ts` ganha os dois casos: ausente fora de produção passa, ausente em
   produção derruba o boot.
-- [] Task 05: `firestore.indexes.json` — adicionar os três índices do adendo A.5: `gym_questions`
+- [x] Task 05: `firestore.indexes.json` — adicionar os três índices do adendo A.5: `gym_questions`
   (badgeId + difficulty), `gym_questions` (badgeId + createdAt) e `ranking` (xp DESC + uid ASC).
   Atualizar a tabela "Índices compostos que produção exige" no `README.md`. **O deploy é por projeto e com
   `--project` explícito, nos dois** — a lição de 2026-08-28.
 
 ---
 
-# Fase 02: Banco de questões — entidade, repositório e CRUD do admin []
+# Fase 02: Banco de questões — entidade, repositório e CRUD do admin [x]
 
-- [] Task 01: `src/games/entities/gym-question.entity.ts` — a interface `GymQuestion` e o
+- [x] Task 01: `src/games/entities/gym-question.entity.ts` — a interface `GymQuestion` e o
   `FirestoreDataConverter` da decisão 6. Comentar por que `correctIndex` é número e não a string da
   alternativa, e por que a coleção é de primeiro nível e não subcoleção de `badge_videos`.
-- [] Task 02: `src/games/entities/gym-question.entity.spec.ts` — round-trip do converter, `alternatives`
+- [x] Task 02: `src/games/entities/gym-question.entity.spec.ts` — round-trip do converter, `alternatives`
   sempre com 4 posições, `correctIndex` preservado.
-- [] Task 03: `src/games/dto/create-question.dto.ts` e `update-question.dto.ts` — validação de classe:
+- [x] Task 03: `src/games/dto/create-question.dto.ts` e `update-question.dto.ts` — validação de classe:
   `question` não vazio, `alternatives` com `@ArrayMinSize(4) @ArrayMaxSize(4)` de strings não vazias,
   `correctIndex` com `@Min(0) @Max(3)`, `difficulty` com `@IsIn(['easy', 'medium', 'hard'])`.
   O `forbidNonWhitelisted` já é global e rejeita campo a mais.
-- [] Task 04: `src/games/gym-question.repository.ts` — `create`, `update`, `delete`,
+- [x] Task 04: `src/games/gym-question.repository.ts` — `create`, `update`, `delete`,
   `listByBadge(badgeId, difficulty?)`, `countByDifficulty(badgeId)` e `pickRandom(badgeId, difficulty, n)`.
   Devolve `{ found, entry }` / `{ entries }`, nunca `null`. O `countByDifficulty` usa o agregado `count()`:
   contar documentos lendo-os inteiros custa o banco inteiro a cada abertura da tela do admin.
-- [] Task 05: `src/games/gym-question.repository.spec.ts` — contra o `fake-firestore` de
+- [x] Task 05: `src/games/gym-question.repository.spec.ts` — contra o `fake-firestore` de
   `src/track/testing/`, que já existe e é onde a spec 019 provou que um `jest.fn()` não prova o lote.
-- [] Task 06: `src/games/gym-question.service.spec.ts` — **testes antes**: rejeita `badgeId` fora de
+- [x] Task 06: `src/games/gym-question.service.spec.ts` — **testes antes**: rejeita `badgeId` fora de
   `CHALLENGE_BADGE_IDS`; rejeita a 34ª questão de uma dificuldade (teto da decisão 5); devolve a contagem
   por nível; `correctIndex` fora de 0-3 não chega ao repositório.
-- [] Task 07: `src/games/gym-question.service.ts` — a lógica que os testes acima descrevem.
-- [] Task 08: `src/games/admin-games.controller.ts` — `GET` / `POST` / `PATCH` / `DELETE` de
+- [x] Task 07: `src/games/gym-question.service.ts` — a lógica que os testes acima descrevem.
+- [x] Task 08: `src/games/admin-games.controller.ts` — `GET` / `POST` / `PATCH` / `DELETE` de
   `/admin/badges/:badgeId/questions`, com `AdminGuard`. O `:badgeId` passa por `isBadgeId` antes de virar
   dado — a razão está escrita em `track.constants.ts`.
-- [] Task 09: `src/games/games.module.ts` e o registro em `AppModule.imports`.
-- [] Task 10: `src/games/admin-games.controller.spec.ts` — cobertura dos quatro verbos, incluindo o `404`
+- [x] Task 09: `src/games/games.module.ts` e o registro em `AppModule.imports`.
+- [x] Task 10: `src/games/admin-games.controller.spec.ts` — cobertura dos quatro verbos, incluindo o `404`
   de `badgeId` inexistente.
 
 ---
