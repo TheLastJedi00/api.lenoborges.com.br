@@ -1,5 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { BadgeVideoRepository } from './badge-video.repository';
+import { RankingRepository } from '../games/ranking.repository';
+import { XP_PER_VIDEO } from './track.constants';
 import { WatchedVideoRepository } from './watched-video.repository';
 import { SetWatchedDto, WatchedVideoDto } from './dto/set-watched.dto';
 
@@ -16,6 +18,7 @@ export class WatchedVideoService {
   constructor(
     private readonly watched: WatchedVideoRepository,
     private readonly videos: BadgeVideoRepository,
+    private readonly ranking: RankingRepository,
   ) {}
 
   /**
@@ -55,11 +58,26 @@ export class WatchedVideoService {
     // seria a segunda implementacao da mesma regra -- a que erra no video
     // remarcado, que nao paga XP nenhum -- e injetar o `ProfileRepository` so
     // para reler o campo fecharia o ciclo de modulos que derruba o boot.
+    // A linha do placar entra **no mesmo lote** do XP do perfil (spec 022,
+    // decisao 11). O `found` decide se ha o que somar: quem ainda nao escolheu
+    // gamertag nao esta no ranking, e um `increment` num documento inexistente o
+    // criaria sem `nickname` -- uma linha em branco no placar de quem a decisao
+    // 20 mantem fora.
+    const rankingRow = await this.ranking.findByUid(uid);
+
     const { xp } = await this.watched.setWatched(
       uid,
       videoId,
       badgeId!,
       dto.watched,
+      (batch) =>
+        this.ranking.addXpToBatch(
+          batch,
+          uid,
+          rankingRow.found,
+          XP_PER_VIDEO,
+          rankingRow.entry?.xp ?? 0,
+        ),
     );
 
     return { videoId, watched: dto.watched, xp };

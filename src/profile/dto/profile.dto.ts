@@ -131,6 +131,19 @@ export class ProfileDto {
   socialLinksPublic: boolean;
 
   @ApiProperty({
+    nullable: true,
+    example: 'leno_dev',
+    description:
+      'A gamertag do membro no ranking e nos jogos (spec 022). `null` enquanto ' +
+      'ele não escolher. **É o que trava o campo em Meu Perfil**: escolhido uma ' +
+      'vez, não muda mais, e a tela precisa saber disso para desabilitar o ' +
+      'input em vez de deixar o membro digitar e tomar 409.\n\n' +
+      '**Não entra no `PublicMemberDto`**: aquele DTO é definido pelo que ' +
+      'deixa de fora, e o nickname já é público por outro caminho — o ranking',
+  })
+  nickname: string | null;
+
+  @ApiProperty({
     type: 'object',
     additionalProperties: { $ref: '#/components/schemas/LegalAcceptanceDto' },
     description:

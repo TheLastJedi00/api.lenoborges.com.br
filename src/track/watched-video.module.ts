@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { BadgeVideoRepository } from './badge-video.repository';
 import { WatchedVideoRepository } from './watched-video.repository';
 import { WatchedVideoService } from './watched-video.service';
+import { GamesDataModule } from '../games/games-data.module';
 
 /**
  * O razao do que cada membro assistiu, num modulo proprio (spec 019).
@@ -33,6 +34,10 @@ import { WatchedVideoService } from './watched-video.service';
  * depende de mais nada alem do `FirebaseService`, que e global.
  */
 @Module({
+  // O GamesDataModule nao importa nada e so depende do FirebaseService, que e
+  // global -- por isso ele pode entrar aqui sem reabrir o ciclo que este modulo
+  // existe para cortar. Ver ranking.module.ts.
+  imports: [GamesDataModule],
   providers: [
     BadgeVideoRepository,
     WatchedVideoRepository,
