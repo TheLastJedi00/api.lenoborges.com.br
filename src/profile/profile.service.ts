@@ -1,4 +1,5 @@
 import {
+  ConflictException,
   ForbiddenException,
   Inject,
   Injectable,
@@ -14,6 +15,8 @@ import { ChangePasswordDto } from './dto/change-password.dto';
 import { DeleteAccountDto } from './dto/delete-account.dto';
 import { EmailPreferenceDto } from './dto/email-preference.dto';
 import { PrivacyPreferenceDto } from './dto/privacy-preference.dto';
+import { SetNicknameDto } from './dto/nickname.dto';
+import { NicknameRepository } from './nickname.repository';
 import { ProfileDto } from './dto/profile.dto';
 import { PublicMemberDto } from './dto/public-member.dto';
 import { WatchedVideoRepository } from '../track/watched-video.repository';
@@ -65,6 +68,7 @@ export class ProfileService {
     private readonly legalAcceptanceRepository: LegalAcceptanceRepository,
     @Inject(forwardRef(() => WatchedVideoRepository))
     private readonly watchedVideoRepository: WatchedVideoRepository,
+    private readonly nicknameRepository: NicknameRepository,
   ) {}
 
   /**
@@ -101,6 +105,10 @@ export class ProfileService {
       // posicao inicial do switch -- e chuta ligado, que e o unico chute que
       // publica dado de alguem.
       socialLinksPublic: profile.socialLinksPublic,
+      // A gamertag (spec 022). Aqui, e nao no `PublicMemberDto`: a tela de Meu
+      // Perfil precisa saber se o campo ja esta travado, e o `?? null` cobre o
+      // perfil montado a mao num teste ou num script.
+      nickname: profile.nickname ?? null,
       // **Do mesmo `pendingFor` que o guard usa** (spec 018, decisao 9). Nunca
       // calcular de outro jeito aqui: este campo e o corpo do 428 tem de dizer a
       // mesma coisa, ou o painel abre bloqueado por algo que ja foi aceito.
@@ -194,6 +202,43 @@ export class ProfileService {
 
     if (!found) {
       throw new NotFoundException('Perfil não encontrado.');
+    }
+  }
+
+  /**
+   * Escolhe a gamertag, uma vez e para sempre (spec 022, decisao 20).
+   *
+   * **Duas recusas com o mesmo 409, e por motivos diferentes.** "Voce ja tem
+   * uma" e "esse nome e de outra pessoa" sao fatos distintos com a mesma
+   * consequencia; o front decide o texto pelo corpo, e nao pelo status.
+   *
+   * A imutabilidade e a regra que o placar exige: um nome que muda faz o
+   * historico de posicoes deixar de se referir a alguem, e trocar deixaria o
+   * documento de unicidade antigo orfao, ocupando um nome que ninguem mais usa.
+   *
+   * **Quem decide a colisao e o `create()` do lote, e nunca uma consulta
+   * previa.** Entre consultar "esse nome esta livre?" e gravar cabe o clique de
+   * outra pessoa, e a corrida so acontece em producao: dois cadastros
+   * simultaneos do mesmo nome sao raros demais para aparecer em teste, e o
+   * resultado sao duas gamertags iguais num ranking que nao sabe qual e qual.
+   */
+  async setNickname(userId: string, dto: SetNicknameDto): Promise<void> {
+    const { found, entry } = await this.repository.findById(userId);
+
+    if (!found || !entry) {
+      throw new NotFoundException('Perfil não encontrado.');
+    }
+
+    if (entry.nickname !== null) {
+      throw new ConflictException(
+        'Você já escolheu seu gamertag, e ele não pode ser alterado.',
+      );
+    }
+
+    const { taken } = await this.nicknameRepository.claim(userId, dto.nickname);
+
+    if (taken) {
+      throw new ConflictException('Esse gamertag já está em uso.');
     }
   }
 
