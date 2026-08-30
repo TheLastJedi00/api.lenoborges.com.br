@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   NotFoundException,
@@ -12,6 +13,7 @@ import { GymQuestionRepository } from './gym-question.repository';
 import { ChallengeConfigRepository } from './challenge-config.repository';
 import { MIN_QUESTIONS_PER_DIFFICULTY } from './games.constants';
 import type { Difficulty } from './games.constants';
+import type { AnswerResultDto } from './dto/answer-question.dto';
 
 export interface Harness {
   service: GamesService;
@@ -19,7 +21,7 @@ export interface Harness {
   challenges: GymChallengeRepository;
   questions: GymQuestionRepository;
   configs: ChallengeConfigRepository;
-  profiles: { findById: jest.Mock };
+  profiles: { findById: jest.Mock; update: jest.Mock };
   /** Enche o banco de uma insignia ate o desafio existir. */
   seedQuestions: (badgeId: string, perLevel?: number) => Promise<void>;
 }
@@ -34,6 +36,7 @@ export function makeHarness(xp = 0): Harness {
 
   firestore.seedProfile('uid-1', xp);
   const profiles = {
+    update: jest.fn().mockResolvedValue({ entry: {} }),
     findById: jest.fn().mockImplementation((uid: string) =>
       Promise.resolve({
         found: true,
@@ -441,5 +444,345 @@ describe('GamesService — iniciar a rodada', () => {
     const b = segunda.questions.map((q) => q.question).join('|');
 
     expect(a).not.toBe(b);
+  });
+});
+
+describe('GamesService — responder', () => {
+  /** Abre uma rodada e devolve o gabarito de cada questao servida. */
+  async function abrirRodada(h: Harness) {
+    await h.seedQuestions('logica');
+    await h.service.startRound('uid-1', 'logica');
+    const { entries } = await h.challenges.listActiveRound('logica', 'uid-1');
+
+    return { servidas: entries };
+  }
+
+  it('acerto paga XP pela formula, sem o front conhecer o numero', async () => {
+    const h = makeHarness(500);
+    const { servidas } = await abrirRodada(h);
+
+    const resultado = await h.service.answer('uid-1', 'logica', {
+      questionIndex: 0,
+      chosenIndex: servidas[0].correctAlternativeIndex!,
+      clientElapsedMs: 3000,
+    });
+
+    expect(resultado.correct).toBe(true);
+    expect(resultado.xpAwarded).toBe(50);
+    expect(resultado.totalXp).toBe(550);
+  });
+
+  it('a penalidade de tempo desconta do sexto segundo em diante', async () => {
+    // **O `servedAt` e envelhecido de proposito.** Sem isso o servidor mede ~0s
+    // (o teste roda instantaneo), e um `clientElapsedMs` de 15s cai fora do teto
+    // de `servidor + 2` e e descartado -- que e o comportamento certo, e nao o
+    // que este teste quer medir. Para a penalidade existir, os dois relogios
+    // precisam concordar, como concordam na vida real.
+    const h = makeHarness(0);
+    const { servidas } = await abrirRodada(h);
+    const { entry } = await h.challenges.get('logica', 'uid-1');
+    await h.challenges.replaceActiveRound(
+      entry,
+      servidas.map((questao) => ({
+        ...questao,
+        servedAt: new Date(Date.now() - 15_000),
+      })),
+    );
+    const { entries } = await h.challenges.listActiveRound('logica', 'uid-1');
+
+    const resultado = await h.service.answer('uid-1', 'logica', {
+      questionIndex: 0,
+      chosenIndex: entries[0].correctAlternativeIndex!,
+      clientElapsedMs: 15_000,
+    });
+
+    expect(resultado.xpAwarded).toBe(40);
+  });
+
+  it('teste-trava: cliente alegando mais tempo que o servidor e descartado', async () => {
+    // O teto de `servidor + 2` protege contra relogio dessincronizado, e o
+    // efeito e sempre a favor do membro: quem alega ter demorado mais do que o
+    // servidor mediu nao e punido por isso.
+    const h = makeHarness(0);
+    const { servidas } = await abrirRodada(h);
+
+    const resultado = await h.service.answer('uid-1', 'logica', {
+      questionIndex: 0,
+      chosenIndex: servidas[0].correctAlternativeIndex!,
+      clientElapsedMs: 45_000,
+    });
+
+    expect(resultado.xpAwarded).toBe(50);
+  });
+
+  it('erro paga zero e nao desconta nada', async () => {
+    // Errar nao perde XP nenhum, nem da questao nem do acumulado (decisao 3).
+    const h = makeHarness(500);
+    const { servidas } = await abrirRodada(h);
+    const errada = (servidas[0].correctAlternativeIndex! + 1) % 4;
+
+    const resultado = await h.service.answer('uid-1', 'logica', {
+      questionIndex: 0,
+      chosenIndex: errada,
+      clientElapsedMs: 3000,
+    });
+
+    expect(resultado.correct).toBe(false);
+    expect(resultado.xpAwarded).toBe(0);
+    expect(resultado.totalXp).toBe(500);
+  });
+
+  it('devolve qual era a certa, para a tela pintar de verde', async () => {
+    const h = makeHarness(0);
+    const { servidas } = await abrirRodada(h);
+    const errada = (servidas[0].correctAlternativeIndex! + 1) % 4;
+
+    const resultado = await h.service.answer('uid-1', 'logica', {
+      questionIndex: 0,
+      chosenIndex: errada,
+      clientElapsedMs: 1000,
+    });
+
+    expect(resultado.correctAlternativeIndex).toBe(
+      servidas[0].correctAlternativeIndex,
+    );
+  });
+
+  it('teste-trava: a conferencia atravessa as duas ordens', async () => {
+    // O chosenIndex e posicao na lista EMBARALHADA; o correctIndex da questao e
+    // posicao na lista ORIGINAL. Compara-los direto acertaria por acaso em uma
+    // de quatro questoes. Este teste responde todas as dez com o indice
+    // embaralhado e exige dez acertos.
+    const h = makeHarness(0);
+    const { servidas } = await abrirRodada(h);
+
+    for (const questao of servidas) {
+      const resultado = await h.service.answer('uid-1', 'logica', {
+        questionIndex: questao.index,
+        chosenIndex: questao.correctAlternativeIndex!,
+        clientElapsedMs: 1000,
+      });
+
+      expect(resultado.correct).toBe(true);
+    }
+  });
+
+  it('400 quando nao ha rodada aberta naquele indice', async () => {
+    const h = makeHarness(500);
+    await abrirRodada(h);
+    await h.challenges.clearActiveRound('logica', 'uid-1');
+
+    await expect(
+      h.service.answer('uid-1', 'logica', {
+        questionIndex: 0,
+        chosenIndex: 0,
+        clientElapsedMs: 1000,
+      }),
+    ).rejects.toThrow(BadRequestException);
+  });
+
+  it('teste-trava: 409 na questao ja respondida, e sem pagar de novo', async () => {
+    // A trava da dupla contagem. Nao ha ALREADY_EXISTS para segurar isto: o
+    // documento ja existe e o lote o sobrescreve. Sem a conferencia de
+    // answeredAt, reenviar a mesma resposta pagaria XP de novo -- um farm de um
+    // clique repetido, sem exploit nenhum.
+    const h = makeHarness(0);
+    const { servidas } = await abrirRodada(h);
+
+    await h.service.answer('uid-1', 'logica', {
+      questionIndex: 0,
+      chosenIndex: servidas[0].correctAlternativeIndex!,
+      clientElapsedMs: 1000,
+    });
+
+    await expect(
+      h.service.answer('uid-1', 'logica', {
+        questionIndex: 0,
+        chosenIndex: servidas[0].correctAlternativeIndex!,
+        clientElapsedMs: 1000,
+      }),
+    ).rejects.toThrow(ConflictException);
+
+    expect(h.firestore.raw('profiles/uid-1')!.xp).toBe(50);
+  });
+
+  it('o XP entra no perfil no mesmo lote da resposta', async () => {
+    const h = makeHarness(100);
+    const { servidas } = await abrirRodada(h);
+
+    await h.service.answer('uid-1', 'logica', {
+      questionIndex: 0,
+      chosenIndex: servidas[0].correctAlternativeIndex!,
+      clientElapsedMs: 1000,
+    });
+
+    expect(h.firestore.raw('profiles/uid-1')!.xp).toBe(150);
+    expect(
+      h.firestore.raw('gym_challenges/logica__uid-1/active_round/0')!.correct,
+    ).toBe(true);
+  });
+});
+
+describe('GamesService — fim de rodada', () => {
+  /** Responde a rodada inteira acertando `acertos` das dez. */
+  async function jogarRodada(h: Harness, acertos: number, badge = 'logica') {
+    const { entries } = await h.challenges.listActiveRound(
+      badge as 'logica',
+      'uid-1',
+    );
+    // Tipado, e nao `let ultimo;`: sem o tipo o TypeScript infere `any`, e o
+    // teste passa a afirmar propriedades que ninguem confere -- um `score` que
+    // virasse `scores` ficaria `undefined` e o `toBe(7)` falharia com uma
+    // mensagem sobre o valor, e nao sobre o nome errado.
+    let ultimo: AnswerResultDto | undefined;
+
+    for (const questao of entries) {
+      const certa = questao.correctAlternativeIndex!;
+      const escolha = questao.index < acertos ? certa : (certa + 1) % 4;
+
+      ultimo = await h.service.answer('uid-1', badge, {
+        questionIndex: questao.index,
+        chosenIndex: escolha,
+        clientElapsedMs: 1000,
+      });
+    }
+
+    return ultimo!;
+  }
+
+  it('7 de 10 aprova e avanca a rodada', async () => {
+    const h = makeHarness(0);
+    await h.seedQuestions('logica');
+    await h.service.startRound('uid-1', 'logica');
+
+    const fim = await jogarRodada(h, 7);
+
+    expect(fim.roundComplete).toBe(true);
+    expect(fim.score).toBe(7);
+    expect(fim.roundPassed).toBe(true);
+    expect(fim.nextRound).toBe(2);
+
+    const { entry } = await h.challenges.get('logica', 'uid-1');
+    expect(entry.currentRound).toBe(2);
+  });
+
+  it('6 de 10 reprova e mantem a rodada', async () => {
+    const h = makeHarness(0);
+    await h.seedQuestions('logica');
+    await h.service.startRound('uid-1', 'logica');
+
+    const fim = await jogarRodada(h, 6);
+
+    expect(fim.roundPassed).toBe(false);
+    expect(fim.nextRound).toBeUndefined();
+
+    const { entry } = await h.challenges.get('logica', 'uid-1');
+    expect(entry.currentRound).toBe(1);
+    expect(entry.roundResults[1]!.score).toBe(6);
+  });
+
+  it('teste-trava: reprovar nao reseta as rodadas anteriores', async () => {
+    // Quem passou na facil e reprovou na media volta direto para a media, sem
+    // refazer a facil (decisao 2).
+    const h = makeHarness(0);
+    await h.seedQuestions('logica');
+    await h.service.startRound('uid-1', 'logica');
+    await jogarRodada(h, 10);
+    await h.service.startRound('uid-1', 'logica');
+
+    await jogarRodada(h, 3);
+
+    const { entry } = await h.challenges.get('logica', 'uid-1');
+    expect(entry.roundResults[1]!.passed).toBe(true);
+    expect(entry.currentRound).toBe(2);
+  });
+
+  it('a terceira aprovada desbloqueia a insignia e sobe o grade', async () => {
+    const h = makeHarness(0);
+    await h.seedQuestions('logica');
+
+    for (let rodada = 1; rodada <= 3; rodada += 1) {
+      await h.service.startRound('uid-1', 'logica');
+      const fim = await jogarRodada(h, 10);
+
+      if (rodada === 3) {
+        expect(fim.badgeUnlocked).toBe(true);
+        expect(fim.grade).toBe(1);
+      } else {
+        expect(fim.badgeUnlocked).toBeUndefined();
+      }
+    }
+
+    const { entry } = await h.challenges.get('logica', 'uid-1');
+    expect(entry.badgeUnlocked).toBe(true);
+  });
+
+  it('teste-trava: conquistar fora de ordem nao sobe o grade', async () => {
+    // A invariante da spec 008 (decisao 13): grade conta etapas em sequencia.
+    // O membro ganha os selos e o XP, e nao ganha a posicao 2 sem a 1.
+    const h = makeHarness(0);
+    await h.seedQuestions('poo');
+
+    for (let rodada = 1; rodada <= 3; rodada += 1) {
+      await h.service.startRound('uid-1', 'poo');
+      await jogarRodada(h, 10, 'poo');
+    }
+
+    const { entry } = await h.challenges.get('poo', 'uid-1');
+    expect(entry.badgeUnlocked).toBe(true);
+    expect(h.profiles.update).not.toHaveBeenCalled();
+  });
+
+  it('a subcolecao e apagada ao fim da rodada', async () => {
+    const h = makeHarness(0);
+    await h.seedQuestions('logica');
+    await h.service.startRound('uid-1', 'logica');
+
+    await jogarRodada(h, 10);
+
+    expect(
+      h.firestore.countUnder('gym_challenges/logica__uid-1/active_round'),
+    ).toBe(0);
+  });
+
+  it('teste-trava: replay nao paga XP e nao toca o roundResults', async () => {
+    // A rodada ja foi aprovada, e um replay reprovado nao pode apagar a
+    // aprovacao original (decisao 21).
+    const h = makeHarness(0);
+    await h.seedQuestions('logica');
+    await h.service.startRound('uid-1', 'logica');
+    await jogarRodada(h, 10);
+    const xpDepoisDaPrimeira = h.firestore.raw('profiles/uid-1')!.xp;
+
+    const { entry } = await h.challenges.get('logica', 'uid-1');
+    await h.challenges.save({ ...entry, currentRound: 1 });
+    const rodada = await h.service.startRound('uid-1', 'logica');
+    expect(rodada.replay).toBe(true);
+
+    const fim = await jogarRodada(h, 3);
+
+    expect(fim.xpAwarded).toBe(0);
+    expect(fim.replay).toBe(true);
+    expect(h.firestore.raw('profiles/uid-1')!.xp).toBe(xpDepoisDaPrimeira);
+
+    const depois = await h.challenges.get('logica', 'uid-1');
+    expect(depois.entry.roundResults[1]!.passed).toBe(true);
+    expect(depois.entry.roundResults[1]!.score).toBe(10);
+  });
+
+  it('o replaying volta a false depois do treino', async () => {
+    // Senao a proxima rodada de verdade tambem nao pagaria XP.
+    const h = makeHarness(0);
+    await h.seedQuestions('logica');
+    await h.service.startRound('uid-1', 'logica');
+    await jogarRodada(h, 10);
+    const { entry } = await h.challenges.get('logica', 'uid-1');
+    await h.challenges.save({ ...entry, currentRound: 1 });
+    await h.service.startRound('uid-1', 'logica');
+
+    await jogarRodada(h, 10);
+
+    const depois = await h.challenges.get('logica', 'uid-1');
+    expect(depois.entry.replaying).toBe(false);
   });
 });

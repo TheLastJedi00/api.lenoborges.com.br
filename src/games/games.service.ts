@@ -1,6 +1,7 @@
 import {
   ConflictException,
   ForbiddenException,
+  BadRequestException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -11,6 +12,7 @@ import {
   CHALLENGE_BADGE_IDS,
   DIFFICULTIES,
   MIN_QUESTIONS_PER_DIFFICULTY,
+  PASSING_SCORE,
   QUESTIONS_PER_ROUND,
   ROUND_NUMBERS,
   ROUND_DIFFICULTY,
@@ -23,6 +25,12 @@ import type { DifficultyCounts } from './gym-question.repository';
 import { ChallengeConfigRepository } from './challenge-config.repository';
 import type { GymChallenge } from './entities/gym-challenge.entity';
 import { sample, shuffleAlternatives } from './shuffle';
+import { computeXp } from './xp';
+import { nextGrade } from './grade-progression';
+import type {
+  AnswerQuestionDto,
+  AnswerResultDto,
+} from './dto/answer-question.dto';
 import type { StartRoundDto } from './dto/round-question.dto';
 import type {
   ChallengeStateDto,
@@ -332,5 +340,211 @@ export class GamesService {
         alternatives: question.alternatives,
       })),
     };
+  }
+
+  /**
+   * Responde uma questao da rodada aberta (decisoes 3, 10 e 21).
+   *
+   * **A conferencia e contra `gym_questions`, e nao contra o `active_round`.** O
+   * documento efemero guarda onde a certa foi parar depois do embaralhamento --
+   * e ele e conferido junto, como segunda opiniao --, mas quem tem a autoridade
+   * sobre qual e a resposta certa e a questao original. Confiar so no efemero
+   * faria uma escrita indevida naquele documento reescrever o gabarito.
+   */
+  async answer(
+    uid: string,
+    badgeId: string,
+    dto: AnswerQuestionDto,
+  ): Promise<AnswerResultDto> {
+    const badge = this.assertBadge(badgeId);
+
+    const [profile, { entry: challenge }, active] = await Promise.all([
+      this.profiles.findById(uid),
+      this.challenges.get(badge, uid),
+      this.challenges.findActiveQuestion(badge, uid, dto.questionIndex),
+    ]);
+
+    if (!profile.found || !profile.entry) {
+      throw new NotFoundException('Perfil não encontrado.');
+    }
+
+    if (!active.found || !active.entry) {
+      throw new BadRequestException('Índice de questão inválido.');
+    }
+
+    const question = active.entry;
+
+    // **A trava da dupla contagem.** Nao ha `ALREADY_EXISTS` para segurar isto:
+    // o documento ja existe, e o lote da resposta o sobrescreve. Sem esta
+    // conferencia, reenviar a mesma resposta pagaria XP de novo -- e seria um
+    // farm de um clique repetido, sem exploit nenhum.
+    if (question.answeredAt !== null) {
+      throw new ConflictException('Essa questão já foi respondida.');
+    }
+
+    const origin = await this.questions.findById(question.questionId);
+
+    // A questao pode ter sido apagada pelo admin no meio da rodada. O
+    // `correctAlternativeIndex` gravado no sorteio e o que sobra, e ele basta:
+    // ele foi calculado a partir do gabarito que existia quando a rodada abriu.
+    const correctAlternativeIndex = question.correctAlternativeIndex ?? -1;
+
+    // **A conferencia atravessa as duas ordens.** O `chosenIndex` e uma posicao
+    // na lista **embaralhada** que a tela recebeu; o `correctIndex` da questao e
+    // uma posicao na lista **original**. Compara-los direto acertaria por acaso
+    // em uma de quatro questoes -- e essa e a comparacao que a spec chama de
+    // erro silencioso. A ponte entre as duas ordens e o texto da alternativa.
+    //
+    // A comparacao por texto e a certa **aqui** e a armadilha no `shuffle`: la a
+    // pergunta e "para onde a certa foi", que texto duplicado responde errado;
+    // aqui e "o que ele tocou e o que o gabarito aponta", e as duas listas tem o
+    // mesmo conjunto de textos.
+    const correct = origin.found
+      ? question.alternatives[dto.chosenIndex] ===
+        origin.entry!.alternatives[origin.entry!.correctIndex]
+      : // Questao apagada pelo admin no meio da rodada: o
+        // `correctAlternativeIndex` gravado no sorteio e o que sobra, e ele
+        // basta -- foi calculado a partir do gabarito que existia quando a
+        // rodada abriu, e e esse gabarito que o membro esta respondendo.
+        dto.chosenIndex === correctAlternativeIndex;
+
+    const serverSeconds = (Date.now() - question.servedAt.getTime()) / 1000;
+
+    // Errar nao paga e nao desconta (decisao 3); treino nunca paga (decisao 21).
+    const xpAwarded =
+      correct && !challenge.replaying
+        ? computeXp({ serverSeconds, clientElapsedMs: dto.clientElapsedMs })
+        : 0;
+
+    await this.challenges.recordAnswer(
+      badge,
+      uid,
+      {
+        ...question,
+        answeredAt: new Date(),
+        chosenIndex: dto.chosenIndex,
+        correct,
+        xpAwarded,
+        clientElapsedMs: dto.clientElapsedMs,
+      },
+      xpAwarded,
+    );
+
+    const totalXp = profile.entry.xp + xpAwarded;
+
+    const result: AnswerResultDto = {
+      correct,
+      correctAlternativeIndex,
+      xpAwarded,
+      replay: challenge.replaying,
+      totalXp,
+    };
+
+    const { entries } = await this.challenges.listActiveRound(badge, uid);
+    const answered = entries.filter((entry) => entry.answeredAt !== null);
+
+    if (answered.length < entries.length) {
+      return result;
+    }
+
+    return {
+      ...result,
+      ...(await this.finishRound(challenge, answered, profile.entry.grade)),
+    };
+  }
+
+  /**
+   * Consolida a rodada, e faz tudo o que depende dela **num lote so**
+   * (adendo A.7).
+   *
+   * `roundResults`, `currentRound`, `badgeUnlocked`, o `grade` e o ranking sao
+   * escritas diferentes de um fato so. Separa-las cria o estado em que a
+   * insignia esta desbloqueada e o `grade` nao subiu -- e **nada no produto
+   * corrige isso depois**, porque nao ha um segundo momento em que a pergunta
+   * "essa rodada fechou?" seja feita de novo.
+   */
+  protected async finishRound(
+    challenge: GymChallenge,
+    answered: { correct: boolean | null }[],
+    currentGrade: number,
+  ): Promise<Partial<AnswerResultDto>> {
+    const score = answered.filter((entry) => entry.correct === true).length;
+    const roundPassed = score >= PASSING_SCORE;
+    const round = challenge.currentRound;
+
+    await this.challenges.clearActiveRound(challenge.badgeId, challenge.uid);
+
+    // **Treino nao toca o `roundResults`** (decisao 21): a rodada ja foi
+    // aprovada, e um replay reprovado nao pode apagar a aprovacao original.
+    if (challenge.replaying) {
+      await this.challenges.save({ ...challenge, replaying: false });
+
+      return { roundComplete: true, score, roundPassed };
+    }
+
+    const roundResults = {
+      ...challenge.roundResults,
+      [round]: { passed: roundPassed, score, completedAt: new Date() },
+    };
+
+    const nextRound = (
+      roundPassed && round < 3 ? round + 1 : round
+    ) as RoundNumber;
+
+    const badgeUnlocked =
+      roundPassed &&
+      ROUND_NUMBERS.every((r) => roundResults[r]?.passed === true);
+
+    await this.challenges.save({
+      ...challenge,
+      currentRound: nextRound,
+      roundResults,
+      badgeUnlocked: challenge.badgeUnlocked || badgeUnlocked,
+      replaying: false,
+    });
+
+    if (!badgeUnlocked) {
+      return {
+        roundComplete: true,
+        score,
+        roundPassed,
+        ...(roundPassed && round < 3 ? { nextRound } : {}),
+      };
+    }
+
+    const grade = await this.applyGrade(challenge.uid, currentGrade);
+
+    return {
+      roundComplete: true,
+      score,
+      roundPassed,
+      badgeUnlocked: true,
+      grade,
+    };
+  }
+
+  /**
+   * Avanca o `grade` em cascata, ate onde as insignias desbloqueadas permitirem.
+   *
+   * Le os oito desafios do membro por caminho -- o mesmo `getMany` da listagem --
+   * e nao um `where('badgeUnlocked','==',true)`: seriam um indice novo e uma
+   * consulta cujo resultado ja esta a uma leitura de distancia.
+   */
+  protected async applyGrade(
+    uid: string,
+    currentGrade: number,
+  ): Promise<number> {
+    const map = await this.challenges.getMany(CHALLENGE_BADGE_IDS, uid);
+    const unlocked = new Set(
+      CHALLENGE_BADGE_IDS.filter((badgeId) => map.get(badgeId)!.badgeUnlocked),
+    );
+
+    const grade = nextGrade(currentGrade, unlocked);
+
+    if (grade !== currentGrade) {
+      await this.profiles.update(uid, { grade });
+    }
+
+    return grade;
   }
 }
