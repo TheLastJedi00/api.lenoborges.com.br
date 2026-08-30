@@ -238,6 +238,15 @@ export class GymChallengeRepository {
     uid: string,
     question: ActiveRoundQuestion,
     xpAwarded: number,
+    /**
+     * Escritas que precisam cair **no mesmo lote** -- hoje, a linha do ranking.
+     *
+     * Um gancho, e nao o `RankingRepository` injetado aqui: o que este
+     * repositorio sabe e gravar o desafio, e a atomicidade e um requisito de
+     * quem chama. Injetar o outro repositorio inverteria a dependencia e faria o
+     * modulo de desafio conhecer o placar, que e a proxima coisa a mudar.
+     */
+    extra?: (batch: WriteBatch) => void,
   ): Promise<void> {
     const batch = this.firebase.firestore.batch();
 
@@ -252,6 +261,8 @@ export class GymChallengeRepository {
         updatedAt: Timestamp.now(),
       });
     }
+
+    extra?.(batch);
 
     await batch.commit();
   }
