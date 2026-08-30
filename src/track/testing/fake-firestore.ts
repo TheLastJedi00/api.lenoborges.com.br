@@ -14,13 +14,28 @@ import { FieldValue, Timestamp } from 'firebase-admin/firestore';
  * O que ele implementa, e nada alem disso:
  *
  * - `collection().doc().collection().withConverter().doc()`
- * - `get()`, `update()` com `FieldValue.increment`, `listDocuments()`
+ * - `get()`, `set()`, `update()` com `FieldValue.increment`, `delete()`,
+ *   `listDocuments()`
  * - `getAll(...refs)`
- * - `batch()` com `create()`, `update()` e `commit()` -- e o `commit()`
- *   **falha inteiro** com ALREADY_EXISTS quando um `create()` do lote atinge um
- *   caminho ocupado, que e exatamente a atomicidade de que a decisao 3 depende.
+ * - `batch()` com `create()`, `update()`, `delete()` e `commit()` -- e o
+ *   `commit()` **falha inteiro** com ALREADY_EXISTS quando um `create()` do lote
+ *   atinge um caminho ocupado, que e exatamente a atomicidade de que a decisao 3
+ *   depende.
+ * - consulta: `where(campo, '==', valor)`, `orderBy(campo)`, `count()` e `get()`
+ *   -- acrescentados pela spec 022, que trouxe a primeira colecao deste produto
+ *   consultada por dois campos ao mesmo tempo.
  *
- * Nao e um Firestore. E o suficiente para a unica pergunta que importa aqui.
+ * **O `where` so entende `==`, de proposito.** Nenhum repositorio daqui usa
+ * outro operador, e no dia em que usar o fake precisa falhar alto em vez de
+ * fingir que filtrou -- um fake mais capaz que o codigo real vira um segundo
+ * banco com semantica propria, e o teste passa a provar o fake.
+ *
+ * E ele reproduz a regra que ja custou duas specs: **documento sem o campo nao
+ * casa com nenhum filtro e nao aparece em consulta ordenada por ele.** E a
+ * armadilha do `tab` (spec 021) e do `promotedTo == null` (spec 016), e um fake
+ * que a ignorasse deixaria as duas passarem verdes.
+ *
+ * Nao e um Firestore. E o suficiente para as perguntas que importam aqui.
  */
 
 type Doc = Record<string, unknown>;
@@ -113,7 +128,185 @@ class FakeDocumentReference<T = Doc> {
 
     return Promise.resolve();
   }
+
+  /**
+   * Sobrescreve o documento inteiro, passando pelo converter.
+   *
+   * **Existe para o `update` do `GymQuestionRepository`, e a diferenca para o
+   * `update()` acima e o converter.** O `update()` do Firestore e um patch de
+   * campos crus e nao passa pelo converter; o `set()` recebe a entidade e a
+   * converte. Um fake que tratasse os dois igual esconderia o unico bug que essa
+   * distincao produz: gravar um `Date` onde o banco espera `Timestamp`.
+   */
+  set(data: T): Promise<void> {
+    this.store.set(
+      this.path,
+      this.converter ? this.converter.toFirestore(data) : (data as Doc),
+    );
+
+    return Promise.resolve();
+  }
+
+  /**
+   * `create()` solto, fora de lote -- e ele falha com ALREADY_EXISTS igual ao do
+   * lote.
+   *
+   * **A regra do repositorio e `create()`, nunca `set()`**, e o fake so consegue
+   * defende-la se as duas se comportarem diferente aqui dentro. Um fake em que
+   * `create` fosse apelido de `set` deixaria passar exatamente o defeito que a
+   * regra existe para impedir.
+   */
+  create(data: T): Promise<void> {
+    if (this.store.has(this.path)) {
+      throw new FakeError(
+        `document already exists: ${this.path}`,
+        ALREADY_EXISTS,
+      );
+    }
+
+    return this.set(data);
+  }
+
+  delete(): Promise<void> {
+    this.store.delete(this.path);
+
+    return Promise.resolve();
+  }
 }
+
+/** Um `where` guardado ate a hora do `get()`. So o `==` e usado por este produto. */
+interface FakeFilter {
+  field: string;
+  value: unknown;
+}
+
+/**
+ * O pedaco de consulta que o fake entende: `where('campo', '==', v)`,
+ * `orderBy(campo)` e `count()`.
+ *
+ * **Deliberadamente so o `==`.** Nenhum repositorio deste produto usa outro
+ * operador -- e no dia em que usar, o fake precisa falhar alto em vez de fingir
+ * que filtrou. Um fake que aceita mais do que o codigo real usa vira um segundo
+ * banco de dados com semantica propria, e o teste passa a provar o fake.
+ *
+ * A ordenacao ignora `undefined`, do mesmo jeito que o Firestore ignora
+ * documento sem o campo do `orderBy` -- que e a armadilha do `tab` da spec 021
+ * e do `promotedTo` da 016, e vale demais ela existir aqui.
+ */
+class FakeQuery<T = Doc> {
+  constructor(
+    private readonly store: Map<string, Doc>,
+    private readonly path: string,
+    private readonly converter: Converter<T> | undefined,
+    private readonly filters: FakeFilter[] = [],
+    private readonly order: string | null = null,
+  ) {}
+
+  where(field: string, op: string, value: unknown): FakeQuery<T> {
+    if (op !== '==') {
+      throw new Error(`fake-firestore: operador nao suportado: ${op}`);
+    }
+
+    return new FakeQuery<T>(
+      this.store,
+      this.path,
+      this.converter,
+      [...this.filters, { field, value }],
+      this.order,
+    );
+  }
+
+  orderBy(field: string): FakeQuery<T> {
+    return new FakeQuery<T>(
+      this.store,
+      this.path,
+      this.converter,
+      this.filters,
+      field,
+    );
+  }
+
+  count(): { get: () => Promise<{ data: () => { count: number } }> } {
+    return {
+      get: () =>
+        Promise.resolve({ data: () => ({ count: this.matches().length }) }),
+    };
+  }
+
+  get(): Promise<{
+    empty: boolean;
+    size: number;
+    docs: { id: string; data: () => T | Doc }[];
+  }> {
+    const matches = this.matches();
+
+    return Promise.resolve({
+      empty: matches.length === 0,
+      size: matches.length,
+      docs: matches.map(([key, raw]) => ({
+        id: key.slice(key.lastIndexOf('/') + 1),
+        data: () =>
+          this.converter
+            ? this.converter.fromFirestore({
+                id: key.slice(key.lastIndexOf('/') + 1),
+                data: () => raw,
+              })
+            : raw,
+      })),
+    });
+  }
+
+  private matches(): [string, Doc][] {
+    const prefix = `${this.path}/`;
+    const rows: [string, Doc][] = [];
+
+    for (const [key, raw] of this.store.entries()) {
+      if (!key.startsWith(prefix) || key.slice(prefix.length).includes('/')) {
+        continue;
+      }
+
+      // **Documento sem o campo nunca casa**, nem quando o valor procurado e
+      // `null` -- e essa e a regra do Firestore que ja custou duas specs.
+      const ok = this.filters.every(
+        (filter) =>
+          Object.hasOwn(raw, filter.field) &&
+          raw[filter.field] === filter.value,
+      );
+
+      if (!ok) {
+        continue;
+      }
+
+      // O `orderBy` do Firestore tambem exclui quem nao tem o campo.
+      if (this.order !== null && !Object.hasOwn(raw, this.order)) {
+        continue;
+      }
+
+      rows.push([key, raw]);
+    }
+
+    if (this.order !== null) {
+      const field = this.order;
+      rows.sort(([, a], [, b]) => compare(a[field], b[field]));
+    }
+
+    return rows;
+  }
+}
+
+/** Ordena Timestamp, numero e string -- os tres tipos que este produto ordena. */
+function compare(a: unknown, b: unknown): number {
+  const left = a instanceof Timestamp ? a.toMillis() : a;
+  const right = b instanceof Timestamp ? b.toMillis() : b;
+
+  if (typeof left === 'number' && typeof right === 'number') {
+    return left - right;
+  }
+
+  return String(left).localeCompare(String(right));
+}
+
+let autoId = 0;
 
 class FakeCollectionReference<T = Doc> {
   constructor(
@@ -126,12 +319,42 @@ class FakeCollectionReference<T = Doc> {
     return new FakeCollectionReference<U>(this.store, this.path, converter);
   }
 
-  doc(id: string): FakeDocumentReference<T> {
+  doc(id?: string): FakeDocumentReference<T> {
+    // Sem id, o Firestore gera um. O contador basta: o teste so precisa que dois
+    // `doc()` seguidos nao colidam.
+    const docId = id ?? `auto-${(autoId += 1)}`;
+
     return new FakeDocumentReference<T>(
       this.store,
-      `${this.path}/${id}`,
+      `${this.path}/${docId}`,
       this.converter,
     );
+  }
+
+  where(field: string, op: string, value: unknown): FakeQuery<T> {
+    return new FakeQuery<T>(this.store, this.path, this.converter).where(
+      field,
+      op,
+      value,
+    );
+  }
+
+  orderBy(field: string): FakeQuery<T> {
+    return new FakeQuery<T>(this.store, this.path, this.converter).orderBy(
+      field,
+    );
+  }
+
+  count(): { get: () => Promise<{ data: () => { count: number } }> } {
+    return new FakeQuery<T>(this.store, this.path, this.converter).count();
+  }
+
+  get(): Promise<{
+    empty: boolean;
+    size: number;
+    docs: { id: string; data: () => T | Doc }[];
+  }> {
+    return new FakeQuery<T>(this.store, this.path, this.converter).get();
   }
 
   listDocuments(): Promise<FakeDocumentReference<T>[]> {
@@ -239,10 +462,14 @@ export class FakeFirestore {
         ref.get().then((snapshot) => ({
           exists: snapshot.exists,
           id: snapshot.id,
-          // O `getAll` do Firestore **perde o converter** no caminho de volta, e
-          // este fake perde tambem: o repositorio faz o cast por conta propria, e
-          // um fake que devolvesse o objeto convertido esconderia isso.
-          data: () => this.docs.get(ref.path) as Doc,
+          // **O converter acompanha a referencia, e nao o `getAll`.** No
+          // firebase-admin o retorno e `DocumentSnapshot<T>` das refs que
+          // entraram: ref com converter volta convertida, ref sem converter
+          // volta crua. Os dois casos existem neste produto -- o
+          // `WatchedVideoRepository` passa `profileDoc()` sem converter e faz o
+          // cast na mao; o `GymQuestionRepository` passa refs tipadas e espera a
+          // entidade. Um fake que escolhesse um dos dois quebraria o outro.
+          data: () => snapshot.data() as Doc,
         })),
       ),
     );
