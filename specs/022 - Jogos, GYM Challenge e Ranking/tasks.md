@@ -62,23 +62,23 @@
 
 ---
 
-# Fase 03: Geração de questões com IA (Gemini) []
+# Fase 03: Geração de questões com IA (Gemini) [x]
 
-- [] Task 01: `src/games/gemini.service.spec.ts` — **testes antes**, com o cliente HTTP mockado:
+- [x] Task 01: `src/games/gemini.service.spec.ts` — **testes antes**, com o cliente HTTP mockado:
   JSON válido vira N questões; questão com 3 alternativas é descartada em silêncio; `correctIndex: 7` é
   descartado; resposta que não é JSON não derruba a rota; sem `GEMINI_API_KEY` responde `503`.
-- [] Task 02: `src/games/gemini.service.ts` — a chamada à Gemini com o prompt estruturado da decisão 9.
+- [x] Task 02: `src/games/gemini.service.ts` — a chamada à Gemini com o prompt estruturado da decisão 9.
   **Só rotas de admin a alcançam**, e o service não tem nenhum caminho público.
-- [] Task 03: `src/games/dto/generate-questions.dto.ts` — `{ prompt, difficulty, count }`, com `count`
+- [x] Task 03: `src/games/dto/generate-questions.dto.ts` — `{ prompt, difficulty, count }`, com `count`
   em `@Min(1) @Max(30)` (Q.3).
-- [] Task 04: `src/games/dto/bulk-create-questions.dto.ts` — `{ questions: CreateQuestionDto[] }` com
+- [x] Task 04: `src/games/dto/bulk-create-questions.dto.ts` — `{ questions: CreateQuestionDto[] }` com
   `@ValidateNested({ each: true })`. Sem isso o `class-validator` valida o array e ignora o conteúdo,
   e o rascunho da IA entra sem validação nenhuma.
-- [] Task 05: `POST /admin/badges/:badgeId/questions/generate` no `admin-games.controller.ts` — devolve o
+- [x] Task 05: `POST /admin/badges/:badgeId/questions/generate` no `admin-games.controller.ts` — devolve o
   rascunho e **não persiste nada**, com a contagem de quantas sobraram após o descarte.
-- [] Task 06: `POST /admin/badges/:badgeId/questions/bulk` — grava num `WriteBatch`, respeitando o teto de
+- [x] Task 06: `POST /admin/badges/:badgeId/questions/bulk` — grava num `WriteBatch`, respeitando o teto de
   33 por dificuldade.
-- [] Task 07: Documentar as duas rotas no `README.md`, e a `GEMINI_API_KEY` na tabela de ambiente.
+- [x] Task 07: Documentar as duas rotas no `README.md`, e a `GEMINI_API_KEY` na tabela de ambiente.
 
 ---
 
