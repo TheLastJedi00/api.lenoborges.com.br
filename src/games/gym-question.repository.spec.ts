@@ -1,6 +1,6 @@
 import { FakeFirestore } from '../track/testing/fake-firestore';
 import { FirebaseService } from '../auth/firebase.service';
-import { Difficulty } from './games.constants';
+
 import {
   CreateGymQuestionData,
   GymQuestionRepository,

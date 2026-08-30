@@ -13,11 +13,7 @@ import { Transform, Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 import { DIFFICULTIES } from '../games.constants';
 import type { Difficulty } from '../games.constants';
-
-/** Apara espaco das pontas sem tocar em string que nao e string. */
-function trim({ value }: { value: unknown }): unknown {
-  return typeof value === 'string' ? value.trim() : value;
-}
+import { trim, trimEach } from './trim';
 
 export class CreateQuestionDto {
   @ApiProperty({
@@ -60,11 +56,7 @@ export class CreateQuestionDto {
   @ArrayMaxSize(4)
   @IsString({ each: true })
   @Length(1, 500, { each: true })
-  @Transform(({ value }: { value: unknown }) =>
-    Array.isArray(value)
-      ? value.map((item) => (typeof item === 'string' ? item.trim() : item))
-      : value,
-  )
+  @Transform(trimEach)
   alternatives: string[];
 
   @ApiProperty({

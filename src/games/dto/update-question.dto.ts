@@ -14,6 +14,7 @@ import { Transform, Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 import { DIFFICULTIES } from '../games.constants';
 import type { Difficulty } from '../games.constants';
+import { trim, trimEach } from './trim';
 
 /**
  * Edita uma questao ja cadastrada.
@@ -42,9 +43,7 @@ export class UpdateQuestionDto {
   @ApiProperty({ required: false, example: 'O que um laço `for` controla?' })
   @IsOptional()
   @IsString()
-  @Transform(({ value }: { value: unknown }) =>
-    typeof value === 'string' ? value.trim() : value,
-  )
+  @Transform(trim)
   @Length(10, 1000)
   question?: string;
 
@@ -55,11 +54,7 @@ export class UpdateQuestionDto {
   @ArrayMaxSize(4)
   @IsString({ each: true })
   @Length(1, 500, { each: true })
-  @Transform(({ value }: { value: unknown }) =>
-    Array.isArray(value)
-      ? value.map((item) => (typeof item === 'string' ? item.trim() : item))
-      : value,
-  )
+  @Transform(trimEach)
   alternatives?: string[];
 
   @ApiProperty({ required: false, minimum: 0, maximum: 3, example: 2 })
