@@ -1,10 +1,20 @@
-import { Controller, Get, Param, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import {
   ApiBearerAuth,
   ApiOperation,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { StartRoundDto } from './dto/round-question.dto';
 import { FirebaseAuthGuard } from '../auth/guards/firebase-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { CurrentUserData } from '../auth/decorators/current-user.decorator';
@@ -55,5 +65,40 @@ export class GamesController {
     @Param('badgeId') badgeId: string,
   ): Promise<ChallengeStateDto> {
     return this.games.getChallenge(user.id, badgeId);
+  }
+
+  /**
+   * `10/min`: ninguém inicia dez desafios por minuto em uso normal (decisão 19).
+   *
+   * O limite existe porque cada `start` sorteia dez questões e escreve onze
+   * documentos — é a rota mais cara do módulo, e a única que um script poderia
+   * repetir de graça para descobrir o banco inteiro por amostragem.
+   */
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @Post('challenges/:badgeId/start')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Inicia (ou reinicia) a rodada corrente',
+    description:
+      'Sorteia 10 questões da dificuldade da rodada e devolve as dez de uma ' +
+      'vez, **sem a resposta certa**. As respostas voltam uma por uma.\n\n' +
+      'Servir todas juntas deixa o membro inspecionar as perguntas seguintes, e ' +
+      'isso é aceito: ele vê as perguntas, não as respostas, e olhar a próxima ' +
+      'não dá vantagem quando a pressão é de tempo. A alternativa custaria dez ' +
+      'idas ao servidor por rodada, cada pergunta esperando a latência da ' +
+      'anterior.',
+  })
+  @ApiResponse({ status: 200, type: StartRoundDto })
+  @ApiResponse({
+    status: 403,
+    description: 'Desafio indisponível (< 90 questões) ou XP insuficiente',
+  })
+  @ApiResponse({ status: 409, description: 'Já há uma rodada em andamento' })
+  @ApiResponse({ status: 429, description: 'Limite de requisições excedido.' })
+  async start(
+    @CurrentUser() user: CurrentUserData,
+    @Param('badgeId') badgeId: string,
+  ): Promise<StartRoundDto> {
+    return this.games.startRound(user.id, badgeId);
   }
 }

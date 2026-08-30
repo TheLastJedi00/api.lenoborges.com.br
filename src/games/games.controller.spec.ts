@@ -1,5 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { GamesController } from './games.controller';
 import { GamesService } from './games.service';
 import { FirebaseAuthGuard } from '../auth/guards/firebase-auth.guard';
@@ -82,5 +86,87 @@ describe('GamesController', () => {
 
     expect(resposta.correctIndex).toBeUndefined();
     expect(JSON.stringify(resposta)).not.toContain('correctIndex');
+  });
+});
+
+describe('GamesController — start', () => {
+  let controller: GamesController;
+  let games: {
+    listChallenges: jest.Mock;
+    getChallenge: jest.Mock;
+    startRound: jest.Mock;
+  };
+
+  beforeEach(async () => {
+    games = {
+      listChallenges: jest.fn(),
+      getChallenge: jest.fn(),
+      startRound: jest.fn().mockResolvedValue({
+        round: 1,
+        difficulty: 'easy',
+        replay: false,
+        questions: [
+          {
+            index: 0,
+            question: 'Enunciado',
+            alternatives: ['a', 'b', 'c', 'd'],
+          },
+        ],
+      }),
+    };
+
+    const module: TestingModule = await Test.createTestingModule({
+      controllers: [GamesController],
+      providers: [{ provide: GamesService, useValue: games }],
+    })
+      .overrideGuard(FirebaseAuthGuard)
+      .useValue({ canActivate: () => true })
+      .compile();
+
+    controller = module.get(GamesController);
+  });
+
+  it('inicia a rodada do membro autenticado', async () => {
+    const rodada = await controller.start(USER, 'logica');
+
+    expect(games.startRound).toHaveBeenCalledWith('uid-1', 'logica');
+    expect(rodada.questions).toHaveLength(1);
+  });
+
+  it('teste-trava: o corpo nao tem a chave correctIndex', async () => {
+    // Um teste que afirma a AUSENCIA da chave, e nao toMatchObject -- aquele
+    // passa feliz com um campo a mais, que aqui seria a resposta certa no
+    // trafego de quem esta jogando.
+    const rodada = await controller.start(USER, 'logica');
+
+    for (const questao of rodada.questions) {
+      expect(Object.keys(questao)).not.toContain('correctIndex');
+      expect(Object.keys(questao)).not.toContain('correctAlternativeIndex');
+      expect(Object.keys(questao)).not.toContain('questionId');
+    }
+  });
+
+  it('propaga o 403 de desafio indisponivel', async () => {
+    games.startRound.mockRejectedValue(new ForbiddenException());
+
+    await expect(controller.start(USER, 'logica')).rejects.toThrow(
+      ForbiddenException,
+    );
+  });
+
+  it('propaga o 403 de XP insuficiente', async () => {
+    games.startRound.mockRejectedValue(
+      new ForbiddenException('Você precisa de mais XP'),
+    );
+
+    await expect(controller.start(USER, 'logica')).rejects.toThrow(/mais XP/);
+  });
+
+  it('propaga o 409 de rodada em andamento', async () => {
+    games.startRound.mockRejectedValue(new ConflictException());
+
+    await expect(controller.start(USER, 'logica')).rejects.toThrow(
+      ConflictException,
+    );
   });
 });
