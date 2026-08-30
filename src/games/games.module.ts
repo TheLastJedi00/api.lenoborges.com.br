@@ -1,9 +1,13 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { GymQuestionRepository } from './gym-question.repository';
 import { GymQuestionService } from './gym-question.service';
 import { GeminiService } from './gemini.service';
 import { ChallengeConfigRepository } from './challenge-config.repository';
 import { ChallengeConfigService } from './challenge-config.service';
+import { GymChallengeRepository } from './gym-challenge.repository';
+import { GamesService } from './games.service';
+import { GamesController } from './games.controller';
+import { ProfileModule } from '../profile/profile.module';
 import { AdminGamesController } from './admin-games.controller';
 
 /**
@@ -17,18 +21,23 @@ import { AdminGamesController } from './admin-games.controller';
  * nenhum deles monta o `AppModule`.
  */
 @Module({
-  controllers: [AdminGamesController],
+  imports: [forwardRef(() => ProfileModule)],
+  controllers: [AdminGamesController, GamesController],
   providers: [
     GymQuestionRepository,
     GymQuestionService,
     GeminiService,
     ChallengeConfigRepository,
     ChallengeConfigService,
+    GymChallengeRepository,
+    GamesService,
   ],
   exports: [
     GymQuestionRepository,
     GymQuestionService,
     ChallengeConfigRepository,
+    GymChallengeRepository,
+    GamesService,
   ],
 })
 export class GamesModule {}
