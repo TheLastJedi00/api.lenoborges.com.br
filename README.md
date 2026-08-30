@@ -778,6 +778,18 @@ continuou verde enquanto metade do produto não abria.
 | `mural_questions` | `weekId` asc + `createdAt` asc | `listByWeek(byVotes: false)`, a semana em coleta |
 | `badge_videos` | `badgeId` asc + `order` asc | `listByBadge()` **sem** `tab` — a visão da administração |
 | `badge_videos` | `badgeId` asc + `tab` asc + `order` asc | `listByBadge(tab)` — as abas Aulas e Perguntas Frequentes |
+| `gym_questions` | `badgeId` asc + `difficulty` asc | `listByBadge(badgeId, difficulty)` e a contagem por nível |
+| `gym_questions` | `badgeId` asc + `createdAt` asc | `listByBadge(badgeId)` **sem** dificuldade — a lista inteira do admin |
+| `ranking` | `xp` desc + `uid` asc | `page()` do ranking, ordenado e paginado por cursor |
+
+**A spec 022 acrescenta três, e a terceira tem um detalhe que custa caro esquecer.** O desempate por
+`uid` no índice do ranking não é enfeite: XP empata com frequência — dois membros que assistiram aos
+mesmos vídeos têm o mesmo número — e um `startAfter` sobre um campo não único **pula ou repete linha**
+na página seguinte. O sintoma é um ranking que perde alguém no meio da rolagem, sem erro e com 200.
+
+O par de `gym_questions` repete a forma do par de `badge_videos` pela mesma razão: o filtro de
+dificuldade é opcional na listagem do admin, então `badgeId` + `createdAt` é uma consulta de verdade e
+não um prefixo da outra.
 
 **A spec 012 não acrescentou nenhuma linha a esta tabela, e isso é decisão.** A consulta de
 notificações é `orderBy('createdAt', 'desc').limit(50)` — ordenação por um campo só, que o índice de
