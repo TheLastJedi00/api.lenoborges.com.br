@@ -1323,3 +1323,116 @@ texto mudou, então a concordância anterior é com um texto que não é mais o 
 inteira, não pode custar também meia dúzia de testes vermelhos que não dizem nada sobre comportamento.
 Quem guarda o texto contra edição silenciosa continua sendo o teste-trava do `contentHash`, e ele
 continua sendo o único.
+
+---
+
+## Spec 022 — Jogos, GYM Challenge e Ranking
+
+Três peças que existiam no vocabulário do produto desde a spec 008 e nunca foram mais que promessa: o
+questionário que conquista a insígnia, o placar, e o banco de questões que alimenta os dois.
+
+### O banco de questões, e por que ele é coleção de primeiro nível
+
+`gym_questions/{questionId}` liga-se à insígnia pelo `badgeId`, e a nada mais. **Não é subcoleção de
+`badge_videos`** porque questão vive mais que vídeo: uma aula pode ser removida sem afetar o desafio, e
+o desafio pode existir antes de qualquer vídeo estar publicado. Pendurar a questão no vídeo faria apagar
+uma aula levar embora as perguntas sobre ela.
+
+**É a primeira coleção do produto com ID automático**, e vale dizer por quê: em
+`waitlist_entries/{email}`, `profiles/{uid}` e `badge_videos/{badgeId__youtubeId}` o caminho carrega uma
+garantia de unicidade. Aqui não há nenhuma para carregar — duas questões com o mesmo enunciado são um
+erro de revisão, não de integridade — e transformar o enunciado em ID faria corrigir uma vírgula virar
+uma exclusão seguida de uma criação, perdendo a data.
+
+**`correctIndex` é número, nunca a string da alternativa certa.** A resposta é uma posição, e a posição
+muda quando o servidor embaralha as alternativas para servir a rodada; quem embaralha carrega o índice
+junto, e a comparação acontece sempre no servidor, contra este documento. Guardar a string faria a
+conferência virar comparação de texto, e a primeira alternativa reescrita com um acento diferente
+passaria a estar errada para sempre, em silêncio.
+
+### O mínimo de 90, e por que o `ready` olha os três níveis
+
+Trinta questões por nível (90 no total) para o desafio existir; 33 por nível (99) é o teto. Abaixo do
+mínimo o card fica em "Em breve", e o motivo não é burocracia: com menos que isso o sorteio de 10
+repetiria as mesmas questões entre tentativas, e a segunda tentativa viraria memorização.
+
+**O `ready` confere os três níveis separadamente, e não a soma.** Noventa questões fáceis e nenhuma
+difícil somam 90 e não montam uma rodada 3 — um `total >= 90` deixaria o card acender e a terceira
+rodada estourar por falta de questão.
+
+### O XP de uma questão: 50 com penalidade de tempo, e dois relógios
+
+```
+tempoReal  = min(tempoServidor, tempoCliente)
+penalidade = max(0, floor(tempoReal) - 5)
+xpGanho    = max(1, 50 - penalidade)
+```
+
+Os cinco primeiros segundos são livres — ler o enunciado não pode ser penalidade, senão a questão mais
+bem escrita, que é a mais longa, seria a que menos paga. O piso é 1 XP: quem acerta recebe, e zero
+transformaria o acerto lento em erro. **Errar não desconta nada**, nem da questão nem do acumulado.
+
+**O `min` dos dois relógios é a decisão inteira.** O tempo do servidor (`submittedAt - servedAt`) inclui
+uma viagem de rede, e rede não é tempo de pensar — cobrá-la do membro faria a mesma resposta valer menos
+no 4G do ônibus do que no wi-fi de casa. O `clientElapsedMs` é **conferido, não confiado**: entra apenas
+se estiver entre zero e `tempoServidor + 2s`, e a folga cobre relógio dessincronizado, não rede.
+
+**O que isso não protege, dito em voz alta:** um cliente adulterado que envia `0` leva os 50 XP. É o
+preço combinado. Fechar essa porta exigiria ignorar o tempo do cliente, e aí a rede lenta passaria a
+roubar XP de todo mundo que joga honesto — um dano certo e distribuído para evitar um possível e
+individual. `xp.spec.ts` tem um teste que diz isso com todas as letras, para que ninguém "conserte"
+depois sem saber o que está trocando.
+
+**O front não conhece nenhum desses números.** `games.constants.ts` é o único lugar onde o 50 existe, e
+o membro recebe `xpAwarded` pronto — a mesma regra do `XP_PER_VIDEO` da spec 019 e da `orientation` da
+017: o servidor afirma, a tela obedece. Num questionário isso deixa de ser elegância e vira segurança.
+
+### A geração por IA devolve rascunho, e não grava nada
+
+`POST /admin/badges/:badgeId/questions/generate` chama a Gemini e devolve uma proposta. **Nada é
+persistido ali**: o que grava é `POST .../questions/bulk`, depois que o admin editou, excluiu e
+escolheu. Essa separação é o que impede uma questão errada de entrar no banco por descuido de um modelo.
+
+O parser é deliberadamente tolerante e deliberadamente contado: aceita o JSON embrulhado em cerca de
+markdown (o modelo devolve ` ```json ` com frequência mesmo instruído a não devolver, e recusar isso
+seria transformar um formato previsível em falha), descarta em silêncio o que não tem quatro
+alternativas ou `correctIndex` fora de 0-3, e devolve `discarded`. **A tela precisa mostrar esse
+número**: sem ele, um rascunho de 7 quando se pediu 10 parece um limite do produto em vez de um modelo
+que errou o formato.
+
+**A dificuldade é a que o admin pediu, nunca a que o modelo devolveu.** Aceitar o campo do modelo faria
+trinta questões pedidas como difíceis caírem em fácil e desequilibrarem a rodada 1, sem ninguém
+perceber.
+
+`GEMINI_API_KEY` segue a regra do `RESEND_API_KEY` e não a do `FIREBASE_WEB_API_KEY`: **opcional no boot,
+obrigatória em produção**. Exigi-la sempre derrubaria toda máquina de desenvolvimento por causa de uma
+rota de admin que ninguém está usando; sem ela a rota responde `503` e o resto da API serve
+normalmente. A chave vai no cabeçalho `x-goog-api-key`, nunca na query string — chave em query vaza em
+log de proxy e no histórico de erro de qualquer intermediário.
+
+### Endpoints (admin)
+
+| Método | Rota | Corpo | Resposta |
+|---|---|---|---|
+| `GET` | `/admin/badges/:badgeId/questions` | `?difficulty=` | `200` `{ questions, counts }` |
+| `POST` | `/admin/badges/:badgeId/questions` | `CreateQuestionDto` | `201` questão criada |
+| `PATCH` | `/admin/badges/:badgeId/questions/:id` | `UpdateQuestionDto` | `200` questão atualizada |
+| `DELETE` | `/admin/badges/:badgeId/questions/:id` | — | `204` |
+| `POST` | `/admin/badges/:badgeId/questions/generate` | `{ prompt, difficulty, count }` | `200` rascunho, **sem persistir** |
+| `POST` | `/admin/badges/:badgeId/questions/bulk` | `{ questions: [...] }` | `201` questões criadas |
+
+A contagem por nível vai **no mesmo corpo** da listagem, de propósito: ela é o cabeçalho da tela
+("Fáceis: 30/30, Médias: 28/30…"), e uma segunda rota para obtê-la seria a mesma leitura duas vezes a
+cada abertura.
+
+**Este é o único controller do produto em que a resposta certa trafega.** O `AdminGuard` vale no
+controller inteiro justamente por isso: uma rota nova que esquecesse o decorador publicaria o
+`correctIndex` do banco todo. O DTO que o membro recebe não tem o campo, e **não é este objeto com um
+`delete` em cima** — são dois DTOs, e fundi-los com um `if (admin)` transformaria a diferença entre quem
+revisa e quem responde num ramo dentro de uma função.
+
+### Variáveis de ambiente
+
+| Variável | Obrigatória | O que acontece sem ela |
+|---|---|---|
+| `GEMINI_API_KEY` | em produção | A rota de geração responde `503`; o resto da API serve normalmente |
