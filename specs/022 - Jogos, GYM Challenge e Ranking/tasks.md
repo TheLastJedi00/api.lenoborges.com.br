@@ -152,27 +152,27 @@
   documentos do `active_round` num `WriteBatch`, com `servedAt` do servidor.
 - [] Task 04: `src/games/dto/round-question.dto.ts` — `{ index, question, alternatives }`. Nada mais.
 - [] Task 05: `POST /games/challenges/:badgeId/start` com `@Throttle` em `10/min` (decisão 19).
-- [] Task 06: `.spec.ts` do controller, incluindo os três erros e o corpo sem `correctIndex` — um teste que
+- [x] Task 06: `.spec.ts` do controller, incluindo os três erros e o corpo sem `correctIndex` — um teste que
   afirma a **ausência** da chave, nunca `toMatchObject`.
 
 ---
 
-# Fase 08: Responder, pontuar e conquistar a insígnia []
+# Fase 08: Responder, pontuar e conquistar a insígnia [x]
 
-- [] Task 01: `src/games/dto/answer-question.dto.ts` — `{ questionIndex, chosenIndex, clientElapsedMs }`,
+- [x] Task 01: `src/games/dto/answer-question.dto.ts` — `{ questionIndex, chosenIndex, clientElapsedMs }`,
   todos com `@IsInt()` e `@Min(0)`, e `chosenIndex` com `@Max(3)`.
-- [] Task 02: `games.service.spec.ts` — **testes antes** do `answer`: acerto paga o `computeXp`; erro paga 0
+- [x] Task 02: `games.service.spec.ts` — **testes antes** do `answer`: acerto paga o `computeXp`; erro paga 0
   e não desconta; `400` com `questionIndex` fora de faixa; `409` na questão já respondida; replay paga
   sempre 0 e devolve `replay: true`; o XP entra no perfil **no mesmo lote** da gravação da resposta.
-- [] Task 03: `GamesService.answer` — confere o `chosenIndex` contra o `gym_questions` original (nunca
+- [x] Task 03: `GamesService.answer` — confere o `chosenIndex` contra o `gym_questions` original (nunca
   contra o `active_round`), calcula o XP com `computeXp`, e grava a resposta, o `FieldValue.increment` no
   perfil e o incremento no `ranking/{uid}` num `WriteBatch` só (adendo A.7).
-- [] Task 04: `games.service.spec.ts` — **testes antes** da consolidação: 7 acertos aprova e avança
+- [x] Task 04: `games.service.spec.ts` — **testes antes** da consolidação: 7 acertos aprova e avança
   `currentRound`; 6 reprova e mantém a rodada; a 3ª aprovada grava `badgeUnlocked`; replay aprovado **não**
   toca `roundResults`; a subcoleção é apagada ao fim.
-- [] Task 05: `GamesService.finishRound` — consolidação da rodada no mesmo `WriteBatch` do `badgeUnlocked`
+- [x] Task 05: `GamesService.finishRound` — consolidação da rodada no mesmo `WriteBatch` do `badgeUnlocked`
   e do `grade` (adendo A.7).
-- [] Task 06: `src/games/grade-progression.ts` + `.spec.ts` — a cascata da decisão 13 e do adendo A.8:
+- [x] Task 06: `src/games/grade-progression.ts` + `.spec.ts` — a cascata da decisão 13 e do adendo A.8:
   avança enquanto a insígnia da posição `grade + 1` estiver desbloqueada, **e para em 8**. Testes:
   `grade: 1` conquistando Angular não sobe; conquistando POO sobe para 2; quem já tinha de 3 a 8
   desbloqueados sobe até 8 de uma vez; `grade: 8` não vira 9.
