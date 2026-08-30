@@ -1471,3 +1471,64 @@ caminho — o ranking. Há um teste-trava para isso.
 
 `nicknames` **não gera índice**: lê-se só por caminho, o mesmo motivo pelo qual
 `waitlist_entries/{email}` nunca gerou.
+
+### O Ranking: coleção dedicada, cursor opaco e um desempate que não é enfeite
+
+`ranking/{uid}` é uma coleção separada, e **não um `getAll` em `profiles`**. Ler 200 perfis para montar
+um placar custa 200 leituras toda vez; o perfil carrega e-mail, telefone, tier e aceites legais, que o
+filtro teria que excluir perfeitamente sempre; e ordenar por XP no perfil seria mais um índice composto
+num documento já consultado por cinco caminhos. Aqui a consulta é uma e os campos são poucos.
+
+**É eventualmente consistente, e isso é aceito**: o XP do perfil pode estar um passo à frente do placar.
+Ele atualiza em segundos, não em dias.
+
+**O nome exibido é o `nickname`, nunca o `name`.** Quem não tem gamertag não entra — e é por isso que
+`addXpToBatch` **não usa `FieldValue.increment` e não cria documento**: um increment num documento
+inexistente o criaria sem `nickname`, e o placar ganharia uma linha em branco de quem a decisão 20
+mantém fora.
+
+**A manutenção acontece dentro do lote de quem paga o XP.** Tanto `WatchedVideoRepository.setWatched`
+quanto `GymChallengeRepository.recordAnswer` recebem um gancho `extra?: (batch) => void` e escrevem a
+linha do placar no mesmo `commit`. Um gancho, e não o `RankingRepository` injetado nesses repositórios:
+injetá-lo faria o `TrackModule` importar o módulo de jogos, e o ciclo de arquivos que isso fecha derruba
+o boot — a lição que a spec 019 pagou com a suíte inteira verde.
+
+**Por isso `RankingModule` não importa nada.** Três lugares escrevem no ranking (jogos, vídeos
+assistidos, perfil), e pendurar o repositório no `GamesModule` faria os outros dois importarem o
+`GamesModule` inteiro, que importa o `ProfileModule` de volta. Um módulo de um provider e sem `imports`
+corta a volta na raiz, exatamente como o `WatchedVideoModule` da spec 019 e o `MemberDirectoryModule` da
+015.
+
+**A paginação é por cursor, e o cursor carrega dois valores.** `xp DESC, uid ASC`: XP empata com
+frequência, e um `startAfter` sobre campo não único pula ou repete linha — um placar que perde alguém no
+meio da rolagem, sem erro e com 200. O cursor é **opaco** (base64url de `xp:uid`) porque expor
+`?afterXp=&afterUid=` publicaria a forma da ordenação na URL, e o dia em que o desempate mudasse
+quebraria o "Carregar mais" de toda aba aberta. Cursor quebrado é `400`, e não um retorno silencioso ao
+topo: voltar ao topo no meio da rolagem parece a lista se duplicando na tela.
+
+**A posição da lista é calculada na leitura; `currentPosition` é cache do snapshot diário e serve só à
+variação.** Ler o cache para desenhar a lista faria a linha do topo dizer "#47" enquanto a lista abaixo
+mostra a pessoa em 43 — duas verdades na mesma tela. E `positionChange` é `null`, nunca zero, no
+primeiro dia: zero diz "não mudou", e "ainda não sei" é outra afirmação.
+
+| Método | Rota | Query | Resposta |
+|---|---|---|---|
+| `GET` | `/ranking` | `?limit=` (padrão 20, teto 50), `?after=` | `200` `{ entries, myPosition, myEntry, nextCursor }` |
+
+### Os dois scripts do ranking
+
+```bash
+npm run ranking:backfill -- --dry-run   # mostra quem entraria
+npm run ranking:backfill                # grava; idempotente, preserva as posições
+npm run ranking:snapshot -- --dry-run   # mostra as posições e as variações
+npm run ranking:snapshot                # fecha o dia: hoje vira ontem, e recalcula
+```
+
+**O backfill não é opcional.** Sem ele `GET /ranking` responde `200` com lista vazia, e nada aparece em
+log nenhum — a mesma armadilha do `tab` da spec 021, vista do outro lado: lá o documento existia sem o
+campo filtrado, aqui o documento não existe. Roda **antes** de o código novo receber tráfego, **nos dois
+projetos**, com o `.env` de cada um.
+
+**O snapshot não é idempotente dentro do mesmo dia, e nem deveria ser**: rodar duas vezes zera a
+variação, porque a segunda execução copia a posição de hoje para ontem. É o comportamento correto de um
+snapshot, e o `--dry-run` existe para conferir antes.
