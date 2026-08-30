@@ -92,6 +92,10 @@ export class ProfileRepository {
       // esqueca de definir o campo e grave `undefined` no documento.
       linkedin: null,
       instagram: null,
+      // E nasce sem gamertag (spec 022, decisao 20). O nickname e escolhido
+      // depois, no modal que abre ao entrar em Jogos, e e imutavel a partir dali
+      // -- por isso ele nao pode nascer de um default nem ser inferido do nome.
+      nickname: null,
       // E nasce recebendo. Quem entra na comunidade consentiu com o contato do
       // produto; a saida existe e esta a um clique no rodape de todo e-mail.
       emailOptOut: false,

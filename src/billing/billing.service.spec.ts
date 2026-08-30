@@ -16,6 +16,7 @@ const perfil: Profile = {
   legalAcceptances: {},
   xp: 0,
   socialLinksPublic: false,
+  nickname: null,
   completedAt: new Date(),
   waitlistEntryId: null,
   createdAt: new Date(),
