@@ -193,37 +193,67 @@ interface FakeFilter {
  * documento sem o campo do `orderBy` -- que e a armadilha do `tab` da spec 021
  * e do `promotedTo` da 016, e vale demais ela existir aqui.
  */
+/** Um `orderBy` guardado, com a direcao. */
+interface FakeOrder {
+  field: string;
+  desc: boolean;
+}
+
 class FakeQuery<T = Doc> {
   constructor(
     private readonly store: Map<string, Doc>,
     private readonly path: string,
     private readonly converter: Converter<T> | undefined,
     private readonly filters: FakeFilter[] = [],
-    private readonly order: string | null = null,
+    private readonly orders: FakeOrder[] = [],
+    private readonly cursor: unknown[] | null = null,
+    private readonly max: number | null = null,
   ) {}
+
+  private derive(patch: {
+    filters?: FakeFilter[];
+    orders?: FakeOrder[];
+    cursor?: unknown[] | null;
+    max?: number | null;
+  }): FakeQuery<T> {
+    return new FakeQuery<T>(
+      this.store,
+      this.path,
+      this.converter,
+      patch.filters ?? this.filters,
+      patch.orders ?? this.orders,
+      patch.cursor !== undefined ? patch.cursor : this.cursor,
+      patch.max !== undefined ? patch.max : this.max,
+    );
+  }
 
   where(field: string, op: string, value: unknown): FakeQuery<T> {
     if (op !== '==') {
       throw new Error(`fake-firestore: operador nao suportado: ${op}`);
     }
 
-    return new FakeQuery<T>(
-      this.store,
-      this.path,
-      this.converter,
-      [...this.filters, { field, value }],
-      this.order,
-    );
+    return this.derive({ filters: [...this.filters, { field, value }] });
   }
 
-  orderBy(field: string): FakeQuery<T> {
-    return new FakeQuery<T>(
-      this.store,
-      this.path,
-      this.converter,
-      this.filters,
-      field,
-    );
+  orderBy(field: string, direction: 'asc' | 'desc' = 'asc'): FakeQuery<T> {
+    return this.derive({
+      orders: [...this.orders, { field, desc: direction === 'desc' }],
+    });
+  }
+
+  /**
+   * O cursor de paginacao, com **um valor por `orderBy`**.
+   *
+   * E aqui que a decisao do desempate por `uid` se prova: com um `orderBy` so
+   * sobre um campo que empata, o cursor nao consegue apontar para uma linha
+   * especifica, e a pagina seguinte pula ou repete quem tem o mesmo valor.
+   */
+  startAfter(...values: unknown[]): FakeQuery<T> {
+    return this.derive({ cursor: values });
+  }
+
+  limit(n: number): FakeQuery<T> {
+    return this.derive({ max: n });
   }
 
   count(): { get: () => Promise<{ data: () => { count: number } }> } {
@@ -277,20 +307,58 @@ class FakeQuery<T = Doc> {
         continue;
       }
 
-      // O `orderBy` do Firestore tambem exclui quem nao tem o campo.
-      if (this.order !== null && !Object.hasOwn(raw, this.order)) {
+      // O `orderBy` do Firestore tambem exclui quem nao tem o campo -- em
+      // qualquer um dos campos ordenados.
+      if (this.orders.some((order) => !Object.hasOwn(raw, order.field))) {
         continue;
       }
 
       rows.push([key, raw]);
     }
 
-    if (this.order !== null) {
-      const field = this.order;
-      rows.sort(([, a], [, b]) => compare(a[field], b[field]));
+    if (this.orders.length > 0) {
+      rows.sort(([, a], [, b]) => {
+        for (const order of this.orders) {
+          const diff = compare(a[order.field], b[order.field]);
+
+          if (diff !== 0) {
+            return order.desc ? -diff : diff;
+          }
+        }
+
+        return 0;
+      });
     }
 
-    return rows;
+    let result = rows;
+
+    if (this.cursor !== null) {
+      // O cursor aponta para uma linha; a pagina comeca **depois** dela. A
+      // comparacao percorre os campos ordenados na ordem, exatamente como o
+      // Firestore faz -- e e por isso que um cursor com menos valores que
+      // `orderBy` nao consegue desempatar.
+      const values = this.cursor;
+      const index = result.findIndex(([, raw]) => {
+        for (let i = 0; i < values.length; i += 1) {
+          const order = this.orders[i];
+          const diff = compare(raw[order.field], values[i]);
+
+          if (diff !== 0) {
+            return order.desc ? diff < 0 : diff > 0;
+          }
+        }
+
+        return false;
+      });
+
+      result = index === -1 ? [] : result.slice(index);
+    }
+
+    if (this.max !== null) {
+      result = result.slice(0, this.max);
+    }
+
+    return result;
   }
 }
 
@@ -339,10 +407,15 @@ class FakeCollectionReference<T = Doc> {
     );
   }
 
-  orderBy(field: string): FakeQuery<T> {
+  orderBy(field: string, direction: 'asc' | 'desc' = 'asc'): FakeQuery<T> {
     return new FakeQuery<T>(this.store, this.path, this.converter).orderBy(
       field,
+      direction,
     );
+  }
+
+  limit(n: number): FakeQuery<T> {
+    return new FakeQuery<T>(this.store, this.path, this.converter).limit(n);
   }
 
   count(): { get: () => Promise<{ data: () => { count: number } }> } {
