@@ -82,18 +82,18 @@
 
 ---
 
-# Fase 04: Configuração do desafio []
+# Fase 04: Configuração do desafio [x]
 
-- [] Task 01: `src/games/entities/challenge-config.entity.ts` e o converter — `challenge_configs/{badgeId}`,
+- [x] Task 01: `src/games/entities/challenge-config.entity.ts` e o converter — `challenge_configs/{badgeId}`,
   com `requiredXp ?? 0` no `fromFirestore`. **Todo documento é inexistente no dia do deploy**, e a ausência
   do documento tem que significar "sem exigência", não `undefined`.
-- [] Task 02: `src/games/challenge-config.repository.ts` + `.spec.ts` — `get(badgeId)` devolvendo
+- [x] Task 02: `src/games/challenge-config.repository.ts` + `.spec.ts` — `get(badgeId)` devolvendo
   `{ found, entry }` com o default quando não existe, e `save(badgeId, requiredXp)`.
-- [] Task 03: `src/games/dto/challenge-config.dto.ts` — `requiredXp` com `@IsInt() @Min(0)`.
-- [] Task 04: `GET` e `PUT /admin/badges/:badgeId/challenge-config` no `admin-games.controller.ts`.
+- [x] Task 03: `src/games/dto/challenge-config.dto.ts` — `requiredXp` com `@IsInt() @Min(0)`.
+- [x] Task 04: `GET` e `PUT /admin/badges/:badgeId/challenge-config` no `admin-games.controller.ts`.
   O `GET` devolve junto a contagem por dificuldade e o booleano `ready` (≥ 90) — é o que a tela do admin
   mostra no topo, e uma segunda requisição para contar seria a mesma leitura duas vezes.
-- [] Task 05: `.spec.ts` do controller para as duas rotas.
+- [x] Task 05: `.spec.ts` do controller para as duas rotas.
 
 ---
 
