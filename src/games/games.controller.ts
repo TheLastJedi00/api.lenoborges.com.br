@@ -1,4 +1,5 @@
 import {
+  Body,
   Controller,
   Get,
   HttpCode,
@@ -15,6 +16,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { StartRoundDto } from './dto/round-question.dto';
+import { AnswerQuestionDto, AnswerResultDto } from './dto/answer-question.dto';
 import { FirebaseAuthGuard } from '../auth/guards/firebase-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { CurrentUserData } from '../auth/decorators/current-user.decorator';
@@ -100,5 +102,39 @@ export class GamesController {
     @Param('badgeId') badgeId: string,
   ): Promise<StartRoundDto> {
     return this.games.startRound(user.id, badgeId);
+  }
+
+  /**
+   * `120/min`: dez respostas por rodada, com folga larga para retry (decisão 19).
+   *
+   * O limite é generoso de propósito — apertá-lo puniria a conexão ruim, que é
+   * exatamente quem o `clientElapsedMs` existe para proteger. O que impede o
+   * abuso aqui não é o throttle, é o `409` da questão já respondida.
+   */
+  @Throttle({ default: { limit: 120, ttl: 60000 } })
+  @Post('challenges/:badgeId/answer')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Responde uma questão da rodada aberta',
+    description:
+      'Devolve o resultado imediato: certo ou errado, qual era a certa, e o XP ' +
+      'daquela questão. **O front não calcula XP e não conhece a fórmula** — ele ' +
+      'mede o tempo e manda o `clientElapsedMs`, e o servidor decide.\n\n' +
+      'Na décima resposta a rodada é consolidada, e o corpo ganha `score`, ' +
+      '`roundPassed` e — quando as três fecham — `badgeUnlocked` e `grade`.\n\n' +
+      '`totalXp` é o XP do membro **depois** desta resposta: é ele que a tela ' +
+      'grava no AuthStore. Somar `xp + xpAwarded` localmente erra no replay e em ' +
+      'toda resposta errada.',
+  })
+  @ApiResponse({ status: 200, type: AnswerResultDto })
+  @ApiResponse({ status: 400, description: 'Índice de questão inválido' })
+  @ApiResponse({ status: 409, description: 'Essa questão já foi respondida' })
+  @ApiResponse({ status: 429, description: 'Limite de requisições excedido.' })
+  async answer(
+    @CurrentUser() user: CurrentUserData,
+    @Param('badgeId') badgeId: string,
+    @Body() dto: AnswerQuestionDto,
+  ): Promise<AnswerResultDto> {
+    return this.games.answer(user.id, badgeId, dto);
   }
 }

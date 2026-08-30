@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   NotFoundException,
@@ -168,5 +169,138 @@ describe('GamesController — start', () => {
     await expect(controller.start(USER, 'logica')).rejects.toThrow(
       ConflictException,
     );
+  });
+});
+
+describe('GamesController — answer', () => {
+  let controller: GamesController;
+  let games: {
+    listChallenges: jest.Mock;
+    getChallenge: jest.Mock;
+    startRound: jest.Mock;
+    answer: jest.Mock;
+  };
+
+  beforeEach(async () => {
+    games = {
+      listChallenges: jest.fn(),
+      getChallenge: jest.fn(),
+      startRound: jest.fn(),
+      answer: jest.fn().mockResolvedValue({
+        correct: true,
+        correctAlternativeIndex: 2,
+        xpAwarded: 47,
+        replay: false,
+        totalXp: 387,
+      }),
+    };
+
+    const module: TestingModule = await Test.createTestingModule({
+      controllers: [GamesController],
+      providers: [{ provide: GamesService, useValue: games }],
+    })
+      .overrideGuard(FirebaseAuthGuard)
+      .useValue({ canActivate: () => true })
+      .compile();
+
+    controller = module.get(GamesController);
+  });
+
+  it('repassa a resposta e devolve o resultado imediato', async () => {
+    const corpo = {
+      questionIndex: 3,
+      chosenIndex: 2,
+      clientElapsedMs: 4200,
+    };
+
+    const resultado = await controller.answer(USER, 'logica', corpo);
+
+    expect(games.answer).toHaveBeenCalledWith('uid-1', 'logica', corpo);
+    expect(resultado.correct).toBe(true);
+    expect(resultado.xpAwarded).toBe(47);
+  });
+
+  it('devolve o totalXp para a tela gravar sem somar nada', async () => {
+    // Somar `xp + xpAwarded` localmente erra no replay e em toda resposta
+    // errada. O numero vem pronto.
+    const resultado = await controller.answer(USER, 'logica', {
+      questionIndex: 0,
+      chosenIndex: 0,
+      clientElapsedMs: 1000,
+    });
+
+    expect(resultado.totalXp).toBe(387);
+  });
+
+  it('no fim da rodada o corpo ganha score e roundPassed', async () => {
+    games.answer.mockResolvedValue({
+      correct: true,
+      correctAlternativeIndex: 1,
+      xpAwarded: 50,
+      replay: false,
+      totalXp: 900,
+      roundComplete: true,
+      score: 8,
+      roundPassed: true,
+      nextRound: 2,
+    });
+
+    const resultado = await controller.answer(USER, 'logica', {
+      questionIndex: 9,
+      chosenIndex: 1,
+      clientElapsedMs: 1000,
+    });
+
+    expect(resultado.roundComplete).toBe(true);
+    expect(resultado.score).toBe(8);
+    expect(resultado.nextRound).toBe(2);
+  });
+
+  it('na conquista o corpo traz badgeUnlocked e grade', async () => {
+    games.answer.mockResolvedValue({
+      correct: true,
+      correctAlternativeIndex: 1,
+      xpAwarded: 50,
+      replay: false,
+      totalXp: 1500,
+      roundComplete: true,
+      score: 10,
+      roundPassed: true,
+      badgeUnlocked: true,
+      grade: 1,
+    });
+
+    const resultado = await controller.answer(USER, 'logica', {
+      questionIndex: 9,
+      chosenIndex: 1,
+      clientElapsedMs: 1000,
+    });
+
+    expect(resultado.badgeUnlocked).toBe(true);
+    expect(resultado.grade).toBe(1);
+  });
+
+  it('propaga o 400 de indice invalido', async () => {
+    games.answer.mockRejectedValue(new BadRequestException());
+
+    await expect(
+      controller.answer(USER, 'logica', {
+        questionIndex: 0,
+        chosenIndex: 0,
+        clientElapsedMs: 0,
+      }),
+    ).rejects.toThrow(BadRequestException);
+  });
+
+  it('propaga o 409 de questao ja respondida', async () => {
+    games.answer.mockRejectedValue(new ConflictException());
+
+    await expect(
+      controller.answer(USER, 'logica', {
+        questionIndex: 0,
+        chosenIndex: 0,
+        clientElapsedMs: 0,
+      }),
+    ).rejects.toThrow(ConflictException);
   });
 });
