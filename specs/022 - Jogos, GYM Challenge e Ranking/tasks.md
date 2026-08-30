@@ -115,22 +115,22 @@
 
 ---
 
-# Fase 06: Estado do desafio — leitura []
+# Fase 06: Estado do desafio — leitura [x]
 
-- [] Task 01: `src/games/entities/gym-challenge.entity.ts` e o converter — `gym_challenges/{badgeId__uid}`
+- [x] Task 01: `src/games/entities/gym-challenge.entity.ts` e o converter — `gym_challenges/{badgeId__uid}`
   da decisão 7, com `roundResults` como mapa e `badgeUnlocked ?? false`.
-- [] Task 02: `src/games/entities/active-round-question.entity.ts` e o converter — a subcoleção efêmera da
+- [x] Task 02: `src/games/entities/active-round-question.entity.ts` e o converter — a subcoleção efêmera da
   decisão 8, incluindo `clientElapsedMs` e `replayed` (adendo A.1). **`correctIndex` não existe aqui**, e o
   comentário no arquivo diz por quê: dar a resposta ao front é dar a cola no tráfego.
-- [] Task 03: `src/games/gym-challenge.repository.ts` + `.spec.ts` — `get`, `listByUid`, `upsert`,
+- [x] Task 03: `src/games/gym-challenge.repository.ts` + `.spec.ts` — `get`, `listByUid`, `upsert`,
   `listActiveRound`, `replaceActiveRound` (apaga e regrava em lote) e `clearActiveRound`.
-- [] Task 04: `src/games/dto/challenge-state.dto.ts` — o DTO dos estados da decisão 5:
+- [x] Task 04: `src/games/dto/challenge-state.dto.ts` — o DTO dos estados da decisão 5:
   `{ badgeId, status: 'em-breve' | 'xp-insuficiente' | 'disponivel' | 'conquistada', currentRound,
   rounds: [{ round, passed, score }], requiredXp, currentXp, badgeUnlocked, hasActiveRound }`.
-- [] Task 05: `src/games/games.service.spec.ts` — **testes antes** para o cálculo de status: < 90 questões é
+- [x] Task 05: `src/games/games.service.spec.ts` — **testes antes** para o cálculo de status: < 90 questões é
   `em-breve` mesmo com XP de sobra; XP abaixo do `requiredXp` é `xp-insuficiente`; `badgeUnlocked` é
   `conquistada` **mesmo se o admin apagar questões depois** (Q.8).
-- [] Task 06: `src/games/games.service.ts` — `listChallenges(uid)` e `getChallenge(uid, badgeId)`.
+- [x] Task 06: `src/games/games.service.ts` — `listChallenges(uid)` e `getChallenge(uid, badgeId)`.
   O `listChallenges` monta as 8 insígnias com um `getAll` nos caminhos exatos, no molde do `watched` da
   spec 019 — não uma consulta por `uid` na coleção.
 - [] Task 07: `src/games/games.controller.ts` — `GET /games/challenges` e `GET /games/challenges/:badgeId`
