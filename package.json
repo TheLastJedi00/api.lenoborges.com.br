@@ -21,7 +21,9 @@
     "emulators": "firebase emulators:start --only auth,firestore",
     "rules:deploy": "firebase deploy --only firestore:rules",
     "admin:grant": "ts-node -P tsconfig.json scripts/grant-admin.ts",
-    "tab:backfill": "ts-node -P tsconfig.json scripts/backfill-tab.ts"
+    "tab:backfill": "ts-node -P tsconfig.json scripts/backfill-tab.ts",
+    "ranking:backfill": "ts-node -P tsconfig.json scripts/ranking-backfill.ts",
+    "ranking:snapshot": "ts-node -P tsconfig.json scripts/ranking-snapshot.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",

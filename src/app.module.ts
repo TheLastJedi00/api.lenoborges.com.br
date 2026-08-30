@@ -16,6 +16,7 @@ import { MuralModule } from './mural/mural.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { EmailsModule } from './emails/emails.module';
 import { LegalModule } from './legal/legal.module';
+import { GamesModule } from './games/games.module';
 import { LegalAcceptanceGuard } from './legal/legal-acceptance.guard';
 
 @Module({
@@ -42,6 +43,7 @@ import { LegalAcceptanceGuard } from './legal/legal-acceptance.guard';
     NotificationsModule,
     EmailsModule,
     LegalModule,
+    GamesModule,
   ],
   controllers: [AppController],
   providers: [

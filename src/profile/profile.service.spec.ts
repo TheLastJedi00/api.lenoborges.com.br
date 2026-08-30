@@ -3,6 +3,7 @@ import {
   BadRequestException,
   ForbiddenException,
   NotFoundException,
+  ConflictException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ProfileService } from './profile.service';
@@ -15,6 +16,9 @@ import { Profile } from './entities/profile.entity';
 import { LegalService } from '../legal/legal.service';
 import { LegalAcceptanceRepository } from '../legal/legal-acceptance.repository';
 import { WatchedVideoRepository } from '../track/watched-video.repository';
+import { NicknameRepository } from './nickname.repository';
+import { RankingRepository } from '../games/ranking.repository';
+import { GymChallengeRepository } from '../games/gym-challenge.repository';
 
 describe('ProfileService', () => {
   let service: ProfileService;
@@ -40,6 +44,9 @@ describe('ProfileService', () => {
   let legalService: { pendingFor: jest.Mock };
   let legalAcceptanceRepository: { removeAll: jest.Mock };
   let watchedVideoRepository: { removeAll: jest.Mock };
+  let nicknameRepository: { claim: jest.Mock; release: jest.Mock };
+  let rankingRepository: { upsert: jest.Mock; remove: jest.Mock };
+  let gymChallengeRepository: { removeAll: jest.Mock };
 
   beforeEach(async () => {
     repository = {
@@ -75,6 +82,16 @@ describe('ProfileService', () => {
     watchedVideoRepository = { removeAll: registra('watched.removeAll') };
     watchedVideoRepository = { removeAll: registra('watched.removeAll') };
     repository.remove = registra('profile.remove');
+    nicknameRepository = {
+      claim: jest.fn().mockResolvedValue({ taken: false, entry: null }),
+      release: registra('nickname.release'),
+    };
+    rankingRepository = {
+      upsert: jest.fn().mockResolvedValue(undefined),
+      release: jest.fn(),
+      remove: registra('ranking.remove'),
+    } as unknown as { upsert: jest.Mock; remove: jest.Mock };
+    gymChallengeRepository = { removeAll: registra('gym.removeAll') };
     authService = {
       reauthenticate: jest.fn().mockResolvedValue('id-token-fresco'),
       continueUrl: 'http://localhost:4200/?entrar=1',
@@ -100,10 +117,97 @@ describe('ProfileService', () => {
           provide: WatchedVideoRepository,
           useValue: watchedVideoRepository,
         },
+        { provide: NicknameRepository, useValue: nicknameRepository },
+        { provide: RankingRepository, useValue: rankingRepository },
+        {
+          provide: GymChallengeRepository,
+          useValue: gymChallengeRepository,
+        },
       ],
     }).compile();
 
     service = module.get<ProfileService>(ProfileService);
+  });
+
+  describe('setNickname (spec 022)', () => {
+    /** Um perfil qualquer, com a gamertag ainda por escolher. */
+    function perfilSemNickname(extra: Partial<Profile> = {}): Profile {
+      return {
+        id: 'uid-1',
+        name: 'Leno',
+        phone: '47999990000',
+        bio: 'bio',
+        grade: 0,
+        tier: 'dev-tier',
+        linkedin: null,
+        instagram: null,
+        emailOptOut: false,
+        emailOptOutReason: null,
+        emailOptOutAt: null,
+        legalAcceptances: {},
+        xp: 0,
+        socialLinksPublic: false,
+        nickname: null,
+        completedAt: new Date(),
+        waitlistEntryId: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        ...extra,
+      };
+    }
+
+    it('grava a gamertag quando o perfil ainda nao tem uma', async () => {
+      repository.findById.mockResolvedValue({
+        found: true,
+        entry: perfilSemNickname(),
+      });
+
+      await expect(
+        service.setNickname('uid-1', { nickname: 'LenoDev' }),
+      ).resolves.toBeUndefined();
+
+      expect(nicknameRepository.claim).toHaveBeenCalledWith('uid-1', 'LenoDev');
+    });
+
+    it('teste-trava: 409 quando o perfil ja tem gamertag', async () => {
+      // **Imutavel depois de gravado** (decisao 20), e a razao e o placar: um
+      // nome que muda faz o historico de posicoes deixar de se referir a alguem.
+      // Sem esta recusa, o membro trocaria a gamertag e deixaria o documento de
+      // unicidade antigo orfao, ocupando um nome que ninguem mais usa.
+      repository.findById.mockResolvedValue({
+        found: true,
+        entry: perfilSemNickname({ nickname: 'LenoDev' }),
+      });
+
+      await expect(
+        service.setNickname('uid-1', { nickname: 'OutroNome' }),
+      ).rejects.toThrow(ConflictException);
+
+      expect(nicknameRepository.claim).not.toHaveBeenCalled();
+    });
+
+    it('409 quando o nome ja pertence a outra pessoa', async () => {
+      // Mesmo status, outro motivo. Quem decide isso e o ALREADY_EXISTS do
+      // create() no lote, e nao uma consulta previa: entre consultar e gravar
+      // cabe o clique de outra pessoa.
+      repository.findById.mockResolvedValue({
+        found: true,
+        entry: perfilSemNickname(),
+      });
+      nicknameRepository.claim.mockResolvedValue({ taken: true, entry: null });
+
+      await expect(
+        service.setNickname('uid-1', { nickname: 'LenoDev' }),
+      ).rejects.toThrow(ConflictException);
+    });
+
+    it('404 quando nao ha perfil', async () => {
+      repository.findById.mockResolvedValue({ found: false, entry: null });
+
+      await expect(
+        service.setNickname('uid-1', { nickname: 'LenoDev' }),
+      ).rejects.toThrow(NotFoundException);
+    });
   });
 
   describe('setEmailPreference', () => {
@@ -149,6 +253,7 @@ describe('ProfileService', () => {
         linkedin: null,
         instagram: null,
         completedAt: new Date('2026-01-01T00:00:00.000Z'),
+        nickname: 'Fulano_Dev',
         waitlistEntryId: 'fulano@email.com',
       },
     };
@@ -173,6 +278,16 @@ describe('ProfileService', () => {
         // comportamento ligado a um `uid`: quem pediu para ser esquecido leva
         // junto o que assistiu.
         'watched.removeAll',
+        // E os do GYM Challenge, com a subcolecao `active_round` dentro deles
+        // (spec 022, decisao 14). Quinta e sexta vez que a mesma regra vale.
+        'gym.removeAll',
+        // A linha do placar: gamertag, XP e insignias ligados ao uid.
+        'ranking.remove',
+        // **E a gamertag volta a ficar livre.** Sem isto, o membro que voltasse
+        // encontraria o proprio nome ocupado por um fantasma -- um documento de
+        // unicidade cujo uid aponta para um perfil que nao existe mais, e que
+        // ninguem consegue liberar sem mexer no banco a mao.
+        'nickname.release',
         'profile.remove',
         'waitlist.remove',
         'deleteUser',
@@ -386,6 +501,12 @@ describe('ProfileService', () => {
         role: null,
         pendingLegal: [],
         legalAcceptances: {},
+        // Explicito porque o `toDto` usa `?? null` (spec 022): o `toEqual`
+        // ignora chave com `undefined` -- que e como os outros campos deste
+        // fixture parcial chegam -- e nao ignora `null`. O fallback existe para
+        // o perfil montado a mao num teste ou num script nao virar
+        // `nickname: undefined` no ranking.
+        nickname: null,
       });
     });
 
@@ -437,6 +558,25 @@ describe('ProfileService', () => {
         'name',
         'xp',
       ]);
+    });
+
+    it('teste-trava: o nickname nao entra no cartao publico', async () => {
+      // **O `PublicMemberDto` e definido pelo que ele deixa de fora** (spec 019,
+      // decisao 8), e campo novo entra por decisao escrita, nao por
+      // conveniencia. A gamertag ja e publica por outro caminho -- o ranking --
+      // e coloca-la aqui tambem seria uma segunda fonte para o mesmo fato, que
+      // divergiria no dia em que uma das duas passasse a esconder alguem.
+      repository.findById.mockResolvedValue({
+        found: true,
+        entry: { ...membro, nickname: 'AnaDev' },
+      });
+
+      const cartao = (await service.findPublicMember(
+        'uid-2',
+      )) as unknown as Record<string, unknown>;
+
+      expect(cartao.nickname).toBeUndefined();
+      expect(Object.keys(cartao)).toHaveLength(7);
     });
 
     it('teste-trava: nao vaza telefone, tier nem preferencia de e-mail', async () => {

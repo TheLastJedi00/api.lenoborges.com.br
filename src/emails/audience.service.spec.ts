@@ -28,6 +28,7 @@ function perfil(overrides: Partial<Profile> = {}): Profile {
     legalAcceptances: {},
     xp: 0,
     socialLinksPublic: false,
+    nickname: null,
     completedAt: new Date('2026-01-01T00:00:00.000Z'),
     waitlistEntryId: null,
     createdAt: new Date('2026-01-01T00:00:00.000Z'),

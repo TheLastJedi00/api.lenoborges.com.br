@@ -145,6 +145,7 @@ describe('validate (env)', () => {
           RESEND_API_KEY: 're_x',
           RESEND_WEBHOOK_SECRET: 'whsec_x',
           API_PUBLIC_URL: 'https://api.lenoborges.com.br',
+          GEMINI_API_KEY: 'AIza_x',
         }),
       ).not.toThrow();
     });
@@ -157,6 +158,29 @@ describe('validate (env)', () => {
       const { EMAIL_UNSUBSCRIBE_SECRET, ...semSegredo } = baseEnv;
       expect(EMAIL_UNSUBSCRIBE_SECRET).toBeDefined();
       expect(() => validate(semSegredo)).toThrow();
+    });
+  });
+
+  describe('geracao por IA (spec 022)', () => {
+    it('fora de producao, boot sem GEMINI_API_KEY sobe', () => {
+      // Exigi-la sempre derrubaria toda maquina de desenvolvimento por causa de
+      // uma rota de admin que ninguem esta usando. Sem a chave, a rota de
+      // geracao responde 503 e o resto da API serve normalmente.
+      expect(() => validate({ ...baseEnv })).not.toThrow();
+    });
+
+    it('teste-trava: em producao, boot sem GEMINI_API_KEY falha', () => {
+      // O sintoma que este teste evita: o admin escreve o prompt, clica em
+      // "Gerar com IA" e so entao descobre pelo 503 que a chave nunca esteve la.
+      expect(() =>
+        validate({
+          ...baseEnv,
+          NODE_ENV: 'production',
+          RESEND_API_KEY: 're_x',
+          RESEND_WEBHOOK_SECRET: 'whsec_x',
+          API_PUBLIC_URL: 'https://api.lenoborges.com.br',
+        }),
+      ).toThrow(/GEMINI_API_KEY/);
     });
   });
 });

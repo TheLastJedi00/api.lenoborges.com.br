@@ -114,6 +114,22 @@ class EnvironmentVariables {
   @IsString()
   @IsOptional()
   RESEND_WEBHOOK_SECRET?: string;
+
+  // Geracao de questoes por IA (spec 022, decisao 9).
+  //
+  // **Opcional aqui e obrigatoria em producao**, pela mesma checagem imperativa
+  // da RESEND_API_KEY logo abaixo -- e nao com `@IsNotEmpty()`, que e o padrao
+  // da FIREBASE_WEB_API_KEY. A diferenca importa: exigi-la sempre derrubaria o
+  // boot de toda maquina de desenvolvimento que nao tem a chave, por causa de
+  // uma rota de admin que ninguem esta usando. Sem a chave, a rota de geracao
+  // responde 503 dizendo que a IA nao esta configurada, e o resto da API serve
+  // normalmente.
+  //
+  // **Nenhuma rota publica a alcanca.** O GeminiService so e injetado no
+  // controller de admin.
+  @IsString()
+  @IsOptional()
+  GEMINI_API_KEY?: string;
 }
 
 export function validate(config: Record<string, unknown>) {
@@ -165,6 +181,17 @@ export function validate(config: Record<string, unknown>) {
         'API_PUBLIC_URL e obrigatoria em producao. Sem ela o link de ' +
           'descadastro de todo e-mail aponta para localhost, e quem quiser sair ' +
           'da lista nao consegue -- o que vira denuncia de spam.',
+      );
+    }
+
+    // Em producao, a ausencia da chave da Gemini e o admin descobrindo pelo 503
+    // que o botao "Gerar com IA" nunca funcionou -- depois de escrever o prompt.
+    // Falhar no boot troca isso por uma linha no deploy.
+    if (!validatedConfig.GEMINI_API_KEY) {
+      throw new Error(
+        'GEMINI_API_KEY e obrigatoria em producao. Sem ela a geracao de ' +
+          'questoes do GYM Challenge responde 503, e o admin so descobre ' +
+          'depois de escrever o prompt.',
       );
     }
   }

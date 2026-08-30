@@ -27,6 +27,7 @@ import { ChangePasswordDto } from './dto/change-password.dto';
 import { DeleteAccountDto } from './dto/delete-account.dto';
 import { EmailPreferenceDto } from './dto/email-preference.dto';
 import { PrivacyPreferenceDto } from './dto/privacy-preference.dto';
+import { SetNicknameDto } from './dto/nickname.dto';
 import { WatchedVideoService } from '../track/watched-video.service';
 import { SetWatchedDto, WatchedVideoDto } from '../track/dto/set-watched.dto';
 import { CookieService } from '../auth/cookie.service';
@@ -275,6 +276,47 @@ export class ProfileController {
     @Body() dto: PrivacyPreferenceDto,
   ): Promise<void> {
     await this.profileService.setPrivacyPreference(user.id, dto);
+  }
+
+  /**
+   * A gamertag, escolhida uma vez e para sempre (spec 022, decisão 20).
+   *
+   * Mora aqui, e não no módulo de Jogos: **o nickname é campo de perfil que
+   * jogos consome, e não o contrário.** O prefixo `/me` é deste controller, e
+   * uma rota `/games/nickname` faria a mesma pessoa ter dois lugares para editar
+   * quem ela é.
+   *
+   * `204` e não `200` com o perfil: quem chama é o modal bloqueante, e o que ele
+   * precisa saber é só se passou — o perfil ele já tem, e vai recarregar.
+   *
+   * **Não é isenta do `LegalAcceptanceGuard`.** Quem não aceitou os documentos
+   * não escolhe gamertag, não joga e não aparece no ranking, sem uma linha
+   * escrita para isso ser verdade.
+   */
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @Put('nickname')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({
+    summary: 'Escolher a gamertag do ranking e dos jogos',
+    description:
+      '**Única e imutável.** Uma vez gravada, esta rota responde `409` — e ' +
+      'responde `409` também quando o nome já pertence a outra pessoa. São dois ' +
+      'motivos com o mesmo status, e o texto do corpo é o que os separa; a tela ' +
+      'decide a mensagem pelo corpo, nunca pelo número.\n\n' +
+      'A colisão é **case-insensitive**: `LenoDev` e `lenodev` são a mesma ' +
+      'gamertag, porque duas que se leem igual num placar são a mesma para quem ' +
+      'está olhando.',
+  })
+  @ApiResponse({ status: 204, description: 'Gamertag registrada.' })
+  @ApiResponse({
+    status: 409,
+    description: 'Já tem gamertag, ou o nome já está em uso.',
+  })
+  async setNickname(
+    @CurrentUser() user: CurrentUserData,
+    @Body() dto: SetNicknameDto,
+  ): Promise<void> {
+    await this.profileService.setNickname(user.id, dto);
   }
 
   @Throttle({ default: { limit: 10, ttl: 60000 } })

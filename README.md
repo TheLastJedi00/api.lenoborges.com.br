@@ -778,6 +778,26 @@ continuou verde enquanto metade do produto não abria.
 | `mural_questions` | `weekId` asc + `createdAt` asc | `listByWeek(byVotes: false)`, a semana em coleta |
 | `badge_videos` | `badgeId` asc + `order` asc | `listByBadge()` **sem** `tab` — a visão da administração |
 | `badge_videos` | `badgeId` asc + `tab` asc + `order` asc | `listByBadge(tab)` — as abas Aulas e Perguntas Frequentes |
+| `gym_questions` | `badgeId` asc + `difficulty` asc + `createdAt` asc | `listByBadge(badgeId, difficulty)` **e** a contagem por nível |
+| `gym_questions` | `badgeId` asc + `createdAt` asc | `listByBadge(badgeId)` **sem** dificuldade — a lista inteira do admin |
+| `ranking` | `xp` desc + `uid` asc | `page()` do ranking, ordenado e paginado por cursor |
+
+**A spec 022 acrescenta três, e o desempate por `uid` no ranking não é enfeite:** XP empata com
+frequência — dois membros que assistiram aos mesmos vídeos têm o mesmo número — e um `startAfter` sobre
+um campo não único **pula ou repete linha** na página seguinte. O sintoma é um ranking que perde alguém
+no meio da rolagem, sem erro e com 200.
+
+O par de `gym_questions` repete a forma do par de `badge_videos` pela mesma razão: o filtro de
+dificuldade é opcional na listagem do admin, então `badgeId` + `createdAt` é uma consulta de verdade e
+não um prefixo da outra.
+
+> **O primeiro deles tinha dois campos e estava errado, e isso foi descoberto no navegador — não pelos
+> testes.** `listByBadge` com dificuldade faz `where badgeId` + `where difficulty` + `orderBy createdAt`,
+> que são **três** campos; um índice de `badgeId` + `difficulty` serve a contagem e **não** serve a
+> listagem, e a tela do admin respondia `500` com "The query requires an index". Nada nas 863 unidades
+> pegou: o `fake-firestore` não exige índice, e o emulador também não — é exatamente o que esta seção já
+> avisava, agora com um exemplo próprio. O de três campos serve as duas consultas, porque
+> `(badgeId, difficulty)` é prefixo dele, então o de dois campos foi **substituído** em vez de somado.
 
 **A spec 012 não acrescentou nenhuma linha a esta tabela, e isso é decisão.** A consulta de
 notificações é `orderBy('createdAt', 'desc').limit(50)` — ordenação por um campo só, que o índice de
@@ -1311,3 +1331,253 @@ texto mudou, então a concordância anterior é com um texto que não é mais o 
 inteira, não pode custar também meia dúzia de testes vermelhos que não dizem nada sobre comportamento.
 Quem guarda o texto contra edição silenciosa continua sendo o teste-trava do `contentHash`, e ele
 continua sendo o único.
+
+---
+
+## Spec 022 — Jogos, GYM Challenge e Ranking
+
+Três peças que existiam no vocabulário do produto desde a spec 008 e nunca foram mais que promessa: o
+questionário que conquista a insígnia, o placar, e o banco de questões que alimenta os dois.
+
+### O banco de questões, e por que ele é coleção de primeiro nível
+
+`gym_questions/{questionId}` liga-se à insígnia pelo `badgeId`, e a nada mais. **Não é subcoleção de
+`badge_videos`** porque questão vive mais que vídeo: uma aula pode ser removida sem afetar o desafio, e
+o desafio pode existir antes de qualquer vídeo estar publicado. Pendurar a questão no vídeo faria apagar
+uma aula levar embora as perguntas sobre ela.
+
+**É a primeira coleção do produto com ID automático**, e vale dizer por quê: em
+`waitlist_entries/{email}`, `profiles/{uid}` e `badge_videos/{badgeId__youtubeId}` o caminho carrega uma
+garantia de unicidade. Aqui não há nenhuma para carregar — duas questões com o mesmo enunciado são um
+erro de revisão, não de integridade — e transformar o enunciado em ID faria corrigir uma vírgula virar
+uma exclusão seguida de uma criação, perdendo a data.
+
+**`correctIndex` é número, nunca a string da alternativa certa.** A resposta é uma posição, e a posição
+muda quando o servidor embaralha as alternativas para servir a rodada; quem embaralha carrega o índice
+junto, e a comparação acontece sempre no servidor, contra este documento. Guardar a string faria a
+conferência virar comparação de texto, e a primeira alternativa reescrita com um acento diferente
+passaria a estar errada para sempre, em silêncio.
+
+### O mínimo de 90, e por que o `ready` olha os três níveis
+
+Trinta questões por nível (90 no total) para o desafio existir; 33 por nível (99) é o teto. Abaixo do
+mínimo o card fica em "Em breve", e o motivo não é burocracia: com menos que isso o sorteio de 10
+repetiria as mesmas questões entre tentativas, e a segunda tentativa viraria memorização.
+
+**O `ready` confere os três níveis separadamente, e não a soma.** Noventa questões fáceis e nenhuma
+difícil somam 90 e não montam uma rodada 3 — um `total >= 90` deixaria o card acender e a terceira
+rodada estourar por falta de questão.
+
+### O XP de uma questão: 50 com penalidade de tempo, e dois relógios
+
+```
+tempoReal  = min(tempoServidor, tempoCliente)
+penalidade = max(0, floor(tempoReal) - 5)
+xpGanho    = max(1, 50 - penalidade)
+```
+
+Os cinco primeiros segundos são livres — ler o enunciado não pode ser penalidade, senão a questão mais
+bem escrita, que é a mais longa, seria a que menos paga. O piso é 1 XP: quem acerta recebe, e zero
+transformaria o acerto lento em erro. **Errar não desconta nada**, nem da questão nem do acumulado.
+
+**O `min` dos dois relógios é a decisão inteira.** O tempo do servidor (`submittedAt - servedAt`) inclui
+uma viagem de rede, e rede não é tempo de pensar — cobrá-la do membro faria a mesma resposta valer menos
+no 4G do ônibus do que no wi-fi de casa. O `clientElapsedMs` é **conferido, não confiado**: entra apenas
+se estiver entre zero e `tempoServidor + 2s`, e a folga cobre relógio dessincronizado, não rede.
+
+**O que isso não protege, dito em voz alta:** um cliente adulterado que envia `0` leva os 50 XP. É o
+preço combinado. Fechar essa porta exigiria ignorar o tempo do cliente, e aí a rede lenta passaria a
+roubar XP de todo mundo que joga honesto — um dano certo e distribuído para evitar um possível e
+individual. `xp.spec.ts` tem um teste que diz isso com todas as letras, para que ninguém "conserte"
+depois sem saber o que está trocando.
+
+**O front não conhece nenhum desses números.** `games.constants.ts` é o único lugar onde o 50 existe, e
+o membro recebe `xpAwarded` pronto — a mesma regra do `XP_PER_VIDEO` da spec 019 e da `orientation` da
+017: o servidor afirma, a tela obedece. Num questionário isso deixa de ser elegância e vira segurança.
+
+### A geração por IA devolve rascunho, e não grava nada
+
+`POST /admin/badges/:badgeId/questions/generate` chama a Gemini e devolve uma proposta. **Nada é
+persistido ali**: o que grava é `POST .../questions/bulk`, depois que o admin editou, excluiu e
+escolheu. Essa separação é o que impede uma questão errada de entrar no banco por descuido de um modelo.
+
+O parser é deliberadamente tolerante e deliberadamente contado: aceita o JSON embrulhado em cerca de
+markdown (o modelo devolve ` ```json ` com frequência mesmo instruído a não devolver, e recusar isso
+seria transformar um formato previsível em falha), descarta em silêncio o que não tem quatro
+alternativas ou `correctIndex` fora de 0-3, e devolve `discarded`. **A tela precisa mostrar esse
+número**: sem ele, um rascunho de 7 quando se pediu 10 parece um limite do produto em vez de um modelo
+que errou o formato.
+
+**A dificuldade é a que o admin pediu, nunca a que o modelo devolveu.** Aceitar o campo do modelo faria
+trinta questões pedidas como difíceis caírem em fácil e desequilibrarem a rodada 1, sem ninguém
+perceber.
+
+`GEMINI_API_KEY` segue a regra do `RESEND_API_KEY` e não a do `FIREBASE_WEB_API_KEY`: **opcional no boot,
+obrigatória em produção**. Exigi-la sempre derrubaria toda máquina de desenvolvimento por causa de uma
+rota de admin que ninguém está usando; sem ela a rota responde `503` e o resto da API serve
+normalmente. A chave vai no cabeçalho `x-goog-api-key`, nunca na query string — chave em query vaza em
+log de proxy e no histórico de erro de qualquer intermediário.
+
+### Endpoints (admin)
+
+| Método | Rota | Corpo | Resposta |
+|---|---|---|---|
+| `GET` | `/admin/badges/:badgeId/questions` | `?difficulty=` | `200` `{ questions, counts }` |
+| `POST` | `/admin/badges/:badgeId/questions` | `CreateQuestionDto` | `201` questão criada |
+| `PATCH` | `/admin/badges/:badgeId/questions/:id` | `UpdateQuestionDto` | `200` questão atualizada |
+| `DELETE` | `/admin/badges/:badgeId/questions/:id` | — | `204` |
+| `POST` | `/admin/badges/:badgeId/questions/generate` | `{ prompt, difficulty, count }` | `200` rascunho, **sem persistir** |
+| `POST` | `/admin/badges/:badgeId/questions/bulk` | `{ questions: [...] }` | `201` questões criadas |
+
+A contagem por nível vai **no mesmo corpo** da listagem, de propósito: ela é o cabeçalho da tela
+("Fáceis: 30/30, Médias: 28/30…"), e uma segunda rota para obtê-la seria a mesma leitura duas vezes a
+cada abertura.
+
+**Este é o único controller do produto em que a resposta certa trafega.** O `AdminGuard` vale no
+controller inteiro justamente por isso: uma rota nova que esquecesse o decorador publicaria o
+`correctIndex` do banco todo. O DTO que o membro recebe não tem o campo, e **não é este objeto com um
+`delete` em cima** — são dois DTOs, e fundi-los com um `if (admin)` transformaria a diferença entre quem
+revisa e quem responde num ramo dentro de uma função.
+
+### Variáveis de ambiente
+
+| Variável | Obrigatória | O que acontece sem ela |
+|---|---|---|
+| `GEMINI_API_KEY` | em produção | A rota de geração responde `503`; o resto da API serve normalmente |
+
+### A gamertag: `nicknames/{nickname}`, única e imutável
+
+O ranking e os jogos não usam o `name` do perfil — usam um `nickname` escolhido pelo membro. A
+unicidade é **o ID do documento**, em minúsculas: criar é um `create()`, e é o `ALREADY_EXISTS` que
+devolve o `409` para quem chegou em segundo lugar. Sem consulta, sem índice, sem corrida.
+
+O caminho alternativo — `where('nickname','==',x)` e depois gravar — tem uma corrida no meio que **não
+aparece em teste nenhum**: dois cadastros simultâneos do mesmo nome são raros o bastante para só
+acontecer em produção, e o resultado são duas gamertags iguais num ranking que não sabe qual é qual.
+
+**`LenoDev` e `lenodev` colidem de propósito.** Duas gamertags que se leem igual num placar são a mesma
+gamertag para quem está olhando; permitir as duas seria autorizar a cópia do nome de outra pessoa
+trocando uma letra de caixa. O que se exibe guarda a capitalização escolhida, e mora em
+`profiles/{uid}.nickname` — que é denormalização para leitura, e nasce `null`.
+
+**A reserva e o campo do perfil vão no mesmo `WriteBatch`**, porque são um fato só: o documento de
+unicidade sem o campo é um nome ocupado por ninguém, e o campo sem o documento é uma gamertag que outra
+pessoa ainda pode pegar.
+
+**Imutável depois de gravado**, e a razão é o placar: um nome que muda faz o histórico de posições
+deixar de se referir a alguém, e trocar deixaria o documento de unicidade antigo órfão, ocupando um nome
+que ninguém mais usa. `PUT /me/nickname` responde `409` nos **dois** casos — "você já tem uma" e "esse
+nome é de outra pessoa" — e é o corpo, nunca o número, que a tela usa para escolher a mensagem.
+
+| Método | Rota | Corpo | Resposta |
+|---|---|---|---|
+| `PUT` | `/me/nickname` | `{ nickname }` | `204` |
+
+O campo entra no `ProfileDto` (é o que trava o input em Meu Perfil) e **não entra no
+`PublicMemberDto`**: aquele DTO é definido pelo que deixa de fora, e a gamertag já é pública por outro
+caminho — o ranking. Há um teste-trava para isso.
+
+`nicknames` **não gera índice**: lê-se só por caminho, o mesmo motivo pelo qual
+`waitlist_entries/{email}` nunca gerou.
+
+### O Ranking: coleção dedicada, cursor opaco e um desempate que não é enfeite
+
+`ranking/{uid}` é uma coleção separada, e **não um `getAll` em `profiles`**. Ler 200 perfis para montar
+um placar custa 200 leituras toda vez; o perfil carrega e-mail, telefone, tier e aceites legais, que o
+filtro teria que excluir perfeitamente sempre; e ordenar por XP no perfil seria mais um índice composto
+num documento já consultado por cinco caminhos. Aqui a consulta é uma e os campos são poucos.
+
+**É eventualmente consistente, e isso é aceito**: o XP do perfil pode estar um passo à frente do placar.
+Ele atualiza em segundos, não em dias.
+
+**O nome exibido é o `nickname`, nunca o `name`.** Quem não tem gamertag não entra — e é por isso que
+`addXpToBatch` **não usa `FieldValue.increment` e não cria documento**: um increment num documento
+inexistente o criaria sem `nickname`, e o placar ganharia uma linha em branco de quem a decisão 20
+mantém fora.
+
+**A manutenção acontece dentro do lote de quem paga o XP.** Tanto `WatchedVideoRepository.setWatched`
+quanto `GymChallengeRepository.recordAnswer` recebem um gancho `extra?: (batch) => void` e escrevem a
+linha do placar no mesmo `commit`. Um gancho, e não o `RankingRepository` injetado nesses repositórios:
+injetá-lo faria o `TrackModule` importar o módulo de jogos, e o ciclo de arquivos que isso fecha derruba
+o boot — a lição que a spec 019 pagou com a suíte inteira verde.
+
+**Por isso `RankingModule` não importa nada.** Três lugares escrevem no ranking (jogos, vídeos
+assistidos, perfil), e pendurar o repositório no `GamesModule` faria os outros dois importarem o
+`GamesModule` inteiro, que importa o `ProfileModule` de volta. Um módulo de um provider e sem `imports`
+corta a volta na raiz, exatamente como o `WatchedVideoModule` da spec 019 e o `MemberDirectoryModule` da
+015.
+
+**A paginação é por cursor, e o cursor carrega dois valores.** `xp DESC, uid ASC`: XP empata com
+frequência, e um `startAfter` sobre campo não único pula ou repete linha — um placar que perde alguém no
+meio da rolagem, sem erro e com 200. O cursor é **opaco** (base64url de `xp:uid`) porque expor
+`?afterXp=&afterUid=` publicaria a forma da ordenação na URL, e o dia em que o desempate mudasse
+quebraria o "Carregar mais" de toda aba aberta. Cursor quebrado é `400`, e não um retorno silencioso ao
+topo: voltar ao topo no meio da rolagem parece a lista se duplicando na tela.
+
+**A posição da lista é calculada na leitura; `currentPosition` é cache do snapshot diário e serve só à
+variação.** Ler o cache para desenhar a lista faria a linha do topo dizer "#47" enquanto a lista abaixo
+mostra a pessoa em 43 — duas verdades na mesma tela. E `positionChange` é `null`, nunca zero, no
+primeiro dia: zero diz "não mudou", e "ainda não sei" é outra afirmação.
+
+| Método | Rota | Query | Resposta |
+|---|---|---|---|
+| `GET` | `/ranking` | `?limit=` (padrão 20, teto 50), `?after=` | `200` `{ entries, myPosition, myEntry, nextCursor }` |
+
+### Os dois scripts do ranking
+
+```bash
+npm run ranking:backfill -- --dry-run   # mostra quem entraria
+npm run ranking:backfill                # grava; idempotente, preserva as posições
+npm run ranking:snapshot -- --dry-run   # mostra as posições e as variações
+npm run ranking:snapshot                # fecha o dia: hoje vira ontem, e recalcula
+```
+
+**O backfill não é opcional.** Sem ele `GET /ranking` responde `200` com lista vazia, e nada aparece em
+log nenhum — a mesma armadilha do `tab` da spec 021, vista do outro lado: lá o documento existia sem o
+campo filtrado, aqui o documento não existe. Roda **antes** de o código novo receber tráfego, **nos dois
+projetos**, com o `.env` de cada um.
+
+**O snapshot não é idempotente dentro do mesmo dia, e nem deveria ser**: rodar duas vezes zera a
+variação, porque a segunda execução copia a posição de hoje para ontem. É o comportamento correto de um
+snapshot, e o `--dry-run` existe para conferir antes.
+
+### Excluir a conta: sexta e sétima subcoleção, e a gamertag que volta a ficar livre
+
+A ordem de exclusão da spec 013 cresce, e o **usuário do Auth continua morrendo por último**. Entram,
+antes de `profiles/{uid}`:
+
+- `gym_challenges/{badgeId__uid}` das oito insígnias, **com a subcoleção `active_round` apagada antes do
+  pai** — apagar o pai primeiro deixaria dez documentos órfãos por insígnia: invisíveis, cobrados e
+  impossíveis de encontrar depois. É a quinta e a sexta vez que este produto esbarra na mesma regra,
+  depois dos votos do Mural, de `notification_reads`, de `legal_acceptances` e de `watched_videos`.
+- `ranking/{uid}`, que é gamertag, XP e insígnias ligados ao `uid`.
+- `nicknames/{nickname}` — **a gamertag volta a ficar livre**, e este é o único jeito de o membro que
+  voltar não encontrar o próprio nome ocupado por um fantasma: um documento de unicidade cujo `uid`
+  aponta para um perfil que não existe mais, e que ninguém consegue liberar sem mexer no banco à mão.
+
+`profile.service.spec.ts` compara a **lista de chamadas na ordem**, e é ele que impede a sétima vez.
+
+### As specs que esta emenda
+
+- **008 (Liga Dev)** — emenda fundamental: `grade` deixa de ser exclusivamente manual. A promessa de
+  "jogos e ranking" ganha regra e implementação.
+- **009 (Trilha)** — estendida: a administração ganha a seção de questões, e `BADGE_IDS` segue sendo a
+  fonte de verdade das insígnias.
+- **013 (Meu Perfil)** — a ordem de exclusão cresce em três passos.
+- **019 (Vídeos assistidos e XP)** — emenda: **a invariante "XP = 10 × documentos em `watched_videos`"
+  deixa de valer.** O XP passa a ter duas fontes, e a reconciliação precisa somar as duas — o ponto em
+  aberto 3 daquela spec ("não existe caminho para reconciliar XP") ganha urgência. A decisão 2 de lá
+  continua: o XP do GYM Challenge também é irreversível.
+
+### O deploy desta spec
+
+```bash
+firebase deploy --only firestore:indexes --project dev-liga-dev
+firebase deploy --only firestore:indexes --project <producao>
+
+npm run ranking:backfill   # com o .env de cada projeto, ANTES do tráfego
+```
+
+**Os dois projetos, com `--project` explícito nos dois.** É a lição de 2026-08-28, e ela custou as duas
+telas ordenadas do `dev-liga-dev`. O backfill não é opcional: sem ele o placar responde `200` com lista
+vazia, e nada aparece em log nenhum.

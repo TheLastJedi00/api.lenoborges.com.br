@@ -4,34 +4,110 @@
       "collectionGroup": "mural_questions",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "weekId", "order": "ASCENDING" },
-        { "fieldPath": "voteCount", "order": "DESCENDING" },
-        { "fieldPath": "createdAt", "order": "ASCENDING" }
+        {
+          "fieldPath": "weekId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "voteCount",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "mural_questions",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "weekId", "order": "ASCENDING" },
-        { "fieldPath": "createdAt", "order": "ASCENDING" }
+        {
+          "fieldPath": "weekId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "badge_videos",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "badgeId", "order": "ASCENDING" },
-        { "fieldPath": "order", "order": "ASCENDING" }
+        {
+          "fieldPath": "badgeId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "order",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "badge_videos",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "badgeId", "order": "ASCENDING" },
-        { "fieldPath": "tab", "order": "ASCENDING" },
-        { "fieldPath": "order", "order": "ASCENDING" }
+        {
+          "fieldPath": "badgeId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "tab",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "order",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "gym_questions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "badgeId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "ranking",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "xp",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "uid",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "gym_questions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "badgeId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "difficulty",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "ASCENDING"
+        }
       ]
     }
   ],

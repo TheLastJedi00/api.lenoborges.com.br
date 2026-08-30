@@ -37,6 +37,7 @@ function profile(id: string, overrides: Partial<Profile> = {}): Profile {
     legalAcceptances: {},
     xp: 0,
     socialLinksPublic: false,
+    nickname: null,
     completedAt: new Date('2026-08-18T09:02:00.000Z'),
     waitlistEntryId: null,
     createdAt: new Date('2026-08-18T09:02:00.000Z'),

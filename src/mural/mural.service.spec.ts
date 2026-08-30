@@ -37,6 +37,7 @@ function profile(tier: TierId, name: string | null = 'Leno Borges'): Profile {
     legalAcceptances: {},
     xp: 0,
     socialLinksPublic: false,
+    nickname: null,
     completedAt: new Date(),
     waitlistEntryId: null,
     createdAt: new Date(),

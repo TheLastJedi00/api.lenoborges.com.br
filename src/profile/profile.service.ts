@@ -1,4 +1,5 @@
 import {
+  ConflictException,
   ForbiddenException,
   Inject,
   Injectable,
@@ -14,6 +15,12 @@ import { ChangePasswordDto } from './dto/change-password.dto';
 import { DeleteAccountDto } from './dto/delete-account.dto';
 import { EmailPreferenceDto } from './dto/email-preference.dto';
 import { PrivacyPreferenceDto } from './dto/privacy-preference.dto';
+import { SetNicknameDto } from './dto/nickname.dto';
+import { NicknameRepository } from './nickname.repository';
+import { RankingRepository } from '../games/ranking.repository';
+import { GymChallengeRepository } from '../games/gym-challenge.repository';
+import { CHALLENGE_BADGE_IDS } from '../games/games.constants';
+import { badgeCountOf } from '../games/entities/ranking-entry.entity';
 import { ProfileDto } from './dto/profile.dto';
 import { PublicMemberDto } from './dto/public-member.dto';
 import { WatchedVideoRepository } from '../track/watched-video.repository';
@@ -65,6 +72,9 @@ export class ProfileService {
     private readonly legalAcceptanceRepository: LegalAcceptanceRepository,
     @Inject(forwardRef(() => WatchedVideoRepository))
     private readonly watchedVideoRepository: WatchedVideoRepository,
+    private readonly nicknameRepository: NicknameRepository,
+    private readonly rankingRepository: RankingRepository,
+    private readonly gymChallengeRepository: GymChallengeRepository,
   ) {}
 
   /**
@@ -101,6 +111,10 @@ export class ProfileService {
       // posicao inicial do switch -- e chuta ligado, que e o unico chute que
       // publica dado de alguem.
       socialLinksPublic: profile.socialLinksPublic,
+      // A gamertag (spec 022). Aqui, e nao no `PublicMemberDto`: a tela de Meu
+      // Perfil precisa saber se o campo ja esta travado, e o `?? null` cobre o
+      // perfil montado a mao num teste ou num script.
+      nickname: profile.nickname ?? null,
       // **Do mesmo `pendingFor` que o guard usa** (spec 018, decisao 9). Nunca
       // calcular de outro jeito aqui: este campo e o corpo do 428 tem de dizer a
       // mesma coisa, ou o painel abre bloqueado por algo que ja foi aceito.
@@ -194,6 +208,65 @@ export class ProfileService {
 
     if (!found) {
       throw new NotFoundException('Perfil não encontrado.');
+    }
+  }
+
+  /**
+   * Escolhe a gamertag, uma vez e para sempre (spec 022, decisao 20).
+   *
+   * **Duas recusas com o mesmo 409, e por motivos diferentes.** "Voce ja tem
+   * uma" e "esse nome e de outra pessoa" sao fatos distintos com a mesma
+   * consequencia; o front decide o texto pelo corpo, e nao pelo status.
+   *
+   * A imutabilidade e a regra que o placar exige: um nome que muda faz o
+   * historico de posicoes deixar de se referir a alguem, e trocar deixaria o
+   * documento de unicidade antigo orfao, ocupando um nome que ninguem mais usa.
+   *
+   * **Quem decide a colisao e o `create()` do lote, e nunca uma consulta
+   * previa.** Entre consultar "esse nome esta livre?" e gravar cabe o clique de
+   * outra pessoa, e a corrida so acontece em producao: dois cadastros
+   * simultaneos do mesmo nome sao raros demais para aparecer em teste, e o
+   * resultado sao duas gamertags iguais num ranking que nao sabe qual e qual.
+   */
+  async setNickname(userId: string, dto: SetNicknameDto): Promise<void> {
+    const { found, entry } = await this.repository.findById(userId);
+
+    if (!found || !entry) {
+      throw new NotFoundException('Perfil não encontrado.');
+    }
+
+    if (entry.nickname !== null) {
+      throw new ConflictException(
+        'Você já escolheu seu gamertag, e ele não pode ser alterado.',
+      );
+    }
+
+    const { taken } = await this.nicknameRepository.claim(userId, dto.nickname);
+
+    if (taken) {
+      throw new ConflictException('Esse gamertag já está em uso.');
+    }
+
+    // **A entrada no placar acontece aqui, e nao no primeiro XP** (spec 022,
+    // decisao 20). Escolher a gamertag e o ato que coloca a pessoa no ranking, e
+    // quem ja tinha XP de videos assistidos aparece com ele imediatamente -- em
+    // vez de ficar invisivel ate acertar a proxima questao.
+    //
+    // Num `catch` que engole, pelo mesmo motivo do `catch` da notificacao na
+    // spec 012: a gamertag ja foi reservada e e imutavel, e um 500 aqui daria ao
+    // membro um erro sobre uma escolha que ele nao pode refazer. O placar e
+    // eventualmente consistente por desenho, e o backfill corrige.
+    try {
+      await this.rankingRepository.upsert({
+        uid: userId,
+        nickname: dto.nickname,
+        xp: entry.xp,
+        badgeCount: badgeCountOf(entry.grade),
+      });
+    } catch (error) {
+      this.logger.error(
+        `Falha ao inserir ${userId} no ranking apos a gamertag: ${String(error)}`,
+      );
     }
   }
 
@@ -368,6 +441,21 @@ export class ProfileService {
     // que ela assistiu vai junto.
     await this.legalAcceptanceRepository.removeAll(userId);
     await this.watchedVideoRepository.removeAll(userId);
+    // E os do GYM Challenge (spec 022, decisao 14). **Quinta e sexta vez que a
+    // regra da subcolecao vale**: `gym_challenges/{badgeId__uid}` carrega
+    // `active_round` dentro, e o `removeAll` de la apaga a subcolecao antes do
+    // pai -- apagar o pai primeiro deixaria dez documentos orfaos por insignia:
+    // invisiveis, cobrados e impossiveis de encontrar depois.
+    await this.gymChallengeRepository.removeAll(userId, CHALLENGE_BADGE_IDS);
+    // A linha do placar, que e gamertag, XP e insignias ligados ao `uid`.
+    await this.rankingRepository.remove(userId);
+    // **E a gamertag volta a ficar livre.** E o unico jeito de o membro que
+    // voltar nao encontrar o proprio nome ocupado por um fantasma: um documento
+    // de unicidade cujo `uid` aponta para um perfil que nao existe mais, e que
+    // ninguem consegue liberar sem mexer no banco a mao.
+    if (profile.entry.nickname) {
+      await this.nicknameRepository.release(profile.entry.nickname);
+    }
     await this.repository.remove(userId);
 
     // 5. A inscricao na lista de espera, que e nome, telefone e e-mail crus.

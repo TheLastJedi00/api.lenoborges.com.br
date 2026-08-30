@@ -5,6 +5,7 @@ import { WatchedVideoRepository } from './watched-video.repository';
 import { WatchedVideoService } from './watched-video.service';
 import { XP_PER_VIDEO } from './track.constants';
 import { FakeFirestore } from './testing/fake-firestore';
+import { RankingRepository } from '../games/ranking.repository';
 
 const UID = 'uid-1';
 const RAZAO = `profiles/${UID}/watched_videos`;
@@ -18,6 +19,7 @@ describe('WatchedVideoService', () => {
   let firestore: FakeFirestore;
   let service: WatchedVideoService;
   let videos: { findById: jest.Mock };
+  let ranking: RankingRepository;
 
   beforeEach(() => {
     firestore = new FakeFirestore();
@@ -37,10 +39,17 @@ describe('WatchedVideoService', () => {
 
     // O repositorio e o de verdade, sobre o Firestore em memoria: um mock
     // devolveria o `xp` que o teste quisesse, e a invariante que este arquivo
-    // existe para provar nao seria provada.
+    // existe para provar nao seria provada. **O ranking tambem e o de verdade,
+    // sobre o mesmo Firestore**: e ele que prova que o placar e o perfil andam
+    // no mesmo lote (spec 022, decisao 11).
+    ranking = new RankingRepository({
+      firestore,
+    } as unknown as FirebaseService);
+
     service = new WatchedVideoService(
       watched,
       videos as unknown as BadgeVideoRepository,
+      ranking,
     );
   });
 
@@ -142,6 +151,70 @@ describe('WatchedVideoService', () => {
 
       expect(firestore.countUnder(RAZAO)).toBe(1);
       expect(xp()).toBe(XP_PER_VIDEO);
+    });
+  });
+  describe('o placar anda junto (spec 022)', () => {
+    it('o XP do video entra no ranking no mesmo lote', async () => {
+      await ranking.upsert({
+        uid: UID,
+        nickname: 'LenoDev',
+        xp: 0,
+        badgeCount: 0,
+      });
+
+      await service.setWatched(UID, A, { watched: true });
+
+      const { entry } = await ranking.findByUid(UID);
+      expect(entry!.xp).toBe(XP_PER_VIDEO);
+      expect(entry!.xp).toBe(xp());
+    });
+
+    it('teste-trava: quem nao tem gamertag nao ganha linha no placar', async () => {
+      // Um increment num documento inexistente o criaria sem `nickname`, e o
+      // ranking mostraria uma linha em branco de quem a decisao 20 mantem fora.
+      await service.setWatched(UID, A, { watched: true });
+
+      await expect(ranking.findByUid(UID)).resolves.toMatchObject({
+        found: false,
+      });
+      expect(xp()).toBe(XP_PER_VIDEO);
+    });
+
+    it('teste-trava: remarcar nao soma no placar, como nao soma no perfil', async () => {
+      // O ranking herda a invariante da decisao 2: ele acompanha o `xp`, e o
+      // `xp` so sobe na primeira marcacao de cada video. Um increment solto,
+      // fora do lote que o `create()` derruba, somaria a cada clique.
+      await ranking.upsert({
+        uid: UID,
+        nickname: 'LenoDev',
+        xp: 0,
+        badgeCount: 0,
+      });
+
+      await service.setWatched(UID, A, { watched: true });
+      await service.setWatched(UID, A, { watched: false });
+      await service.setWatched(UID, A, { watched: true });
+
+      const { entry } = await ranking.findByUid(UID);
+      expect(entry!.xp).toBe(XP_PER_VIDEO);
+      expect(entry!.xp).toBe(xp());
+    });
+
+    it('teste-trava: o 404 do video nao move o placar', async () => {
+      await ranking.upsert({
+        uid: UID,
+        nickname: 'LenoDev',
+        xp: 0,
+        badgeCount: 0,
+      });
+      videos.findById.mockResolvedValue({ found: false, entry: null });
+
+      await expect(
+        service.setWatched(UID, 'qualquer-coisa-1', { watched: true }),
+      ).rejects.toThrow(NotFoundException);
+
+      const { entry } = await ranking.findByUid(UID);
+      expect(entry!.xp).toBe(0);
     });
   });
 });
