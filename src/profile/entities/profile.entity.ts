@@ -137,6 +137,23 @@ export interface Profile {
    * e pior que ausencia dela, porque alguem confia nele.
    */
   socialLinksPublic: boolean;
+  /**
+   * A gamertag do membro no ranking e nos jogos (spec 022, decisao 20).
+   *
+   * **Denormalizacao para leitura, e nasce `null`.** Quem garante a unicidade e
+   * `nicknames/{nickname}`, cujo ID e o nome em minusculas; este campo existe
+   * para o `GET /me` e o ranking nao precisarem de uma segunda leitura so para
+   * descobrir como a pessoa se chama no placar.
+   *
+   * **Imutavel depois de gravado.** O `PUT /me/nickname` responde 409 quando ele
+   * ja nao e nulo, e o modal avisa disso antes de confirmar. A razao e o placar:
+   * um nome que muda faz o historico de posicoes deixar de se referir a alguem.
+   *
+   * O `?? null` no converter e carga util: **todo documento e anterior a este
+   * campo no dia do deploy**, e um `undefined` chegando no ranking gravaria
+   * `nickname: undefined` no placar.
+   */
+  nickname: string | null;
   completedAt: Date | null;
   waitlistEntryId: string | null;
   createdAt: Date;
@@ -158,6 +175,7 @@ interface ProfileDocument extends DocumentData {
   legalAcceptances: Record<string, { version: string; acceptedAt: Timestamp }>;
   xp: number;
   socialLinksPublic: boolean;
+  nickname: string | null;
   completedAt: Timestamp | null;
   waitlistEntryId: string | null;
   createdAt: Timestamp;
@@ -214,6 +232,7 @@ export const profileConverter: FirestoreDataConverter<Profile> = {
       ),
       xp: profile.xp,
       socialLinksPublic: profile.socialLinksPublic,
+      nickname: profile.nickname,
       completedAt: profile.completedAt
         ? Timestamp.fromDate(profile.completedAt)
         : null,
@@ -279,6 +298,8 @@ export const profileConverter: FirestoreDataConverter<Profile> = {
       // spec o preencheu num formulario que so a administracao lia. Trocar isto
       // por `?? true` divulga o vinculo de todo mundo sem ninguem ter escolhido.
       socialLinksPublic: data.socialLinksPublic ?? false,
+      // Todo documento e anterior a este campo no dia do deploy (spec 022).
+      nickname: data.nickname ?? null,
       // completedAt nulo e o estado normal de quem ainda nao fez o onboarding, e
       // e por ele que profileCompleted e decidido. Um undefined vindo de
       // documento antigo viraria "completou", entao o ?? null e carga util.
