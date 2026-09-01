@@ -54,6 +54,21 @@ export class FirebaseService {
       // processo: o sintoma e a primeira requisicao depois de um periodo ocioso
       // pendurar ate dar timeout. preferRest usa HTTP/1.1 e contorna isso.
       //
+      // **Isto exige firebase-admin >= 14, e o piso e por isto.** Na 13.10.0
+      // com preferRest o transporte nao traduzia o "documento ja existe": a
+      // promessa do create() sobre caminho ocupado simplesmente nunca resolvia,
+      // e a requisicao ficava pendurada -- sem log, sem excecao, sem 500. Como
+      // a unicidade deste produto inteiro e o ALREADY_EXISTS de um create(),
+      // isso pendurava remarcar um video, concluir um treinamento, aceitar os
+      // termos duas vezes. Medido em 2026-09-01, fora da aplicacao: a 14
+      // recusa em ~0,3s, com codigo 409 em vez do 6 do gRPC -- e por isso quem
+      // decide se um erro e duplicata e o isAlreadyExists de
+      // waitlist.repository.ts, que conhece os dois.
+      //
+      // Desligar o preferRest tambem consertaria, em uma linha, e reabriria o
+      // travamento de cold start descrito acima. Seria trocar um travamento por
+      // outro, e a Vercel e onde o produto roda.
+      //
       // initializeFirestore so pode ser chamado antes do primeiro getFirestore
       // do app, e por isso mora aqui dentro, junto da inicializacao.
       this.firestore = initializeFirestore(this.app, { preferRest: true });

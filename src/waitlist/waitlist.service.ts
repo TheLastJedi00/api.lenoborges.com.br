@@ -3,7 +3,7 @@ import {
   BadRequestException,
   InternalServerErrorException,
 } from '@nestjs/common';
-import { WaitlistRepository, ALREADY_EXISTS } from './waitlist.repository';
+import { WaitlistRepository, isAlreadyExists } from './waitlist.repository';
 import { CreateWaitlistEntryDto } from './dto/create-waitlist-entry.dto';
 import { WaitlistReceiptDto } from './dto/waitlist-receipt.dto';
 import {
@@ -46,12 +46,7 @@ export class WaitlistService {
         receivedAt: created.entry.createdAt,
       };
     } catch (error: unknown) {
-      if (
-        error &&
-        typeof error === 'object' &&
-        'code' in error &&
-        error.code === ALREADY_EXISTS
-      ) {
+      if (isAlreadyExists(error)) {
         // Documento ja existe: outra requisicao gravou o mesmo e-mail entre o
         // findByEmail e o create. Era a unique violation 23505 do Postgres; com
         // o e-mail como ID do documento, o Firestore recusa pelo mesmo motivo e

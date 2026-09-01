@@ -1,4 +1,9 @@
-import { WaitlistRepository } from './waitlist.repository';
+import {
+  ALREADY_EXISTS,
+  ALREADY_EXISTS_REST,
+  isAlreadyExists,
+  WaitlistRepository,
+} from './waitlist.repository';
 import { FirebaseService } from '../auth/firebase.service';
 
 interface DocMock {
@@ -150,5 +155,47 @@ describe('WaitlistRepository', () => {
       expect(mocks.collection.doc).toHaveBeenCalledWith('test@test.com');
       expect(mocks.doc.delete).toHaveBeenCalledTimes(1);
     });
+  });
+});
+
+/**
+ * **O teste que trava a regra que faltou em 2026-09-01.**
+ *
+ * O produto inteiro apoia a unicidade no `ALREADY_EXISTS` de um `create()`
+ * sobre caminho ocupado, e cerca de dez `catch` perguntam a esta funcao se foi
+ * isso que aconteceu. Ela e o unico lugar que sabe **como** essa recusa chega --
+ * e ela chega de dois jeitos, porque o mesmo build fala dois transportes: gRPC
+ * no emulador e nos testes, REST em producao (`preferRest: true` no
+ * `FirebaseService`, por causa do congelamento de processo na Vercel).
+ *
+ * Sem o `409`, o defeito nao apareceria em teste nenhum: a suite ficaria verde
+ * e o segundo clique em "Concluir Desafio" devolveria `500` em producao.
+ */
+describe('isAlreadyExists', () => {
+  it('aceita o 6 do gRPC', () => {
+    expect(isAlreadyExists({ code: ALREADY_EXISTS })).toBe(true);
+  });
+
+  it('aceita o 409 do REST, que e o que producao recebe', () => {
+    // `preferRest: true` faz a recusa chegar como status HTTP, e nao como
+    // codigo gRPC. Este `expect` e a metade do conserto que da para esquecer:
+    // subir o `firebase-admin` sozinho troca o travamento por um 500.
+    expect(isAlreadyExists({ code: ALREADY_EXISTS_REST })).toBe(true);
+  });
+
+  it('recusa qualquer outro codigo do Firestore', () => {
+    // NOT_FOUND, PERMISSION_DENIED e um 500 do REST nao sao duplicata, e
+    // engoli-los aqui esconderia falha de verdade dentro de um "ja existia".
+    expect(isAlreadyExists({ code: 5 })).toBe(false);
+    expect(isAlreadyExists({ code: 7 })).toBe(false);
+    expect(isAlreadyExists({ code: 500 })).toBe(false);
+  });
+
+  it('recusa o que nao e erro com codigo', () => {
+    expect(isAlreadyExists(null)).toBe(false);
+    expect(isAlreadyExists(undefined)).toBe(false);
+    expect(isAlreadyExists(new Error('boom'))).toBe(false);
+    expect(isAlreadyExists('409')).toBe(false);
+    expect(isAlreadyExists({ code: '409' })).toBe(false);
   });
 });
