@@ -131,16 +131,16 @@ Ao fim desta fase toda a lógica de negócio do membro está coberta por testes 
 
 ---
 
-# Fase 05: Controllers — rotas do membro
+# Fase 05: Controllers — rotas do membro [x]
 
-- [ ] Task 01: `src/training/training.controller.ts` — com `FirebaseAuthGuard`:
+- [x] Task 01: `src/training/training.controller.ts` — com `FirebaseAuthGuard`:
   `GET /badges/:badgeId/trainings` (lista com status de conclusão),
   `GET /trainings/:trainingId` (detalhe),
   `POST /trainings/:trainingId/complete` (conclui e ganha XP),
   `GET /trainings/:trainingId/comments` (paginado, `?limit=&after=`),
   `POST /trainings/:trainingId/comments` (adiciona comentário, tier validado no service).
   **Sem exemção do `LegalAcceptanceGuard`** — quem não aceitou os termos não treina.
-- [ ] Task 02: `src/training/training.controller.spec.ts` — cobertura das cinco rotas, incluindo o
+- [x] Task 02: `src/training/training.controller.spec.ts` — cobertura das cinco rotas, incluindo o
   `403` de tier gratuito ao comentar, o `404` de treinamento inexistente, e o `200` idempotente de
   conclusão duplicada.
 
