@@ -45,9 +45,28 @@ interface Converter<T> {
   fromFirestore(snapshot: { id: string; data: () => Doc }): T;
 }
 
-/** O codigo gRPC de ALREADY_EXISTS, o mesmo que o Firestore de verdade devolve. */
+/**
+ * **O mesmo "ja existe", escrito de dois jeitos, e o fake sabe os dois.**
+ *
+ * O `6` e o codigo gRPC; o `409` e o status HTTP com que o transporte REST --
+ * o `preferRest: true` que a aplicacao usa na Vercel -- recusa a mesma coisa.
+ * Ate 2026-09-01 este fake so sabia emitir o `6`, e foi exatamente por isso que
+ * **a suite ficou verde com o produto travado em producao**: nenhum teste
+ * chegava a exercitar o codigo que a aplicacao de verdade recebe.
+ *
+ * Quem escolhe e o `transport` do `FakeFirestore`. O padrao continua sendo
+ * `grpc`, que e o do emulador e o de todos os testes que ja existiam.
+ */
 const ALREADY_EXISTS = 6;
+const ALREADY_EXISTS_REST = 409;
 const NOT_FOUND = 5;
+
+/** Qual transporte este fake esta imitando. */
+export type FakeTransport = 'grpc' | 'rest';
+
+function alreadyExistsCode(transport: FakeTransport): number {
+  return transport === 'rest' ? ALREADY_EXISTS_REST : ALREADY_EXISTS;
+}
 
 class FakeError extends Error {
   constructor(
@@ -90,6 +109,7 @@ class FakeDocumentReference<T = Doc> {
     private readonly store: Map<string, Doc>,
     readonly path: string,
     readonly converter?: Converter<T>,
+    readonly transport: FakeTransport = 'grpc',
   ) {}
 
   get id(): string {
@@ -97,7 +117,12 @@ class FakeDocumentReference<T = Doc> {
   }
 
   collection(name: string): FakeCollectionReference {
-    return new FakeCollectionReference(this.store, `${this.path}/${name}`);
+    return new FakeCollectionReference(
+      this.store,
+      `${this.path}/${name}`,
+      undefined,
+      this.transport,
+    );
   }
 
   get(): Promise<{ exists: boolean; id: string; data: () => T | Doc }> {
@@ -160,7 +185,7 @@ class FakeDocumentReference<T = Doc> {
     if (this.store.has(this.path)) {
       throw new FakeError(
         `document already exists: ${this.path}`,
-        ALREADY_EXISTS,
+        alreadyExistsCode(this.transport),
       );
     }
 
@@ -381,10 +406,16 @@ class FakeCollectionReference<T = Doc> {
     private readonly store: Map<string, Doc>,
     private readonly path: string,
     private readonly converter?: Converter<T>,
+    private readonly transport: FakeTransport = 'grpc',
   ) {}
 
   withConverter<U>(converter: Converter<U>): FakeCollectionReference<U> {
-    return new FakeCollectionReference<U>(this.store, this.path, converter);
+    return new FakeCollectionReference<U>(
+      this.store,
+      this.path,
+      converter,
+      this.transport,
+    );
   }
 
   doc(id?: string): FakeDocumentReference<T> {
@@ -396,6 +427,7 @@ class FakeCollectionReference<T = Doc> {
       this.store,
       `${this.path}/${docId}`,
       this.converter,
+      this.transport,
     );
   }
 
@@ -456,7 +488,10 @@ interface PendingWrite {
 class FakeWriteBatch {
   private readonly writes: PendingWrite[] = [];
 
-  constructor(private readonly store: Map<string, Doc>) {}
+  constructor(
+    private readonly store: Map<string, Doc>,
+    private readonly transport: FakeTransport = 'grpc',
+  ) {}
 
   create(ref: FakeDocumentReference<unknown>, data: unknown): void {
     this.writes.push({ kind: 'create', ref, data: toRaw(ref, data) });
@@ -494,7 +529,7 @@ class FakeWriteBatch {
       if (write.kind === 'create' && this.store.has(write.ref.path)) {
         throw new FakeError(
           `document already exists: ${write.ref.path}`,
-          ALREADY_EXISTS,
+          alreadyExistsCode(this.transport),
         );
       }
       if (write.kind === 'update' && !this.store.has(write.ref.path)) {
@@ -530,12 +565,31 @@ function toRaw(ref: FakeDocumentReference<unknown>, data: unknown): Doc {
 export class FakeFirestore {
   readonly docs = new Map<string, Doc>();
 
+  /**
+   * O transporte que este fake imita, e por que ele e um parametro.
+   *
+   * `new FakeFirestore()` continua sendo gRPC, que e o que o emulador fala e o
+   * que todos os testes anteriores a 2026-09-01 assumiam. `'rest'` faz o
+   * `create()` sobre caminho ocupado recusar com `409` em vez de `6` --
+   * **o codigo que a aplicacao de verdade recebe**, porque ela roda com
+   * `preferRest: true`.
+   *
+   * Sem essa chave, um `catch` que so conhecesse o `6` passaria verde aqui e
+   * devolveria `500` em producao. Foi o que aconteceu.
+   */
+  constructor(private readonly transport: FakeTransport = 'grpc') {}
+
   collection(name: string): FakeCollectionReference {
-    return new FakeCollectionReference(this.docs, name);
+    return new FakeCollectionReference(
+      this.docs,
+      name,
+      undefined,
+      this.transport,
+    );
   }
 
   batch(): FakeWriteBatch {
-    return new FakeWriteBatch(this.docs);
+    return new FakeWriteBatch(this.docs, this.transport);
   }
 
   getAll(

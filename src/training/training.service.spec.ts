@@ -190,6 +190,54 @@ describe('TrainingService', () => {
     });
 
     /**
+     * **A mesma idempotência, no transporte que produção usa.**
+     *
+     * Os dois casos acima rodam em gRPC, onde a recusa do `create()` chega como
+     * `code: 6`. Produção roda com `preferRest: true` e recebe `code: 409` --
+     * e foi o segundo clique em "Concluir Desafio" que expôs isso, em
+     * 2026-09-01: a requisição **pendurava**, sem log e sem exceção, com esta
+     * suíte verde. Depois de subir o `firebase-admin`, um `catch` que só
+     * conhecesse o `6` trocaria o travamento por um `500`.
+     *
+     * O teste é o mesmo de sempre; o que muda é só o transporte. É essa
+     * repetição que trava a regra.
+     */
+    it('teste-trava: concluir de novo é idempotente também no transporte REST', async () => {
+      const rest = new FakeFirestore('rest');
+      const firebaseRest = () =>
+        ({ firestore: rest }) as unknown as FirebaseService;
+      const servicoRest = new TrainingService(
+        new TrainingRepository(firebaseRest()),
+        new TrainingCommentRepository(firebaseRest()),
+        new TrainingCompletionRepository(firebaseRest()),
+        new ProfileRepository(firebaseRest()),
+        new RankingRepository(firebaseRest()),
+        firebaseRest(),
+      );
+      rest.docs.set('profiles/ana', {
+        name: 'Ana Prado',
+        tier: 'great-dev-tier',
+        xp: 0,
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now(),
+      });
+      const treinamento = await servicoRest.createTraining('logica', {
+        title: 'Primeiro',
+        description: 'Descrição do desafio',
+        steps: ['Passo um', 'Passo dois'],
+        xpAmount: 30,
+      });
+
+      await servicoRest.complete('ana', treinamento.id);
+      const segunda = await servicoRest.complete('ana', treinamento.id);
+
+      expect(segunda.completed).toBe(true);
+      expect(segunda.xpAwarded).toBe(0);
+      expect(segunda.xp).toBe(30);
+      expect(rest.raw('profiles/ana')?.xp).toBe(30);
+    });
+
+    /**
      * O placar anda **no mesmo lote** que o perfil (spec 022, decisão 11).
      *
      * Duas escritas separadas criariam um XP no ranking que o perfil não tem, e

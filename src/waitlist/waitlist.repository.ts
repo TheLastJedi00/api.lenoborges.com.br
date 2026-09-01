@@ -17,6 +17,46 @@ export const WAITLIST_COLLECTION = 'waitlist_entries';
  */
 export const ALREADY_EXISTS = 6;
 
+/**
+ * O mesmo "documento ja existe", **como o transporte REST o escreve**: o status
+ * HTTP `409`, e nao o codigo gRPC.
+ *
+ * O `FirebaseService` liga o Firestore com `preferRest: true` -- ha um motivo
+ * documentado la, e ele continua valendo. Com ele quem recusa a duplicata e a
+ * API REST, e ela responde `409 Conflict`. O `6` so aparece quando o transporte
+ * e gRPC: o emulador, os testes, e qualquer script local.
+ *
+ * **Os dois codigos significam a mesma coisa e a aplicacao precisa aceitar os
+ * dois**, porque o mesmo build roda nos dois transportes.
+ */
+export const ALREADY_EXISTS_REST = 409;
+
+/**
+ * `true` quando o Firestore recusou a escrita por o documento ja existir.
+ *
+ * **Este e o unico lugar do produto que sabe como essa recusa chega.** A regra
+ * "`create()`, nunca `set()`" e a unicidade deste produto inteiro -- o
+ * `ALREADY_EXISTS` ocupa o lugar da unique violation `23505` do Postgres --, e
+ * cerca de dez `catch` dependem de reconhece-la. Todos compararem contra um
+ * numero so foi o que quebrou em 2026-09-01: no `firebase-admin@13` com
+ * `preferRest`, a promessa do `create()` sobre caminho ocupado **nunca
+ * resolvia** e a requisicao ficava pendurada; subir para a 14 devolveu o erro,
+ * mas como `409`, e cada `if` que so conhecia o `6` teria trocado o travamento
+ * por um `500`.
+ *
+ * Uma funcao, e nao a constante solta, para que um transporte com um terceiro
+ * codigo custe uma linha aqui em vez de dez espalhadas.
+ */
+export function isAlreadyExists(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null || !('code' in error)) {
+    return false;
+  }
+
+  const { code } = error as { code?: unknown };
+
+  return code === ALREADY_EXISTS || code === ALREADY_EXISTS_REST;
+}
+
 @Injectable()
 export class WaitlistRepository {
   constructor(private readonly firebase: FirebaseService) {}

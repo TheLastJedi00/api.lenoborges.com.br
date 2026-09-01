@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { BadgeVideoRepository } from './badge-video.repository';
-import { ALREADY_EXISTS } from '../waitlist/waitlist.repository';
+import { isAlreadyExists } from '../waitlist/waitlist.repository';
 import { BADGE_TITLES, BadgeId, isBadgeId } from './track.constants';
 import { extractYoutubeId } from './youtube-id';
 import { CreateBadgeVideoDto } from './dto/create-badge-video.dto';
@@ -212,12 +212,7 @@ export class BadgeVideoService {
         order: existing.length,
       });
     } catch (error: unknown) {
-      if (
-        error &&
-        typeof error === 'object' &&
-        'code' in error &&
-        error.code === ALREADY_EXISTS
-      ) {
+      if (isAlreadyExists(error)) {
         // O caminho do documento e `{badgeId}__{youtubeId}`, entao o Firestore
         // recusa o mesmo video duas vezes na mesma insignia. Em outra insignia
         // ele entra, e isso e proposital.

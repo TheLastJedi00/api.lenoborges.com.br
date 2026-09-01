@@ -12,7 +12,7 @@ import {
 } from '../profile/profile.repository';
 import { RankingRepository } from '../games/ranking.repository';
 import { BadgeId, isBadgeId } from '../track/track.constants';
-import { ALREADY_EXISTS } from '../waitlist/waitlist.repository';
+import { isAlreadyExists } from '../waitlist/waitlist.repository';
 import { Training } from './entities/training.entity';
 import { TrainingComment } from './entities/training-comment.entity';
 import { TrainingRepository } from './training.repository';
@@ -515,13 +515,4 @@ function firstName(name: string | null): string {
   const trimmed = (name ?? '').trim();
 
   return trimmed ? trimmed.split(/\s+/)[0] : 'Membro';
-}
-
-/** O ALREADY_EXISTS do Firestore chega como `{ code: 6 }` no erro do commit. */
-function isAlreadyExists(error: unknown): boolean {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    (error as { code?: unknown }).code === ALREADY_EXISTS
-  );
 }
