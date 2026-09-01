@@ -114,9 +114,63 @@ O conserto é uma linha, e ela não é um atalho: **o `preferRest` fica desligad
 serverless; o emulador roda em localhost, no mesmo processo vivo, e ali ele não compra nada. Quem
 cobre o transporte REST não é o e2e — é o `fake-firestore`, que sabe emitir o `409`.
 
+## A quinta metade, que só o deploy encontrou: a function nem subia
+
+Com o e2e verde e o preview publicado, **a API de preview estava respondendo `500` em toda rota,
+inclusive na raiz**. O log da Vercel deu a causa em uma linha:
+
+```
+ERR_REQUIRE_ESM: require() of ES Module .../jose/dist/webapi/index.js
+from .../jwks-rsa/src/utils.js not supported
+```
+
+O `nest build` emite CommonJS, e a function da Vercel carrega esse bundle com um `require` próprio.
+O upgrade trocou a cadeia inteira por baixo:
+
+```
+13.x -> jwks-rsa@3.2.2 -> jose@4.15.9   (tem build CJS)
+14.x -> jwks-rsa@4.1.0 -> jose@^6       (só ESM)
+```
+
+E o `jwks-rsa@4.1.0` continua sendo CommonJS — a primeira linha do `utils.js` dele é
+`require('jose')`. A combinação só funciona onde o `require()` de ESM é permitido, que é Node 22.12+
+fora de bundler. **Por isso o build passou, os 984 testes passaram e a máquina de desenvolvimento não
+reclamou**: o Node daqui aceita; o carregador da Vercel não. Nada rodando localmente podia pegar isso
+— nem o e2e, que roda no mesmo Node.
+
+O conserto é um `overrides` prendendo o `jose` na 5, que publica as duas formas. Junto vai
+`cjs-dependencies.spec.ts`, que lê o `exports` do pacote que o consumidor de fato carrega e exige a
+condição `require`. **Ele resolve a partir do consumidor, e não do arquivo de teste**, e isso já
+custou um verde falso na primeira versão: de `src/config` o Node subia até um `jose` solto em
+`C:Users<usuário>
+ode_modules` e passava, com a cópia certa quebrada.
+
+## A passada manual, que é o que fecha
+
+Contra `apipreview.lenoborges.com.br` — Firestore de verdade, `preferRest` ligado, sessão real do
+painel. Os dois sintomas do começo deste documento:
+
+**`POST /trainings/:id/complete`, três vezes no mesmo desafio já concluído:**
+
+| chamada | status | tempo | `xpAwarded` | `xp` |
+|---|---|---|---|---|
+| 1ª | `201` | 823 ms | 0 | 512 |
+| 2ª — **a que pendurava** | `201` | 683 ms | 0 | 512 |
+| 3ª | `201` | 961 ms | 0 | 512 |
+
+**`PUT /me/watched-videos/:videoId`, seis idas e vindas no mesmo vídeo:** todas `200`, entre 720 ms
+e 1514 ms, `xp` parado em 512 nas seis.
+
+Antes: dois minutos e dez segundos, respectivamente, sem resposta nenhuma.
+
+Uma observação que vale guardar: **o botão "Concluir Desafio" some depois da primeira conclusão**,
+então o segundo clique não é alcançável pela tela e o teste teve que ir pela API. Isso é uma boa
+defesa do front, mas nunca foi o que segurava o defeito — um duplo clique rápido, ou uma aba aberta
+antes da conclusão, chegava lá.
+
 ## O que falta
 
-Verde: `npm test` (984 testes, 82 suítes), `npm run lint`, `npm run build`.
+Verde: `npm test` (985 testes, 83 suítes), `npm run lint`, `npm run build`.
 
 **O e2e rodou, e o resultado é "nenhuma regressão": 178 falhas antes e 178 depois, com os nomes de
 teste idênticos.** Essas 178 são **anteriores e desta máquina**, não do upgrade: `POST /auth/login`
