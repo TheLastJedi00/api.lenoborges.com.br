@@ -67,21 +67,28 @@ Ao fim desta fase os comentários existem como dados, com a validação de tier,
 
 ---
 
-# Fase 03: Conclusão de treinamento e XP
+# Fase 03: Conclusão de treinamento e XP [x]
 
 Ao fim desta fase a mecânica de conclusão e ganho de XP existe, atômica e à prova de duplicação.
 
-- [ ] Task 01: `src/training/entities/training-completion.entity.ts` — a interface
+- [x] Task 01: `src/training/entities/training-completion.entity.ts` — a interface
   `TrainingCompletion` e o converter. Coleção: `training_completions/{uid}__{trainingId}`. Campos:
   `uid`, `trainingId`, `xpAwarded: number`, `completedAt`. O ID composto garante unicidade
   (membro, treinamento) pelo mesmo mecanismo de `gym_challenges/{badgeId__uid}`: um `batch.create()`
   que falha com `ALREADY_EXISTS` se já existir.
-- [ ] Task 02: `src/training/entities/training-completion.entity.spec.ts` — round-trip do converter.
-- [ ] Task 03: `src/training/training-completion.repository.ts` — `create(batch, data)` (recebe o
+- [x] Task 02: `src/training/entities/training-completion.entity.spec.ts` — round-trip do converter.
+- [x] Task 03: `src/training/training-completion.repository.ts` — `create(batch, data)` (recebe o
   `WriteBatch` de fora, para compor com o incremento de XP), `findById(uid, trainingId)`,
-  `listByUid(uid)` (para saber quais o membro já completou), e `removeAll(uid)` (para exclusão de
-  conta). Devolve `{ found, entry }` / `{ entries }`.
-- [ ] Task 04: `src/training/training-completion.repository.spec.ts`.
+  `findCompletedIds(uid, trainingIds)` (quais destes o membro já concluiu), `removeAll(uid)` (para
+  exclusão de conta) e `removeAllByTraining(trainingId)` (para a exclusão em cascata da Fase 06).
+  Devolve `{ found, entry }` / `Set<string>`.
+  **`findCompletedIds` no lugar do `listByUid` que esta task pedia**, e a troca é a lição do
+  `findWatchedIds` da spec 019: um `getAll` nos caminhos exatos dos treinamentos que a resposta já
+  vai listar custa as mesmas N leituras, não pede índice nenhum, não devolve linha de treinamento já
+  removido da insígnia, e tem custo proporcional ao que a tela mostra em vez de a tudo o que a pessoa
+  já concluiu na vida. Um `listByUid` cresce para sempre e a listagem da trilha ficaria mais cara a
+  cada desafio concluído, em toda abertura de tela.
+- [x] Task 04: `src/training/training-completion.repository.spec.ts`.
 
 ---
 
