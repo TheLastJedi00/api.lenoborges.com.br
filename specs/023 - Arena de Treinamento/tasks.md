@@ -92,17 +92,17 @@ Ao fim desta fase a mecânica de conclusão e ganho de XP existe, atômica e à 
 
 ---
 
-# Fase 04: Service do membro — listar, concluir e comentar
+# Fase 04: Service do membro — listar, concluir e comentar [x]
 
 Ao fim desta fase toda a lógica de negócio do membro está coberta por testes e implementada.
 
-- [ ] Task 01: `src/training/training.service.spec.ts` — **testes antes**: listar treinamentos por
+- [x] Task 01: `src/training/training.service.spec.ts` — **testes antes**: listar treinamentos por
   insígnia com status de conclusão de cada um para o membro logado; rejeita `badgeId` fora de
   `BADGE_IDS`; concluir dá XP e atualiza o `ranking/{uid}` no mesmo `WriteBatch`; concluir duas vezes
   o mesmo treinamento não duplica XP (`ALREADY_EXISTS` tratado como idempotente, retornando que já foi
   concluído); comentar com tier `dev-tier` retorna `403` com mensagem orientando para o Financeiro;
   comentar com `great-dev-tier` ou superior funciona; listar comentários pagina corretamente.
-- [ ] Task 02: `src/training/training.service.ts` — a lógica que os testes acima descrevem.
+- [x] Task 02: `src/training/training.service.ts` — a lógica que os testes acima descrevem.
   `listByBadge(uid, badgeId)` faz `Promise.all` entre a lista de treinamentos e as completions do
   membro, devolvendo cada treinamento com `completed: boolean`. `complete(uid, trainingId)` monta
   o `WriteBatch` com: (1) `batch.create` da completion, (2) `FieldValue.increment(xpAmount)` no
@@ -118,14 +118,14 @@ Ao fim desta fase toda a lógica de negócio do membro está coberta por testes 
   criaria uma linha de placar sem `nickname`, de quem nunca escolheu gamertag. Então o `complete()`
   chama `ranking.findByUid(uid)` antes de montar o `WriteBatch` e repassa o que veio; quem não tem
   linha não entra no placar, e o XP do perfil sobe do mesmo jeito.
-- [ ] Task 03: `src/training/dto/create-training.dto.ts` — validação de classe: `title` e
+- [x] Task 03: `src/training/dto/create-training.dto.ts` — validação de classe: `title` e
   `description` com `@IsString() @IsNotEmpty()`, `steps` com `@IsArray() @ArrayMinSize(1)` de strings
   não vazias, `videoUrl` com `@IsOptional() @IsUrl()`, `xpAmount` com
   `@IsOptional() @IsInt() @Min(1)`, default 30.
-- [ ] Task 04: `src/training/dto/update-training.dto.ts` — todos opcionais (PartialType do Create),
+- [x] Task 04: `src/training/dto/update-training.dto.ts` — todos opcionais (PartialType do Create),
   mais `position` com `@IsOptional() @IsInt() @Min(0)`.
-- [ ] Task 05: `src/training/dto/create-comment.dto.ts` — `content` com `@IsString() @IsNotEmpty()`.
-- [ ] Task 06: `src/training/dto/training.dto.ts` — o DTO público com `completed: boolean`, e
+- [x] Task 05: `src/training/dto/create-comment.dto.ts` — `content` com `@IsString() @IsNotEmpty()`.
+- [x] Task 06: `src/training/dto/training.dto.ts` — o DTO público com `completed: boolean`, e
   `trainingCommentDto` com `authorName` e `adminReply` — **sem o `uid` cru** para não vazar identificador interno
   para terceiros.
 

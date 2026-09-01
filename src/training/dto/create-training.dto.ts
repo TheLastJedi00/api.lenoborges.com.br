@@ -48,9 +48,11 @@ export class CreateTrainingDto {
   @ArrayMaxSize(30)
   @IsString({ each: true })
   @Length(1, 500, { each: true })
-  @Transform(({ value }: { value: unknown }) =>
+  @Transform(({ value }: { value: unknown }): unknown =>
     Array.isArray(value)
-      ? value.map((item) => (typeof item === 'string' ? item.trim() : item))
+      ? (value as unknown[]).map((item) =>
+          typeof item === 'string' ? item.trim() : item,
+        )
       : value,
   )
   steps: string[];

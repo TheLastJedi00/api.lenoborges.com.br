@@ -47,12 +47,17 @@ describe('TrainingService', () => {
   /** Um perfil com tier, nome e XP — o que as três regras deste service leem. */
   function semearPerfil(
     uid: string,
-    { tier = 'great-dev-tier' as TierId, name = 'Ana Prado', xp = 0 } = {},
+    {
+      tier = 'great-dev-tier',
+      name = 'Ana Prado',
+      xp = 0,
+    }: { tier?: TierId; name?: string; xp?: number } = {},
   ) {
     firestore.docs.set(`profiles/${uid}`, {
       name,
       tier,
       xp,
+      createdAt: Timestamp.now(),
       updatedAt: Timestamp.now(),
     });
   }
