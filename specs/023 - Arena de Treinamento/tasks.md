@@ -7,32 +7,32 @@
 
 ---
 
-# Fase 01: Fundação — entidade do treinamento, repositório e constantes
+# Fase 01: Fundação — entidade do treinamento, repositório e constantes [x]
 
 Ao fim desta fase a coleção `trainings` existe como código, com converter, repositório e constantes.
 Nenhuma rota existe ainda.
 
-- [ ] Task 01: `src/training/training.constants.ts` — criar. `DEFAULT_TRAINING_XP = 30`,
+- [x] Task 01: `src/training/training.constants.ts` — criar. `DEFAULT_TRAINING_XP = 30`,
   `TRAINING_COMMENTS_PAGE_SIZE = 10`. Cada constante com o comentário do porquê, no molde de
   `XP_PER_VIDEO` em `src/track/track.constants.ts`. **O número 30 nasce e morre aqui.**
-- [ ] Task 02: `src/training/entities/training.entity.ts` — a interface `Training` e o
+- [x] Task 02: `src/training/entities/training.entity.ts` — a interface `Training` e o
   `FirestoreDataConverter` da decisão 1. Campos: `id`, `badgeId`, `title`, `description`,
   `steps: string[]`, `videoUrl: string | null`, `xpAmount: number`, `position: number`, `createdAt`,
   `updatedAt`. O `fromFirestore` lê `videoUrl ?? null`, `xpAmount ?? 30`, `steps ?? []` — documentos
   criados antes de qualquer migração lêem valores seguros. Comentar por que a coleção é de primeiro
   nível e não subcoleção de `badge_videos`: treinamento vive mais que vídeo, e o vínculo é por
   `badgeId`, como `gym_questions`.
-- [ ] Task 03: `src/training/entities/training.entity.spec.ts` — round-trip do converter: `steps`
+- [x] Task 03: `src/training/entities/training.entity.spec.ts` — round-trip do converter: `steps`
   preservado como array, `videoUrl` nulo quando ausente, `xpAmount` fallback para 30 em documento
   legado. É o teste que impede a trilha de treinamento de sumir em silêncio quando o campo não existe.
-- [ ] Task 04: `src/training/training.repository.ts` — `create`, `update`, `delete`,
+- [x] Task 04: `src/training/training.repository.ts` — `create`, `update`, `delete`,
   `listByBadge(badgeId)` (ordenado por `position ASC`), `findById`, e
   `reorder(badgeId, orderedIds: string[])` aplicando `batch.update(docRef, { position: index, updatedAt })`
   para todos os itens em lote — no molde exato do `BadgeVideoRepository.reorder`. Devolve `{ found, entry }` /
   `{ entries }`, nunca `null`.
-- [ ] Task 05: `src/training/training.repository.spec.ts` — contra o `fake-firestore` de
+- [x] Task 05: `src/training/training.repository.spec.ts` — contra o `fake-firestore` de
   `src/track/testing/`, que já existe.
-- [ ] Task 06: `firestore.indexes.json` — adicionar o índice `trainings`: `badgeId ASC, position ASC`.
+- [x] Task 06: `firestore.indexes.json` — adicionar o índice `trainings`: `badgeId ASC, position ASC`.
   Atualizar a tabela "Índices compostos que produção exige" no `README.md`.
 
 ---
