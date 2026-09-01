@@ -87,13 +87,44 @@ O piso de versão está escrito onde ele importa: no comentário do `preferRest`
 que o comentário do `FirebaseService` documenta. Seria trocar um travamento por outro, em situação
 diferente — e a Vercel é onde o produto roda.
 
+## A quarta metade, que só o e2e encontrou
+
+O e2e rodou (JDK em `C:UsersLeno.jdks` — o `firebase-tools` de hoje exige Java >= 21, então
+quem serviu foi o JBR do IntelliJ, e não o 17), e ele achou o que a suíte unitária não podia achar:
+**com o `firebase-admin@14`, `preferRest` contra o emulador responde `403 PERMISSION_DENIED` em
+toda leitura e escrita.**
+
+A requisição REST chega ao emulador **sem se identificar como Admin SDK**, então o `firestore.rules`
+é avaliado — e ele nega tudo, de propósito, porque só o Admin SDK toca nesses dados. O corpo do erro
+traz a linha da regra (`false for 'delete' @ L21`), que é o que entrega a causa.
+
+Medido fora da aplicação, mesmo emulador e mesma credencial:
+
+| SDK | transporte | contra o **emulador** |
+|---|---|---|
+| 13.10.0 | `preferRest` | `create()` duplicado **pendura** |
+| 14.3.0 | `preferRest` | **`403 PERMISSION_DENIED` em tudo** |
+| 14.3.0 | gRPC | funciona; recusa duplicata com `code 6` |
+
+**Contra o Firestore de verdade isso não acontece**: lá o JWT da conta de serviço é admin e as regras
+não valem. É um defeito só do emulador — e portanto só do e2e, que ele derrubava inteiro.
+
+O conserto é uma linha, e ela não é um atalho: **o `preferRest` fica desligado quando
+`FIRESTORE_EMULATOR_HOST` está definido.** Ele existe por causa do congelamento de processo em função
+serverless; o emulador roda em localhost, no mesmo processo vivo, e ali ele não compra nada. Quem
+cobre o transporte REST não é o e2e — é o `fake-firestore`, que sabe emitir o `409`.
+
 ## O que falta
 
-**Os dois e2e não rodaram nesta máquina**: `npm run test:e2e` sobe o emulador do Firebase, que precisa
-de Java no PATH, e não há Java aqui. O que rodou, verde: `npm test` (984 testes, 82 suítes),
-`npm run lint` e `npm run build`. **Rodar `npm run test:e2e` numa máquina com Java antes do merge em
-`main` é a última conferência que falta**, e ela não é opcional num bump de major do SDK que sustenta
-auth e Firestore.
+Verde: `npm test` (984 testes, 82 suítes), `npm run lint`, `npm run build`.
+
+**O e2e rodou, e o resultado é "nenhuma regressão": 178 falhas antes e 178 depois, com os nomes de
+teste idênticos.** Essas 178 são **anteriores e desta máquina**, não do upgrade: `POST /auth/login`
+não passa pelo Admin SDK — ele chama `identitytoolkit.googleapis.com` direto, com a
+`FIREBASE_WEB_API_KEY` —, enquanto os usuários do teste nascem no emulador. O login vai ao Google
+de verdade procurar um usuário que só existe local e leva `401` (e `429` quando a corrida se repete
+muito). As duas suítes que não dependem de login passam, incluindo a da lista de espera. **Isso é um
+problema real do e2e, e é assunto de outra passada.**
 
 Depois do deploy, a passada manual que encontrou o defeito é a que o fecha: segundo clique em
 "Concluir Desafio" e remarcação de um vídeo da trilha, contra o `dev-liga-dev`.
