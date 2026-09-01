@@ -199,13 +199,13 @@ Ao fim desta fase toda a lógica de negócio do membro está coberta por testes 
 
 # Fase 08: Testes e2e e fechamento
 
-- [ ] Task 01: `test/training.e2e-spec.ts` — o fluxo do membro contra o emulador: admin cria
+- [x] Task 01: `test/training.e2e-spec.ts` — o fluxo do membro contra o emulador: admin cria
   treinamento, membro lista na trilha, conclui e ganha XP, tenta concluir de novo (idempotente),
   comenta (com tier pago), e o membro do dev-tier recebe `403` ao tentar comentar. Usar o
   `accept-legal.helper.ts` no `createSession`.
-- [ ] Task 02: `test/training-admin.e2e-spec.ts` — CRUD de treinamentos, reordenação, listagem de
+- [x] Task 02: `test/training-admin.e2e-spec.ts` — CRUD de treinamentos, reordenação, listagem de
   comentários recentes e resposta inline. O `403` de membro comum nas rotas de admin.
-- [ ] Task 03: `npm run lint` e `npm test` **limpos** e `npm run build` passando.
+- [x] Task 03: `npm run lint` e `npm test` **limpos** e `npm run build` passando.
 - [ ] Task 04: Deploy dos índices nos **dois** projetos, com `--project` explícito em cada um —
   sem os índices, as consultas por `badgeId + position` e `trainingId + createdAt` respondem erro
   com o link para criá-los.
