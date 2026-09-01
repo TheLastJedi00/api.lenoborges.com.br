@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { MuralRepository } from './mural.repository';
 import { ProfileRepository } from '../profile/profile.repository';
-import { ALREADY_EXISTS } from '../waitlist/waitlist.repository';
+import { isAlreadyExists } from '../waitlist/waitlist.repository';
 import { previousWeekId, weekEndsAt, weekIdOf } from './week-id';
 import { MuralPhase, phaseOf } from './mural-phase';
 import { isBadgeId } from '../track/track.constants';
@@ -254,12 +254,7 @@ export class MuralService {
         body: dto.body?.length ? dto.body : null,
       });
     } catch (error: unknown) {
-      if (
-        error &&
-        typeof error === 'object' &&
-        'code' in error &&
-        error.code === ALREADY_EXISTS
-      ) {
+      if (isAlreadyExists(error)) {
         throw new ConflictException(
           'Você já perguntou esta semana. Dá para editar a sua pergunta enquanto a semana não virar.',
         );
