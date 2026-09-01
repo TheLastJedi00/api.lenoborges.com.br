@@ -17,6 +17,7 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { EmailsModule } from './emails/emails.module';
 import { LegalModule } from './legal/legal.module';
 import { GamesModule } from './games/games.module';
+import { TrainingModule } from './training/training.module';
 import { LegalAcceptanceGuard } from './legal/legal-acceptance.guard';
 
 @Module({
@@ -44,6 +45,7 @@ import { LegalAcceptanceGuard } from './legal/legal-acceptance.guard';
     EmailsModule,
     LegalModule,
     GamesModule,
+    TrainingModule,
   ],
   controllers: [AppController],
   providers: [

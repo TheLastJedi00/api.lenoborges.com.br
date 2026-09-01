@@ -10,6 +10,7 @@ import { LegalModule } from '../legal/legal.module';
 import { WatchedVideoModule } from '../track/watched-video.module';
 import { MembersController } from './members.controller';
 import { GamesDataModule } from '../games/games-data.module';
+import { TrainingDataModule } from '../training/training-data.module';
 
 /**
  * O `forwardRef` no `AuthModule` e a spec 013 chegando: as tres operacoes de
@@ -51,6 +52,13 @@ import { GamesDataModule } from '../games/games-data.module';
     // raiz. Ver o comentario dele, e o do `WatchedVideoModule`, que resolveu o
     // mesmo problema na spec 019 depois de derrubar o boot.
     GamesDataModule,
+    // **E o sexto que NAO virou ciclo, pela mesma razao** (spec 023). Excluir a
+    // conta apaga as conclusoes e os comentarios da Arena, entao este modulo
+    // precisa dos dois repositorios de la. O TrainingModule importa ESTE de
+    // volta, para ler o tier de quem comenta -- pendura-los no TrainingModule
+    // fecharia o ciclo de arquivos que derruba o boot sem nenhum teste unitario
+    // notar. O TrainingDataModule nao importa nada e corta a volta na raiz.
+    TrainingDataModule,
   ],
   controllers: [ProfileController, MembersController],
   providers: [ProfileRepository, ProfileService, NicknameRepository],
