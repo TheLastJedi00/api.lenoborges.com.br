@@ -782,6 +782,7 @@ continuou verde enquanto metade do produto não abria.
 | `gym_questions` | `badgeId` asc + `createdAt` asc | `listByBadge(badgeId)` **sem** dificuldade — a lista inteira do admin |
 | `ranking` | `xp` desc + `uid` asc | `page()` do ranking, ordenado e paginado por cursor |
 | `trainings` | `badgeId` asc + `position` asc | `listByBadge(badgeId)` da Arena de Treinamento (spec 023) |
+| `training_comments` | `trainingId` asc + `createdAt` desc | `listByTraining()` — os comentários de um desafio, mais recentes primeiro |
 
 **A spec 022 acrescenta três, e o desempate por `uid` no ranking não é enfeite:** XP empata com
 frequência — dois membros que assistiram aos mesmos vídeos têm o mesmo número — e um `startAfter` sobre

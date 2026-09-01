@@ -37,11 +37,11 @@ Nenhuma rota existe ainda.
 
 ---
 
-# Fase 02: Comentários — entidade, repositório e restrição de tier
+# Fase 02: Comentários — entidade, repositório e restrição de tier [x]
 
 Ao fim desta fase os comentários existem como dados, com a validação de tier, mas ainda sem rota.
 
-- [ ] Task 01: `src/training/entities/training-comment.entity.ts` — a interface `TrainingComment` e o
+- [x] Task 01: `src/training/entities/training-comment.entity.ts` — a interface `TrainingComment` e o
   `FirestoreDataConverter`. Campos: `id`, `trainingId`, `uid`, `authorName: string`, `content`,
   `adminReply: { content: string; authorName: string; repliedAt: Date } | null`, `createdAt`,
   `updatedAt`. O `adminReply` é **campo e não documento** (decisão 2): a lista é plana, e uma coleção
@@ -51,18 +51,18 @@ Ao fim desta fase os comentários existem como dados, com a validação de tier,
   O `authorName` é fotografado na criação — mesma decisão do `MuralQuestion`
   com a foto do nome: não custa leitura por visita, sobrevive a alteração de nome no perfil, e é o que
   foi escrito, não o que a pessoa virou.
-- [ ] Task 02: `src/training/entities/training-comment.entity.spec.ts` — round-trip do converter,
+- [x] Task 02: `src/training/entities/training-comment.entity.spec.ts` — round-trip do converter,
   incluindo o **teste-trava do documento legado**: comentário gravado sem `adminReply` volta com
   `null`, nunca `undefined`.
-- [ ] Task 03: `src/training/training-comment.repository.ts` — `create`, `findById`,
+- [x] Task 03: `src/training/training-comment.repository.ts` — `create`, `findById`,
   `listByTraining(trainingId, { limit, after? })` (ordenado por `createdAt DESC`, paginado por cursor
   com `startAfter`), `listRecent({ limit })` (todos os comentários, `createdAt DESC`, para o admin),
   `setAdminReply(commentId, reply)`, `removeAllByTraining(trainingId)` e `removeAllByUid(uid)`.
   Devolve `{ entries }` / `{ found, entry }`. As duas remoções em lote apagam em `WriteBatch` de 400,
   no molde do `savePositions` do ranking: uma exclusão por documento deixa metade do trabalho feito
   quando a rede cai no meio, e ninguém fica sabendo.
-- [ ] Task 04: `src/training/training-comment.repository.spec.ts`.
-- [ ] Task 05: `firestore.indexes.json` — adicionar o índice `training_comments`:
+- [x] Task 04: `src/training/training-comment.repository.spec.ts`.
+- [x] Task 05: `firestore.indexes.json` — adicionar o índice `training_comments`:
   `trainingId ASC, createdAt DESC`.
 
 ---
