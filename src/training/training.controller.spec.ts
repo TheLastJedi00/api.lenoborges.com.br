@@ -6,7 +6,13 @@ import type { CurrentUserData } from '../auth/decorators/current-user.decorator'
 const ANA = { id: 'ana', email: 'ana@exemplo.com' } as CurrentUserData;
 
 describe('TrainingController', () => {
-  let service: jest.Mocked<TrainingService>;
+  let service: {
+    listByBadge: jest.Mock;
+    getOne: jest.Mock;
+    complete: jest.Mock;
+    listComments: jest.Mock;
+    addComment: jest.Mock;
+  };
   let controller: TrainingController;
 
   beforeEach(() => {
@@ -16,9 +22,9 @@ describe('TrainingController', () => {
       complete: jest.fn(),
       listComments: jest.fn(),
       addComment: jest.fn(),
-    } as unknown as jest.Mocked<TrainingService>;
+    };
 
-    controller = new TrainingController(service);
+    controller = new TrainingController(service as unknown as TrainingService);
   });
 
   describe('GET /badges/:badgeId/trainings', () => {
