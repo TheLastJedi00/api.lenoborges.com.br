@@ -197,7 +197,7 @@ Ao fim desta fase toda a lógica de negócio do membro está coberta por testes 
 
 ---
 
-# Fase 08: Testes e2e e fechamento
+# Fase 08: Testes e2e e fechamento [x]
 
 - [x] Task 01: `test/training.e2e-spec.ts` — o fluxo do membro contra o emulador: admin cria
   treinamento, membro lista na trilha, conclui e ganha XP, tenta concluir de novo (idempotente),
@@ -206,6 +206,26 @@ Ao fim desta fase toda a lógica de negócio do membro está coberta por testes 
 - [x] Task 02: `test/training-admin.e2e-spec.ts` — CRUD de treinamentos, reordenação, listagem de
   comentários recentes e resposta inline. O `403` de membro comum nas rotas de admin.
 - [x] Task 03: `npm run lint` e `npm test` **limpos** e `npm run build` passando.
-- [ ] Task 04: Deploy dos índices nos **dois** projetos, com `--project` explícito em cada um —
+- [x] Task 04: Deploy dos índices nos **dois** projetos, com `--project` explícito em cada um —
   sem os índices, as consultas por `badgeId + position` e `trainingId + createdAt` respondem erro
   com o link para criá-los.
+
+---
+
+## O que ficou registrado e não consertado
+
+> **`create()` sobre caminho ocupado pendura com `preferRest`.** Está em [fix.md](./fix.md),
+> com a medição, o alcance e o conserto em duas metades. **Não é defeito desta spec** — é
+> anterior e vale para o produto inteiro, e a Arena só o expôs num lugar fácil de alcançar.
+> A idempotência da segunda conclusão está escrita, testada e verde contra o `fake-firestore`;
+> o que falta é o transporte devolver o erro que a aplicação já sabe tratar.
+
+> **Os dois e2e (`training.e2e-spec.ts` e `training-admin.e2e-spec.ts`) não foram executados.**
+> O emulador do Firebase exige Java no PATH, e não há Java nesta máquina. Eles precisam rodar
+> antes do merge.
+
+> **A passada manual contra o `dev-liga-dev` foi feita em 2026-09-01** e cobriu o fluxo inteiro:
+> criar desafio, reordenar com persistência, editar, o card na trilha entre os vídeos e o GYM
+> Challenge, o modal com passos e player, concluir pagando o XP do desafio, comentar, o painel
+> centralizado e a resposta chegando ao modal do membro. Os dois índices novos foram publicados
+> nos dois projetos e respondem consulta real.
