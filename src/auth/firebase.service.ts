@@ -69,9 +69,32 @@ export class FirebaseService {
       // travamento de cold start descrito acima. Seria trocar um travamento por
       // outro, e a Vercel e onde o produto roda.
       //
+      // **Contra o emulador, porem, ele fica desligado -- e isso nao e um
+      // atalho.** O preferRest existe por causa do congelamento de processo em
+      // function serverless, e o emulador roda em localhost, no mesmo processo
+      // vivo: ali ele nao compra nada. E custa: na 14, a requisicao REST chega
+      // ao emulador **sem se identificar como Admin SDK**, entao o
+      // `firestore.rules` e avaliado -- e ele nega tudo, de proposito, porque
+      // so o Admin SDK toca nesses dados. O sintoma e um 403 PERMISSION_DENIED
+      // com a linha da regra no corpo, em cima de qualquer leitura ou escrita,
+      // e ele derruba a suite e2e inteira. Contra o Firestore de verdade nao
+      // acontece: la o JWT da conta de servico e admin e as regras nao valem.
+      //
+      // Medido em 2026-09-01, mesmo emulador, mesmo credencial:
+      //   13.10 + preferRest -> create() duplicado **pendura**
+      //   14.3  + preferRest -> 403 PERMISSION_DENIED em tudo
+      //   14.3  + gRPC       -> funciona, e recusa duplicata com code 6
+      //
+      // Quem cobre o transporte REST nao e o e2e, e sim o `fake-firestore`, que
+      // sabe emitir o 409 (`new FakeFirestore('rest')`).
+      //
       // initializeFirestore so pode ser chamado antes do primeiro getFirestore
       // do app, e por isso mora aqui dentro, junto da inicializacao.
-      this.firestore = initializeFirestore(this.app, { preferRest: true });
+      const noEmulador = !!process.env.FIRESTORE_EMULATOR_HOST;
+
+      this.firestore = initializeFirestore(this.app, {
+        preferRest: !noEmulador,
+      });
     } else {
       this.app = getApp();
       this.firestore = getFirestore(this.app);
