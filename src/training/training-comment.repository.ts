@@ -1,9 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import {
-  CollectionReference,
-  DocumentReference,
-  Timestamp,
-} from 'firebase-admin/firestore';
+import { CollectionReference, Timestamp } from 'firebase-admin/firestore';
 import { FirebaseService } from '../auth/firebase.service';
 import {
   TrainingComment,
@@ -195,7 +191,7 @@ export class TrainingCommentRepository {
 
     const refs = snapshot.docs.map((document) =>
       this.collection.doc(document.id),
-    ) as DocumentReference<TrainingComment>[];
+    );
 
     for (let start = 0; start < refs.length; start += BATCH_SIZE) {
       const batch = this.firebase.firestore.batch();

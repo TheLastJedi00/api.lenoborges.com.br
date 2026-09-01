@@ -70,7 +70,11 @@ describe('trainingCommentConverter', () => {
         }),
       );
 
-      expect(gravado.adminReply?.repliedAt).toBeInstanceOf(Timestamp);
+      // O `toFirestore` do converter devolve `DocumentData`, entao o campo
+      // chega sem tipo: o cast e o que faz o teste falar do Timestamp.
+      const reply = gravado.adminReply as { repliedAt: unknown } | null;
+
+      expect(reply?.repliedAt).toBeInstanceOf(Timestamp);
     });
   });
 
