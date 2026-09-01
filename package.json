@@ -28,6 +28,9 @@
     "ranking:backfill": "ts-node -P tsconfig.json scripts/ranking-backfill.ts",
     "ranking:snapshot": "ts-node -P tsconfig.json scripts/ranking-snapshot.ts"
   },
+  "overrides": {
+    "jose": "^5.10.0"
+  },
   "dependencies": {
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.4",
