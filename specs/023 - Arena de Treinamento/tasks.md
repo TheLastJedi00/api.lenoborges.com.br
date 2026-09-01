@@ -172,22 +172,22 @@ Ao fim desta fase toda a lógica de negócio do membro está coberta por testes 
 
 ---
 
-# Fase 07: Módulo, integração e exclusão de conta
+# Fase 07: Módulo, integração e exclusão de conta [x]
 
-- [ ] Task 01: `src/training/training.module.ts` — registrar controllers e providers, e o
+- [x] Task 01: `src/training/training.module.ts` — registrar controllers e providers, e o
   registro em `AppModule.imports` dentro de `src/app.module.ts`.
-- [ ] Task 02: `src/profile/profile.service.ts` — incluir a exclusão de `training_completions` e
+- [x] Task 02: `src/profile/profile.service.ts` — incluir a exclusão de `training_completions` e
   `training_comments` do membro em `deleteAccount()`, esta última pelo `removeAllByUid` da Fase 02.
   Entram na ordem existente, **antes** de
   `profiles/{uid}`, depois da limpeza do GYM Challenge. **Sexta e sétima vez que a regra da subcoleção
   vale**: apagar o perfil primeiro deixaria comentários e completions órfãos — invisíveis, cobrados
   e impossíveis de encontrar depois. Injetar o `TrainingCompletionRepository` e o
   `TrainingCommentRepository` no `ProfileService`.
-- [ ] Task 03: `src/profile/profile.service.spec.ts` — estender o teste de ordem de exclusão com as
+- [x] Task 03: `src/profile/profile.service.spec.ts` — estender o teste de ordem de exclusão com as
   duas novas coleções. É o teste que impede a próxima coleção de nascer sem limpeza.
-- [ ] Task 04: `README.md` — documentar as rotas, a coleção `trainings`, `training_comments` e
+- [x] Task 04: `README.md` — documentar as rotas, a coleção `trainings`, `training_comments` e
   `training_completions`, e a regra de tier para comentários.
-- [ ] Task 05: `CLAUDE.md` — três linhas na lista de decisões arquiteturais: **comentários de
+- [x] Task 05: `CLAUDE.md` — três linhas na lista de decisões arquiteturais: **comentários de
   treinamento exigem Great Tier ou superior (`tier !== 'dev-tier'`), validado no service, no molde
   do Mural de Perguntas**; **a resposta do admin é o campo `adminReply` do comentário e não um
   documento — sem ele a rota de reply responde `200` e grava no vazio**; e **o XP deixou de ter uma

@@ -931,6 +931,7 @@ acabou de pedir para eliminar é o contrário do pedido.
 | `profiles/{uid}/notification_reads/*` | |
 | Votos dados por ela, em `{questionId}/votes/{uid}` | |
 | `waitlist_entries/{email}`, se houver | |
+| `training_completions` dela, e os `training_comments` que escreveu | |
 
 A pergunta do Mural não é só de quem perguntou: tem votos de outras pessoas, pode ter vencido a semana e
 pode ter virado vídeo na trilha. Apagá-la levaria junto o voto de terceiros e deixaria um vídeo
@@ -1583,3 +1584,151 @@ npm run ranking:backfill   # com o .env de cada projeto, ANTES do tráfego
 **Os dois projetos, com `--project` explícito nos dois.** É a lição de 2026-08-28, e ela custou as duas
 telas ordenadas do `dev-liga-dev`. O backfill não é opcional: sem ele o placar responde `200` com lista
 vazia, e nada aparece em log nenhum.
+
+---
+
+## Spec 023 — Arena de Treinamento
+
+Desafios práticos de código dentro da trilha, entre a lista de vídeos e o GYM Challenge. Cada desafio
+tem título, descrição, uma lista de passos, um vídeo de apoio opcional e um XP próprio. Concluir paga
+esse XP **uma vez, para sempre**; comentar é do Great Tier para cima.
+
+### A coleção é de primeiro nível, e o ID é gerado
+
+`trainings/{id}`, ligada à insígnia por `badgeId` — como `gym_questions`, e não como subcoleção de
+`badge_videos`. Treinamento e vídeo são vizinhos na tela e nada além disso: o vídeo é a peça que mais
+muda na trilha, republicado e removido, enquanto o exercício sobrevive a essas trocas.
+
+**O ID é gerado pelo Firestore, e aqui isso é o certo.** Nas outras coleções deste produto o caminho
+carrega uma garantia — `waitlist_entries/{email}`, `badge_videos/{badgeId}__{youtubeId}` — porque havia
+unicidade a defender. Aqui não há: dois desafios com o mesmo título na mesma insígnia são um caso
+legítimo, e um ID composto por título obrigaria a renomear o documento a cada edição do enunciado, que é
+o mesmo que apagar e recriar.
+
+| Campo | O que é |
+|---|---|
+| `badgeId` | A insígnia. Passa por `isBadgeId` antes de virar dado |
+| `title`, `description` | O card e o cabeçalho do modal |
+| `steps` | Array de strings, na ordem. **Não é um markdown com quebras de linha**: a tela desenha um `<ol>` e o admin edita passo a passo |
+| `videoUrl` | A **URL crua**, e não o ID do YouTube. Aqui o vídeo é anexo do enunciado, não o conteúdo, e amarrar o campo ao YouTube fecharia a porta para outra hospedagem por nenhum ganho |
+| `xpAmount` | Quanto paga. Nasce em 30 e o admin pode mudar. Fica **no documento**, não na constante — um exercício de trinta minutos e um de três horas não valem a mesma coisa |
+| `position` | 0..n-1, renormalizada em lote atômico a cada reorder e a cada exclusão |
+
+### O XP é pago uma vez, e quem garante isso é o caminho do documento
+
+`training_completions/{uid}__{trainingId}`. A conclusão, o incremento de `xp` no perfil e a linha do
+placar entram **num `WriteBatch` só**, e o `create()` da conclusão recusa caminho ocupado com
+`ALREADY_EXISTS` — derrubando o lote inteiro e levando o incremento junto. **Sem transação, sem leitura
+prévia e sem janela entre conferir e escrever**, exatamente como o razão de vídeos assistidos da spec
+019.
+
+A segunda chamada é **idempotente e responde `200`**, com `xpAwarded: 0`: o desafio está concluído, que
+é o que quem clicou queria. Um `409` aqui obrigaria a tela a tratar como erro o caso mais comum de
+todos, o duplo clique.
+
+`xpAwarded` é **gravado, e não recalculado**. O admin pode editar o `xpAmount` depois; o que o documento
+registra é o que foi pago naquele dia. Sem ele, uma auditoria somaria o valor de hoje sobre conclusões
+de ontem e acusaria uma divergência que nunca existiu.
+
+> **O XP deixou de ter uma fonte só.** A propriedade auditável da spec 019 — `xp` igual a `XP_PER_VIDEO`
+> vezes a contagem de `watched_videos` — passa a valer como soma de três parcelas: vídeos, GYM Challenge
+> e treinamentos. Quem for conferir o total precisa saber disso antes de achar que encontrou um erro.
+
+### Comentar é do Great Tier para cima
+
+`training_comments`, coleção de primeiro nível e não subcoleção de `trainings/{id}`: o painel do admin
+lista os comentários **de todos os desafios**, e uma subcoleção exigiria consulta de grupo de coleção
+para responder a pergunta mais simples da tela.
+
+A restrição é `tier !== 'dev-tier'`, validada no **service**, onde o perfil já é lido — e não num guard
+no controller, que trancaria também a *leitura* da Arena. O Dev Tier lê a conversa e não escreve. A
+mensagem do `403` traz o caminho para assinar: um `403` sem saída é a forma mais cara de perder um
+upgrade.
+
+O `authorName` é **fotografado na criação**, como o da `MuralQuestion`: não custa leitura por visita,
+sobrevive a uma troca de nome no perfil, e é o nome de quem escreveu naquele dia. O `uid` fica no
+documento e **não sai no DTO** — ele serve para apagar o que é da pessoa quando ela pede para ser
+esquecida, e para nada mais.
+
+### A resposta do admin é um campo, e não um documento
+
+`adminReply: { content, authorName, repliedAt } | null`, dentro do próprio comentário. A lista é plana
+por decisão, e uma coleção de respostas obrigaria a listagem a costurar pai e filho em memória ou a
+pagar uma leitura por comentário. Como campo, a resposta chega na mesma leitura que o modal já faz: sem
+consulta nova e sem índice novo.
+
+**Uma resposta por comentário, e responder de novo sobrescreve.** É a consequência aceita de a resposta
+ser campo, e é a certa para o que a tela faz: o admin corrige o que escreveu, não conversa em fio.
+
+### Excluir um desafio é em cascata, e precisa ser
+
+`DELETE /admin/trainings/:trainingId` apaga os comentários, apaga as conclusões, apaga o desafio e
+renormaliza as posições dos que sobraram. **No Firestore nada some junto com o pai** — sétima e oitava
+vez que este produto esbarra nisso, depois dos votos do Mural, de `notification_reads`, de
+`legal_acceptances`, de `watched_videos` e das duas do GYM. Sem a limpeza, o que sobra fica invisível,
+cobrado e impossível de encontrar depois.
+
+**Filhos primeiro, pai depois**, pelo mesmo motivo da exclusão de conta: com o pai morto antes, uma
+falha no meio deixaria órfão que ninguém mais consegue encontrar para apagar.
+
+**O XP já pago não volta.** O membro fez o exercício, e uma exclusão administrativa não é motivo para
+tirar XP de quem trabalhou por ele.
+
+### Endpoints
+
+| Método | Rota | Quem | O que faz |
+|---|---|---|---|
+| `GET` | `/badges/:badgeId/trainings` | auth | Os desafios da insígnia, na ordem, com `completed` **de quem pediu** |
+| `GET` | `/trainings/:trainingId` | auth | Um desafio, com o estado de conclusão de quem pediu |
+| `POST` | `/trainings/:trainingId/complete` | auth | Conclui e paga o XP. **Idempotente**: `xpAwarded: 0` na segunda vez |
+| `GET` | `/trainings/:trainingId/comments?limit&after` | auth | Comentários, mais recentes primeiro. Padrão 10, teto 50 |
+| `POST` | `/trainings/:trainingId/comments` | auth + **tier pago** | Comenta. `403` para Dev Tier |
+| `GET` | `/admin/badges/:badgeId/trainings` | admin | A lista, para administrar |
+| `POST` | `/admin/badges/:badgeId/trainings` | admin | Cria no fim da lista. A posição é calculada no servidor |
+| `PATCH` | `/admin/badges/:badgeId/trainings/reorder` | admin | Reordena em lote atômico. Corpo `{ orderedIds }`. `204` |
+| `PATCH` | `/admin/trainings/:trainingId` | admin | Edita |
+| `DELETE` | `/admin/trainings/:trainingId` | admin | Exclui **em cascata** e renormaliza. `204` |
+| `GET` | `/admin/trainings/comments/recent` | admin | O painel centralizado, com o título do desafio em cada linha |
+| `POST` | `/admin/trainings/comments/:commentId/reply` | admin | Grava o `adminReply` no comentário |
+
+**Nenhuma rota é isenta do `LegalAcceptanceGuard`**: quem não aceitou os termos não treina, não ganha XP
+e não comenta. Não foi preciso escrever nenhuma linha para que fosse assim — são rotas autenticadas
+comuns.
+
+`?limit=` acima do teto é **fixado no teto, sem erro** — é paginação, não pedido de dados. Zero e
+negativo são `400`: não são pedido de página, são um engano que devolveria lista vazia e pareceria "não
+há comentários". O `after` é o `nextCursor` da página anterior, que é o **id** do último comentário dela
+e não uma data: um `Timestamp` formatado pelo cliente pula ou repete linha na primeira divergência de
+fuso. E `nextCursor` só vem preenchido quando a página encheu — um "Mostrar mais" que devolve vazio é um
+botão que mente.
+
+### O módulo pequeno, de novo
+
+`TrainingDataModule` tem os três repositórios e **não importa nada**. O `TrainingModule` importa o
+`ProfileModule` (tier e nome de quem comenta) e o `GamesDataModule` (a linha do placar); o
+`ProfileModule` importa o `TrainingDataModule` (a exclusão de conta apaga conclusões e comentários).
+Pendurar os repositórios no `TrainingModule` fecharia o ciclo de arquivos
+`profile.module.ts -> training.module.ts -> profile.module.ts`, que `forwardRef` **não** resolve e que
+derruba o boot com `UndefinedModuleException` — sem nenhum teste unitário notar, porque nenhum deles
+monta o `AppModule`. É o mesmo remédio do `WatchedVideoModule` da spec 019 e do `MemberDirectoryModule`
+da 015.
+
+### O nada de sempre
+
+**Nenhum cron**, **nenhum cache** e **nenhum campo derivado gravado**. E **nenhuma coleção nova guarda
+`uid` ao lado de dado pessoal**: `training_comments` tem `uid` e texto escrito pela pessoa, e por isso
+ele é **apagado** na exclusão de conta em vez de anonimizado — a condição da spec 013 continua de pé.
+
+### O deploy desta spec
+
+Dois índices compostos novos, `trainings` e `training_comments`, e eles precisam existir **nos dois
+projetos**:
+
+```bash
+firebase deploy --only firestore:indexes --project <producao>
+firebase deploy --only firestore:indexes --project dev-liga-dev
+```
+
+Sem eles, a listagem de desafios e a de comentários respondem erro com o link para criá-los. **O
+emulador não exige índice**, então a suíte fica verde até o primeiro acesso real — foi assim que o
+`dev-liga-dev` passou meses sem os índices da trilha e do Mural.
