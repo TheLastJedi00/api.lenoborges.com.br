@@ -435,4 +435,143 @@ describe('TrainingService', () => {
       ).rejects.toThrow(BadRequestException);
     });
   });
+
+  /**
+   * **O teste-trava da exclusão em cascata.**
+   *
+   * No Firestore nada some junto com o pai. Sem esta limpeza, os comentários e
+   * as conclusões do desafio apagado ficam invisíveis, cobrados e impossíveis de
+   * encontrar depois -- é o mesmo descuido que já custou quatro coleções órfãs
+   * neste projeto, e a única diferença é que desta vez existe um teste que
+   * reprova.
+   */
+  describe('removeTraining', () => {
+    beforeEach(() => {
+      semearPerfil('ana');
+    });
+
+    it('recusa um treinamento que não existe', async () => {
+      await expect(service.removeTraining('fantasma')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('apaga os comentários daquele desafio, e só os dele', async () => {
+      const alvo = await criarTreinamento('Alvo');
+      const vizinho = await criarTreinamento('Vizinho');
+      await service.addComment('ana', alvo.id, { content: 'Do alvo' });
+      await service.addComment('ana', vizinho.id, { content: 'Do vizinho' });
+
+      await service.removeTraining(alvo.id);
+
+      expect(
+        (await service.listComments(vizinho.id, {})).comments,
+      ).toHaveLength(1);
+      expect(
+        [...firestore.docs.keys()].filter((key) =>
+          key.startsWith('training_comments/'),
+        ),
+      ).toHaveLength(1);
+    });
+
+    it('apaga as conclusões daquele desafio, e só as dele', async () => {
+      const alvo = await criarTreinamento('Alvo');
+      const vizinho = await criarTreinamento('Vizinho');
+      await service.complete('ana', alvo.id);
+      await service.complete('ana', vizinho.id);
+
+      await service.removeTraining(alvo.id);
+
+      expect(
+        [...firestore.docs.keys()].filter((key) =>
+          key.startsWith('training_completions/'),
+        ),
+      ).toEqual([`training_completions/ana__${vizinho.id}`]);
+    });
+
+    /**
+     * **O XP já pago não volta.** A conclusão some com o desafio, mas o
+     * incremento não é desfeito: o membro fez o exercício, e uma exclusão
+     * administrativa não é motivo para tirar XP de quem trabalhou por ele.
+     */
+    it('não devolve o XP que o desafio já pagou', async () => {
+      const alvo = await criarTreinamento('Alvo', { xpAmount: 30 });
+      await service.complete('ana', alvo.id);
+
+      await service.removeTraining(alvo.id);
+
+      expect(firestore.raw('profiles/ana')?.xp).toBe(30);
+    });
+
+    it('renormaliza as posições dos que sobraram para 0..n-1', async () => {
+      const primeiro = await criarTreinamento('Primeiro');
+      await criarTreinamento('Segundo');
+      await criarTreinamento('Terceiro');
+
+      await service.removeTraining(primeiro.id);
+
+      const { trainings } = await service.listByBadge('ana', 'logica');
+
+      expect(trainings.map((item) => item.title)).toEqual([
+        'Segundo',
+        'Terceiro',
+      ]);
+      expect(trainings.map((item) => item.position)).toEqual([0, 1]);
+    });
+  });
+
+  describe('reorder', () => {
+    beforeEach(() => {
+      semearPerfil('ana');
+    });
+
+    it('recusa uma lista com id repetido', async () => {
+      const primeiro = await criarTreinamento('Primeiro');
+      await criarTreinamento('Segundo');
+
+      await expect(
+        service.reorder('logica', {
+          orderedIds: [primeiro.id, primeiro.id],
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('recusa uma lista que não cobre a insígnia inteira', async () => {
+      const primeiro = await criarTreinamento('Primeiro');
+      await criarTreinamento('Segundo');
+
+      await expect(
+        service.reorder('logica', { orderedIds: [primeiro.id] }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('recusa um id que não é daquela insígnia', async () => {
+      const daLogica = await criarTreinamento('Da lógica');
+      const daPoo = await service.createTraining('poo', {
+        title: 'Da POO',
+        description: 'Descrição',
+        steps: ['Passo'],
+      });
+
+      await expect(
+        service.reorder('logica', { orderedIds: [daLogica.id, daPoo.id] }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('grava a ordem nova quando a lista bate', async () => {
+      const primeiro = await criarTreinamento('Primeiro');
+      const segundo = await criarTreinamento('Segundo');
+
+      await service.reorder('logica', {
+        orderedIds: [segundo.id, primeiro.id],
+      });
+
+      const { trainings } = await service.listByBadge('ana', 'logica');
+
+      expect(trainings.map((item) => item.title)).toEqual([
+        'Segundo',
+        'Primeiro',
+      ]);
+    });
+  });
 });

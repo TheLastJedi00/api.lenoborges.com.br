@@ -146,9 +146,9 @@ Ao fim desta fase toda a lógica de negócio do membro está coberta por testes 
 
 ---
 
-# Fase 06: Controllers — rotas do admin
+# Fase 06: Controllers — rotas do admin [x]
 
-- [ ] Task 01: `src/training/admin-training.controller.ts` — com `FirebaseAuthGuard` e `AdminGuard`:
+- [x] Task 01: `src/training/admin-training.controller.ts` — com `FirebaseAuthGuard` e `AdminGuard`:
   `GET /admin/badges/:badgeId/trainings` (lista),
   `POST /admin/badges/:badgeId/trainings` (cria, posição calculada no service como última + 1),
   `PATCH /admin/trainings/:trainingId` (edita),
@@ -160,12 +160,12 @@ Ao fim desta fase toda a lógica de negócio do membro está coberta por testes 
   `authorName` do admin logado e `repliedAt` do servidor; responder de novo sobrescreve, e um
   `commentId` inexistente é `404`).
   O `:badgeId` passa por `isBadgeId` antes de virar dado.
-- [ ] Task 02: `src/training/dto/reorder-trainings.dto.ts` — `orderedIds` com
+- [x] Task 02: `src/training/dto/reorder-trainings.dto.ts` — `orderedIds` com
   `@IsArray() @ArrayMinSize(1)` de strings.
-- [ ] Task 03: `src/training/dto/admin-reply.dto.ts` — `content` com `@IsString() @IsNotEmpty()`.
-- [ ] Task 04: `src/training/admin-training.controller.spec.ts` — cobertura de CRUD, reordenação,
+- [x] Task 03: `src/training/dto/admin-reply.dto.ts` — `content` com `@IsString() @IsNotEmpty()`.
+- [x] Task 04: `src/training/admin-training.controller.spec.ts` — cobertura de CRUD, reordenação,
   listagem de comentários e resposta inline, incluindo `403` de membro comum nas rotas de admin.
-- [ ] Task 05: Teste-trava da exclusão em cascata, no `.spec.ts` do service: apagar um treinamento
+- [x] Task 05: Teste-trava da exclusão em cascata, no `.spec.ts` do service: apagar um treinamento
   que tem comentários e conclusões deixa as duas coleções vazias para aquele `trainingId`, e as
   posições dos que sobraram voltam a ser `0..n-1`. É o mesmo descuido que já custou quatro coleções
   órfãs neste projeto, e a única diferença é que desta vez existe um teste que reprova.
