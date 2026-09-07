@@ -13,7 +13,7 @@ import { MailerService, OutgoingEmail } from './mailer.service';
 import { renderEmail } from './email-template';
 import { signUnsubscribeToken } from './unsubscribe-token';
 import type { CannotReceiveEmailReason } from './email-eligibility';
-import { ALREADY_EXISTS } from '../waitlist/waitlist.repository';
+import { isAlreadyExists } from '../waitlist/waitlist.repository';
 import type { CreateCampaignData } from './email-campaign.repository';
 import {
   CampaignStatus,
@@ -442,19 +442,4 @@ export class EmailCampaignService {
           undefined,
     };
   }
-}
-
-/**
- * `true` quando o Firestore recusou por o documento já existir.
- *
- * A constante vem de `waitlist.repository.ts`, onde ela nasceu ocupando o lugar
- * do `23505` do Postgres. É a mesma corrida, na mesma casa.
- */
-function isAlreadyExists(error: unknown): boolean {
-  return (
-    !!error &&
-    typeof error === 'object' &&
-    'code' in error &&
-    error.code === ALREADY_EXISTS
-  );
 }

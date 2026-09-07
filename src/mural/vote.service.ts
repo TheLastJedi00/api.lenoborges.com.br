@@ -4,7 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { MuralRepository } from './mural.repository';
-import { ALREADY_EXISTS } from '../waitlist/waitlist.repository';
+import { isAlreadyExists } from '../waitlist/waitlist.repository';
 import { phaseOf } from './mural-phase';
 
 @Injectable()
@@ -33,12 +33,7 @@ export class VoteService {
     try {
       await this.repository.vote(questionId, uid);
     } catch (error: unknown) {
-      if (
-        error &&
-        typeof error === 'object' &&
-        'code' in error &&
-        error.code === ALREADY_EXISTS
-      ) {
+      if (isAlreadyExists(error)) {
         // Já votou. O estado final é o desejado, então não é falha.
         return;
       }

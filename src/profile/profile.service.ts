@@ -19,6 +19,8 @@ import { SetNicknameDto } from './dto/nickname.dto';
 import { NicknameRepository } from './nickname.repository';
 import { RankingRepository } from '../games/ranking.repository';
 import { GymChallengeRepository } from '../games/gym-challenge.repository';
+import { TrainingCompletionRepository } from '../training/training-completion.repository';
+import { TrainingCommentRepository } from '../training/training-comment.repository';
 import { CHALLENGE_BADGE_IDS } from '../games/games.constants';
 import { badgeCountOf } from '../games/entities/ranking-entry.entity';
 import { ProfileDto } from './dto/profile.dto';
@@ -75,6 +77,8 @@ export class ProfileService {
     private readonly nicknameRepository: NicknameRepository,
     private readonly rankingRepository: RankingRepository,
     private readonly gymChallengeRepository: GymChallengeRepository,
+    private readonly trainingCompletionRepository: TrainingCompletionRepository,
+    private readonly trainingCommentRepository: TrainingCommentRepository,
   ) {}
 
   /**
@@ -447,6 +451,14 @@ export class ProfileService {
     // pai -- apagar o pai primeiro deixaria dez documentos orfaos por insignia:
     // invisiveis, cobrados e impossiveis de encontrar depois.
     await this.gymChallengeRepository.removeAll(userId, CHALLENGE_BADGE_IDS);
+    // E a Arena de Treinamento (spec 023). **Setima e oitava vez que a regra
+    // vale**: as conclusoes sao historico de comportamento ligado ao `uid`, e os
+    // comentarios sao texto escrito pela pessoa num desafio -- diferente da
+    // pergunta do Mural, que carrega votos de terceiros e por isso e anonimizada
+    // em vez de apagada. Comentario de treinamento nao carrega nada de ninguem
+    // alem de quem o escreveu, entao ele vai junto.
+    await this.trainingCompletionRepository.removeAll(userId);
+    await this.trainingCommentRepository.removeAllByUid(userId);
     // A linha do placar, que e gamertag, XP e insignias ligados ao `uid`.
     await this.rankingRepository.remove(userId);
     // **E a gamertag volta a ficar livre.** E o unico jeito de o membro que

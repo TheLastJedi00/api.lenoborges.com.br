@@ -19,6 +19,8 @@ import { WatchedVideoRepository } from '../track/watched-video.repository';
 import { NicknameRepository } from './nickname.repository';
 import { RankingRepository } from '../games/ranking.repository';
 import { GymChallengeRepository } from '../games/gym-challenge.repository';
+import { TrainingCompletionRepository } from '../training/training-completion.repository';
+import { TrainingCommentRepository } from '../training/training-comment.repository';
 
 describe('ProfileService', () => {
   let service: ProfileService;
@@ -47,6 +49,8 @@ describe('ProfileService', () => {
   let nicknameRepository: { claim: jest.Mock; release: jest.Mock };
   let rankingRepository: { upsert: jest.Mock; remove: jest.Mock };
   let gymChallengeRepository: { removeAll: jest.Mock };
+  let trainingCompletionRepository: { removeAll: jest.Mock };
+  let trainingCommentRepository: { removeAllByUid: jest.Mock };
 
   beforeEach(async () => {
     repository = {
@@ -92,6 +96,12 @@ describe('ProfileService', () => {
       remove: registra('ranking.remove'),
     } as unknown as { upsert: jest.Mock; remove: jest.Mock };
     gymChallengeRepository = { removeAll: registra('gym.removeAll') };
+    trainingCompletionRepository = {
+      removeAll: registra('trainingCompletion.removeAll'),
+    };
+    trainingCommentRepository = {
+      removeAllByUid: registra('trainingComment.removeAllByUid'),
+    };
     authService = {
       reauthenticate: jest.fn().mockResolvedValue('id-token-fresco'),
       continueUrl: 'http://localhost:4200/?entrar=1',
@@ -122,6 +132,14 @@ describe('ProfileService', () => {
         {
           provide: GymChallengeRepository,
           useValue: gymChallengeRepository,
+        },
+        {
+          provide: TrainingCompletionRepository,
+          useValue: trainingCompletionRepository,
+        },
+        {
+          provide: TrainingCommentRepository,
+          useValue: trainingCommentRepository,
         },
       ],
     }).compile();
@@ -281,6 +299,16 @@ describe('ProfileService', () => {
         // E os do GYM Challenge, com a subcolecao `active_round` dentro deles
         // (spec 022, decisao 14). Quinta e sexta vez que a mesma regra vale.
         'gym.removeAll',
+        // E a Arena de Treinamento (spec 023): as conclusoes, que sao historico
+        // de comportamento ligado ao uid, e os comentarios, que sao texto
+        // escrito pela pessoa. Setima e oitava vez que a regra vale.
+        //
+        // **Comentario de treinamento e APAGADO, e pergunta do Mural e
+        // ANONIMIZADA**, e a diferenca nao e descuido: a pergunta carrega votos
+        // de terceiros e pode ja ter virado video na trilha, enquanto o
+        // comentario nao carrega nada de ninguem alem de quem o escreveu.
+        'trainingCompletion.removeAll',
+        'trainingComment.removeAllByUid',
         // A linha do placar: gamertag, XP e insignias ligados ao uid.
         'ranking.remove',
         // **E a gamertag volta a ficar livre.** Sem isto, o membro que voltasse

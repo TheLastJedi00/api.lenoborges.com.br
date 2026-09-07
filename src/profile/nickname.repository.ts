@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { CollectionReference, Timestamp } from 'firebase-admin/firestore';
 import { FirebaseService } from '../auth/firebase.service';
-import { ALREADY_EXISTS } from '../waitlist/waitlist.repository';
+import { isAlreadyExists } from '../waitlist/waitlist.repository';
 import { PROFILE_COLLECTION } from './profile.repository';
 import {
   NicknameEntry,
@@ -64,7 +64,7 @@ export class NicknameRepository {
     try {
       await batch.commit();
     } catch (error) {
-      if ((error as { code?: number }).code === ALREADY_EXISTS) {
+      if (isAlreadyExists(error)) {
         return { taken: true, entry: null };
       }
 

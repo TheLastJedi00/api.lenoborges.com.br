@@ -5,6 +5,9 @@
   "author": "",
   "private": true,
   "license": "UNLICENSED",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
@@ -25,6 +28,9 @@
     "ranking:backfill": "ts-node -P tsconfig.json scripts/ranking-backfill.ts",
     "ranking:snapshot": "ts-node -P tsconfig.json scripts/ranking-snapshot.ts"
   },
+  "overrides": {
+    "jose": "^5.10.0"
+  },
   "dependencies": {
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.4",
@@ -36,7 +42,7 @@
     "class-validator": "^0.15.1",
     "cookie-parser": "^1.4.7",
     "dotenv": "^17.4.2",
-    "firebase-admin": "^13.10.0",
+    "firebase-admin": "^14.3.0",
     "reflect-metadata": "^0.2.2",
     "resend": "^6.22.1",
     "rxjs": "^7.8.1"

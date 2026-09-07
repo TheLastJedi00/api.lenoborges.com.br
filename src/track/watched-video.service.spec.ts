@@ -152,6 +152,38 @@ describe('WatchedVideoService', () => {
       expect(firestore.countUnder(RAZAO)).toBe(1);
       expect(xp()).toBe(XP_PER_VIDEO);
     });
+
+    /**
+     * **A mesma invariante, no transporte que producao usa.**
+     *
+     * Tudo acima roda em gRPC, que e o do emulador -- e nele o `create()` sobre
+     * caminho ocupado recusa com `code: 6`. Producao roda com
+     * `preferRest: true` (`FirebaseService`, por causa do congelamento de
+     * processo na Vercel), e ali a recusa chega como `code: 409`.
+     *
+     * Ate 2026-09-01 a diferenca nao existia em teste nenhum, e o preco foi
+     * exato: remarcar um video -- a interacao mais repetida do produto --
+     * **pendurava** a requisicao em producao com a suite inteira verde. Este
+     * caso e o que impede a suite de mentir de novo.
+     */
+    it('teste-trava: remarcar tambem nao paga duas vezes no transporte REST', async () => {
+      const rest = new FakeFirestore('rest');
+      rest.seedProfile(UID);
+      const firebaseRest = { firestore: rest } as unknown as FirebaseService;
+      const servicoRest = new WatchedVideoService(
+        new WatchedVideoRepository(firebaseRest),
+        videos as unknown as BadgeVideoRepository,
+        new RankingRepository(firebaseRest),
+      );
+
+      await servicoRest.setWatched(UID, A, { watched: true });
+      await servicoRest.setWatched(UID, A, { watched: false });
+      const terceira = await servicoRest.setWatched(UID, A, { watched: true });
+
+      expect(terceira.xp).toBe(XP_PER_VIDEO);
+      expect(rest.countUnder(RAZAO)).toBe(1);
+      expect(rest.raw(`profiles/${UID}`)!.xp).toBe(XP_PER_VIDEO);
+    });
   });
   describe('o placar anda junto (spec 022)', () => {
     it('o XP do video entra no ranking no mesmo lote', async () => {

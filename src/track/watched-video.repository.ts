@@ -8,7 +8,7 @@ import {
 } from 'firebase-admin/firestore';
 import { FirebaseService } from '../auth/firebase.service';
 import { PROFILE_COLLECTION } from '../profile/profile.repository';
-import { ALREADY_EXISTS } from '../waitlist/waitlist.repository';
+import { isAlreadyExists } from '../waitlist/waitlist.repository';
 import { XP_PER_VIDEO } from './track.constants';
 import {
   WatchedVideo,
@@ -232,13 +232,4 @@ export class WatchedVideoRepository {
 
     await batch.commit();
   }
-}
-
-/** O ALREADY_EXISTS do Firestore chega como `{ code: 6 }` no erro do commit. */
-function isAlreadyExists(error: unknown): boolean {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    (error as { code?: unknown }).code === ALREADY_EXISTS
-  );
 }
