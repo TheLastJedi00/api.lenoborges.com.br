@@ -87,6 +87,7 @@ describe('Arena de Treinamento — membro (e2e)', () => {
   async function criarTreinamento(
     titulo: string,
     xpAmount?: number,
+    hints: string[] = ['Repare no que o laço acumula', 'Extraia a menor parte'],
   ): Promise<TrainingDto> {
     const response = await request(app.getHttpServer())
       .post('/admin/badges/logica/trainings')
@@ -94,7 +95,8 @@ describe('Arena de Treinamento — membro (e2e)', () => {
       .send({
         title: titulo,
         description: 'Um exercício de leitura antes de escrever.',
-        steps: ['Clone o repositório', 'Rode os testes'],
+        objective: 'Um laço lido de cima a baixo sem rolar a tela.',
+        hints,
         ...(xpAmount === undefined ? {} : { xpAmount }),
       })
       .expect(201);
@@ -227,13 +229,65 @@ describe('Arena de Treinamento — membro (e2e)', () => {
       const response = await request(app.getHttpServer())
         .post(`/trainings/${treinamento.id}/complete`)
         .set('Authorization', `Bearer ${pagoToken}`)
+        .send({ hintsUsed: 2 })
         .expect(201);
 
       const body = response.body as TrainingCompletionDto;
 
       expect(body.completed).toBe(true);
+      expect(body.xpAwarded).toBe(28);
+      expect(body.xp).toBe(antes + 28);
+    });
+
+    /**
+     * **O corpo vazio precisa continuar pagando o prêmio cheio** (spec 025,
+     * decisão 2).
+     *
+     * A tela anterior a esta spec não manda corpo nenhum, e entre o deploy do
+     * back e o do front existe uma janela em que é exatamente isso que chega.
+     * Com o campo obrigatório, essa janela seria um 400 em cima de quem acabou
+     * de concluir um desafio -- e o membro perderia o XP de um clique que deu
+     * certo.
+     */
+    it('sem corpo, paga o prêmio cheio', async () => {
+      const treinamento = await criarTreinamento('Sem dicas usadas', 30);
+      const antes = await xpDe(pagoToken);
+
+      const response = await request(app.getHttpServer())
+        .post(`/trainings/${treinamento.id}/complete`)
+        .set('Authorization', `Bearer ${pagoToken}`)
+        .expect(201);
+
+      const body = response.body as TrainingCompletionDto;
+
       expect(body.xpAwarded).toBe(30);
       expect(body.xp).toBe(antes + 30);
+    });
+
+    /**
+     * O teto é o número de dicas do desafio. O servidor não tem como saber
+     * quantas foram realmente abertas -- quem mandar zero leva o prêmio cheio,
+     * e isso é aceito --, mas um número absurdo não leva o cálculo para longe
+     * do desafio real, e o XP nunca fica negativo.
+     */
+    it('corta o hintsUsed no número de dicas e nunca paga negativo', async () => {
+      const treinamento = await criarTreinamento('Barato', 2, [
+        'Uma',
+        'Duas',
+        'Três',
+      ]);
+      const antes = await xpDe(pagoToken);
+
+      const response = await request(app.getHttpServer())
+        .post(`/trainings/${treinamento.id}/complete`)
+        .set('Authorization', `Bearer ${pagoToken}`)
+        .send({ hintsUsed: 999 })
+        .expect(201);
+
+      const body = response.body as TrainingCompletionDto;
+
+      expect(body.xpAwarded).toBe(0);
+      expect(body.xp).toBe(antes);
     });
 
     /**

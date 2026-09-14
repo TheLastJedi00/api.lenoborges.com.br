@@ -61,9 +61,11 @@ Ao fim desta fase, o admin pede treinamentos à IA como já faz no GYM Challenge
 
 ---
 
-# Fase 04: Testes e2e e fechamento [ ]
+# Fase 04: Testes e2e e fechamento [x]
 
-- [ ] Task 01: `test/training.e2e-spec.ts` — a conclusão passa a mandar `{ hintsUsed: 2 }` e o teste valida o `xpAwarded` descontado e o `xp` do perfil. Incluir o caso **sem corpo** (`{}`), que precisa continuar pagando o prêmio cheio, e a segunda chamada respondendo `xpAwarded: 0`.
-- [ ] Task 02: `test/training-admin.e2e-spec.ts` — criar e editar treinamento com `objective` e `hints`; a rota de `generate` responde `503` na suíte, que roda sem `GEMINI_API_KEY` — é esse o contrato a travar aqui, e não uma chamada real à Gemini.
-- [ ] Task 03: `README.md` — registrar a evolução dos `trainings` para desafio-objetivo-dicas e o desconto de 1 XP por dica. **Nenhum índice composto novo**: `hints` não entra em query, e a tabela de índices não ganha linha.
-- [ ] Task 04: `npm run lint`, `npm test` e `npm run build` limpos antes do merge.
+- [x] Task 01: `test/training.e2e-spec.ts` — a conclusão passa a mandar `{ hintsUsed: 2 }` e o teste valida o `xpAwarded` descontado e o `xp` do perfil. Incluir o caso **sem corpo** (`{}`), que precisa continuar pagando o prêmio cheio, e a segunda chamada respondendo `xpAwarded: 0`.
+- [x] Task 02: `test/training-admin.e2e-spec.ts` — criar e editar treinamento com `objective` e `hints`; a rota de `generate` responde `503` na suíte, que roda sem `GEMINI_API_KEY` — é esse o contrato a travar aqui, e não uma chamada real à Gemini.
+- [x] Task 03: `README.md` — registrar a evolução dos `trainings` para desafio-objetivo-dicas e o desconto de 1 XP por dica. **Nenhum índice composto novo**: `hints` não entra em query, e a tabela de índices não ganha linha.
+- [x] Task 04: `npm run lint`, `npm test` e `npm run build` limpos antes do merge.
+  **`npm run test:e2e` não foi executado nesta máquina**: o emulador exige Java no PATH e ele não está
+  instalado aqui. Os dois arquivos e2e foram atualizados e passam no type-check; falta rodá-los.

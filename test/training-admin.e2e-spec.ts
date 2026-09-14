@@ -91,7 +91,8 @@ describe('Arena de Treinamento — admin (e2e)', () => {
       .send({
         title: titulo,
         description: 'Um exercício de leitura antes de escrever.',
-        steps: ['Clone o repositório', 'Rode os testes'],
+        objective: 'Um laço lido de cima a baixo sem rolar a tela.',
+        hints: ['Repare no que o laço acumula', 'Extraia a menor parte'],
         ...(xpAmount === undefined ? {} : { xpAmount }),
       })
       .expect(201);
@@ -190,11 +191,35 @@ describe('Arena de Treinamento — admin (e2e)', () => {
       expect(segundo.videoUrl).toBeNull();
     });
 
-    it('recusa um desafio sem passo nenhum', async () => {
+    /**
+     * **O piso de uma dica continua valendo** (spec 025, decisão 1).
+     *
+     * A razão mudou de lugar e não sumiu: antes era o modal vazio, agora é que
+     * a Arena existe para ensinar raciocínio, e um desafio que não oferece
+     * nenhuma saída quando o membro trava só paga quem já sabia.
+     */
+    it('recusa um desafio sem dica nenhuma', async () => {
       await request(app.getHttpServer())
         .post('/admin/badges/logica/trainings')
         .set('Authorization', `Bearer ${adminToken}`)
-        .send({ title: 'Sem passos', description: 'Descrição', steps: [] })
+        .send({
+          title: 'Sem dicas',
+          description: 'Descrição',
+          objective: 'Objetivo',
+          hints: [],
+        })
+        .expect(400);
+    });
+
+    it('recusa um desafio sem objetivo', async () => {
+      await request(app.getHttpServer())
+        .post('/admin/badges/logica/trainings')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          title: 'Sem objetivo',
+          description: 'Descrição',
+          hints: ['Uma'],
+        })
         .expect(400);
     });
 
@@ -205,7 +230,8 @@ describe('Arena de Treinamento — admin (e2e)', () => {
         .send({
           title: 'Com vídeo torto',
           description: 'Descrição',
-          steps: ['Um'],
+          objective: 'Objetivo',
+          hints: ['Uma'],
           videoUrl: 'nao-e-url',
         })
         .expect(400);
@@ -215,7 +241,12 @@ describe('Arena de Treinamento — admin (e2e)', () => {
       await request(app.getHttpServer())
         .post('/admin/badges/nao-existe/trainings')
         .set('Authorization', `Bearer ${adminToken}`)
-        .send({ title: 'Órfão', description: 'Descrição', steps: ['Um'] })
+        .send({
+          title: 'Órfão',
+          description: 'Descrição',
+          objective: 'Objetivo',
+          hints: ['Uma'],
+        })
         .expect(404);
     });
 
@@ -234,6 +265,90 @@ describe('Arena de Treinamento — admin (e2e)', () => {
       expect(body.xpAmount).toBe(55);
       expect(body.hints).toEqual(treinamento.hints);
     });
+
+    it('edita objetivo e dicas', async () => {
+      const treinamento = await criarTreinamento('Para reescrever');
+
+      const response = await request(app.getHttpServer())
+        .patch(`/admin/trainings/${treinamento.id}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          objective: 'Objetivo novo',
+          hints: ['Primeira nova', 'Segunda nova', 'Terceira nova'],
+        })
+        .expect(200);
+
+      const body = response.body as TrainingDto;
+
+      expect(body.objective).toBe('Objetivo novo');
+      expect(body.hints).toEqual([
+        'Primeira nova',
+        'Segunda nova',
+        'Terceira nova',
+      ]);
+    });
+  });
+
+  /**
+   * **A suíte roda sem `GEMINI_API_KEY`, e é esse o contrato a travar aqui.**
+   *
+   * O que se prova é o 503 de recurso não configurado, e não uma chamada real
+   * à Gemini: um teste que dependesse da chave gastaria cota a cada execução e
+   * ficaria vermelho por motivo nenhum na máquina de quem não tem a chave.
+   */
+  describe('a geração por IA', () => {
+    it('responde 503 quando a geração não está configurada', async () => {
+      await request(app.getHttpServer())
+        .post('/admin/badges/logica/trainings/generate')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          prompt: 'Desafios sobre laços de repetição em um caso real.',
+          difficulty: 'medium',
+          count: 3,
+        })
+        .expect(503);
+    });
+
+    /**
+     * A conferência do `badgeId` vem **antes** da chamada paga: a insígnia
+     * inexistente responde 404 sem gastar a geração. Como a suíte roda sem
+     * chave, é justamente aqui que os dois se distinguem -- 404 e não 503.
+     */
+    it('responde 404 na insígnia inexistente, sem tentar gerar', async () => {
+      await request(app.getHttpServer())
+        .post('/admin/badges/nao-existe/trainings/generate')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          prompt: 'Desafios sobre laços de repetição em um caso real.',
+          difficulty: 'medium',
+          count: 3,
+        })
+        .expect(404);
+    });
+
+    it('recusa um nível que não existe', async () => {
+      await request(app.getHttpServer())
+        .post('/admin/badges/logica/trainings/generate')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          prompt: 'Desafios sobre laços de repetição em um caso real.',
+          difficulty: 'impossivel',
+          count: 3,
+        })
+        .expect(400);
+    });
+
+    it('recusa membro comum', async () => {
+      await request(app.getHttpServer())
+        .post('/admin/badges/logica/trainings/generate')
+        .set('Authorization', `Bearer ${pagoToken}`)
+        .send({
+          prompt: 'Desafios sobre laços de repetição em um caso real.',
+          difficulty: 'medium',
+          count: 3,
+        })
+        .expect(403);
+    });
   });
 
   describe('o portão do admin', () => {
@@ -247,7 +362,12 @@ describe('Arena de Treinamento — admin (e2e)', () => {
       await request(app.getHttpServer())
         .post('/admin/badges/logica/trainings')
         .set('Authorization', `Bearer ${pagoToken}`)
-        .send({ title: 'x', description: 'y', steps: ['z'] })
+        .send({
+          title: 'x',
+          description: 'y',
+          objective: 'z',
+          hints: ['w'],
+        })
         .expect(403);
       await request(app.getHttpServer())
         .patch(`/admin/trainings/${treinamento.id}`)
