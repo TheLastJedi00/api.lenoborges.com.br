@@ -67,5 +67,16 @@ Ao fim desta fase, o admin pede treinamentos à IA como já faz no GYM Challenge
 - [x] Task 02: `test/training-admin.e2e-spec.ts` — criar e editar treinamento com `objective` e `hints`; a rota de `generate` responde `503` na suíte, que roda sem `GEMINI_API_KEY` — é esse o contrato a travar aqui, e não uma chamada real à Gemini.
 - [x] Task 03: `README.md` — registrar a evolução dos `trainings` para desafio-objetivo-dicas e o desconto de 1 XP por dica. **Nenhum índice composto novo**: `hints` não entra em query, e a tabela de índices não ganha linha.
 - [x] Task 04: `npm run lint`, `npm test` e `npm run build` limpos antes do merge.
-  **`npm run test:e2e` não foi executado nesta máquina**: o emulador exige Java no PATH e ele não está
-  instalado aqui. Os dois arquivos e2e foram atualizados e passam no type-check; falta rodá-los.
+  **`npm run test:e2e` roda, mas a suíte inteira falha por um defeito pré-existente do ambiente.**
+  O Java saiu do JBR do IntelliJ (`C:Program FilesJetBrainsIntelliJ IDEA 2026.2.1jbr`), o emulador
+  sobe, e **todas** as 17 falhas de `training.e2e-spec.ts` são o mesmo `401` no `/auth/login` do
+  `createSession` -- 186 falhas em 15 suítes no total, incluindo `auth.e2e-spec.ts`, que esta spec não
+  tocou. **A causa:** `FirebaseService.identityToolkit` monta a URL fixa em
+  `https://identitytoolkit.googleapis.com/v1` (`src/auth/firebase.service.ts:13,119`) e não honra
+  `FIREBASE_AUTH_EMULATOR_HOST`. O usuário é criado no emulador pelo Admin SDK, e o
+  `signInWithPassword` vai para o Google de verdade, onde ele não existe. Nada disso é da spec 025, e
+  o conserto -- apontar `identityToolkit` e `secureToken` para o emulador quando a variável existe --
+  é assunto de outra spec.
+
+  **O que foi verificado no lugar disso: a spec inteira rodando contra o `dev-liga-dev`**, com a API
+  local e o front local (ver a nota da Fase 04 do front).
