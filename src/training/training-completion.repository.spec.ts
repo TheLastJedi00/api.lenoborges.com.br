@@ -13,12 +13,18 @@ describe('TrainingCompletionRepository', () => {
     } as unknown as FirebaseService);
   });
 
-  async function concluir(uid: string, trainingId: string, xpAwarded = 30) {
+  async function concluir(
+    uid: string,
+    trainingId: string,
+    xpAwarded = 30,
+    hintsUsed = 0,
+  ) {
     const batch = firestore.batch();
     repository.create(batch as never, {
       uid,
       trainingId,
       xpAwarded,
+      hintsUsed,
       now: new Date('2026-09-01T12:00:00.000Z'),
     });
     await batch.commit();
@@ -63,6 +69,22 @@ describe('TrainingCompletionRepository', () => {
       const { entry } = await repository.findById('ana', 'trn-1');
 
       expect(entry?.xpAwarded).toBe(80);
+    });
+
+    /**
+     * **É o repository quem chama `batch.create`, e é aqui que o `hintsUsed`
+     * entra no documento** (spec 025).
+     *
+     * Sem esta linha o service calcularia o desconto certo, pagaria o valor
+     * certo, e a conclusão ficaria gravada sem nenhuma explicação de por que um
+     * desafio de 30 pagou 27.
+     */
+    it('guarda quantas dicas foram cobradas naquela conclusão', async () => {
+      await concluir('ana', 'trn-1', 27, 3);
+
+      const { entry } = await repository.findById('ana', 'trn-1');
+
+      expect(entry?.hintsUsed).toBe(3);
     });
   });
 

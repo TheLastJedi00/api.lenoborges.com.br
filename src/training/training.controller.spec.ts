@@ -74,10 +74,34 @@ describe('TrainingController', () => {
         xp: 30,
       });
 
-      const resposta = await controller.complete(ANA, 'trn-1');
+      const resposta = await controller.complete(ANA, 'trn-1', {
+        hintsUsed: 2,
+      });
 
-      expect(service.complete).toHaveBeenCalledWith('ana', 'trn-1');
+      expect(service.complete).toHaveBeenCalledWith('ana', 'trn-1', 2);
       expect(resposta.xp).toBe(30);
+    });
+
+    /**
+     * **O corpo ausente vale zero, e é o que salva a janela entre os deploys**
+     * (spec 025, decisão 2).
+     *
+     * A tela anterior a esta spec não manda corpo nenhum. Com o campo
+     * obrigatório, o intervalo entre o deploy do back e o do front seria um
+     * 400 em cima de quem acabou de concluir um desafio -- e o membro perderia
+     * o XP de um clique que deu certo.
+     */
+    it('trata o corpo vazio como nenhuma dica revelada', async () => {
+      service.complete.mockResolvedValue({
+        trainingId: 'trn-1',
+        completed: true,
+        xpAwarded: 30,
+        xp: 30,
+      });
+
+      await controller.complete(ANA, 'trn-1', {});
+
+      expect(service.complete).toHaveBeenCalledWith('ana', 'trn-1', 0);
     });
 
     /**
@@ -95,7 +119,9 @@ describe('TrainingController', () => {
         xp: 30,
       });
 
-      const resposta = await controller.complete(ANA, 'trn-1');
+      const resposta = await controller.complete(ANA, 'trn-1', {
+        hintsUsed: 0,
+      });
 
       expect(resposta.completed).toBe(true);
       expect(resposta.xpAwarded).toBe(0);

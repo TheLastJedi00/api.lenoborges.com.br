@@ -1589,9 +1589,13 @@ vazia, e nada aparece em log nenhum.
 
 ## Spec 023 — Arena de Treinamento
 
+> **Atualizada pela spec 025.** Os `steps` viraram `hints`, nasceu o `objective`, e cada dica revelada
+> desconta 1 XP do prêmio. O que esta seção descreve do modelo de dados vale com essa troca de nomes;
+> o resto — o caminho da conclusão, a cascata, o portão de tier — não mudou.
+
 Desafios práticos de código dentro da trilha, entre a lista de vídeos e o GYM Challenge. Cada desafio
-tem título, descrição, uma lista de passos, um vídeo de apoio opcional e um XP próprio. Concluir paga
-esse XP **uma vez, para sempre**; comentar é do Great Tier para cima.
+tem título, descrição, objetivo, uma lista de dicas, um vídeo de apoio opcional e um XP próprio.
+Concluir paga esse XP **uma vez, para sempre**; comentar é do Great Tier para cima.
 
 ### A coleção é de primeiro nível, e o ID é gerado
 
@@ -1609,7 +1613,8 @@ o mesmo que apagar e recriar.
 |---|---|
 | `badgeId` | A insígnia. Passa por `isBadgeId` antes de virar dado |
 | `title`, `description` | O card e o cabeçalho do modal |
-| `steps` | Array de strings, na ordem. **Não é um markdown com quebras de linha**: a tela desenha um `<ol>` e o admin edita passo a passo |
+| `objective` | O resultado esperado, em uma frase (spec 025). Separado da `description`, que conta só o cenário |
+| `hints` | Array de strings, na ordem do raciocínio (spec 025, no lugar de `steps`). **Não é um markdown com quebras de linha**: a tela revela uma por vez e o admin edita dica a dica |
 | `videoUrl` | A **URL crua**, e não o ID do YouTube. Aqui o vídeo é anexo do enunciado, não o conteúdo, e amarrar o campo ao YouTube fecharia a porta para outra hospedagem por nenhum ganho |
 | `xpAmount` | Quanto paga. Nasce em 30 e o admin pode mudar. Fica **no documento**, não na constante — um exercício de trinta minutos e um de três horas não valem a mesma coisa |
 | `position` | 0..n-1, renormalizada em lote atômico a cada reorder e a cada exclusão |
@@ -1680,11 +1685,12 @@ tirar XP de quem trabalhou por ele.
 |---|---|---|---|
 | `GET` | `/badges/:badgeId/trainings` | auth | Os desafios da insígnia, na ordem, com `completed` **de quem pediu** |
 | `GET` | `/trainings/:trainingId` | auth | Um desafio, com o estado de conclusão de quem pediu |
-| `POST` | `/trainings/:trainingId/complete` | auth | Conclui e paga o XP. **Idempotente**: `xpAwarded: 0` na segunda vez |
+| `POST` | `/trainings/:trainingId/complete` | auth | Conclui e paga o XP, **descontado das dicas** (spec 025). Corpo `{ hintsUsed? }`. **Idempotente**: `xpAwarded: 0` na segunda vez |
 | `GET` | `/trainings/:trainingId/comments?limit&after` | auth | Comentários, mais recentes primeiro. Padrão 10, teto 50 |
 | `POST` | `/trainings/:trainingId/comments` | auth + **tier pago** | Comenta. `403` para Dev Tier |
 | `GET` | `/admin/badges/:badgeId/trainings` | admin | A lista, para administrar |
 | `POST` | `/admin/badges/:badgeId/trainings` | admin | Cria no fim da lista. A posição é calculada no servidor |
+| `POST` | `/admin/badges/:badgeId/trainings/generate` | admin | Gera rascunho com IA (spec 025). **Não grava nada.** `503` sem `GEMINI_API_KEY` |
 | `PATCH` | `/admin/badges/:badgeId/trainings/reorder` | admin | Reordena em lote atômico. Corpo `{ orderedIds }`. `204` |
 | `PATCH` | `/admin/trainings/:trainingId` | admin | Edita |
 | `DELETE` | `/admin/trainings/:trainingId` | admin | Exclui **em cascata** e renormaliza. `204` |
@@ -1732,3 +1738,87 @@ firebase deploy --only firestore:indexes --project dev-liga-dev
 Sem eles, a listagem de desafios e a de comentários respondem erro com o link para criá-los. **O
 emulador não exige índice**, então a suíte fica verde até o primeiro acesso real — foi assim que o
 `dev-liga-dev` passou meses sem os índices da trilha e do Mural.
+
+---
+
+## Spec 025 — Desafio, objetivo e dicas que custam XP
+
+A Arena da spec 023 deixa de ser uma execução guiada e passa a cobrar raciocínio. O que era o passo a
+passo vira **dica**, o alvo sai da descrição e vira **objetivo**, e **cada dica revelada custa 1 XP** do
+prêmio do desafio.
+
+### `steps` virou `hints`, e não há migração a rodar
+
+O campo foi **renomeado em código e em banco**. Manter o nome antigo guardando dica lógica deixaria o
+campo mentindo para quem ler o documento daqui a seis meses, e é o tipo de mentira que custa uma tarde.
+
+**Não há script de migração, e não precisa haver.** `hints` não entra em query nenhuma — a listagem
+filtra por `badgeId` e ordena por `position` —, então o `data.hints ?? data.steps ?? []` do converter
+resolve documento antigo por inteiro. É o oposto do `tab` da spec 021, onde o fallback **não** bastava
+justamente porque `where('tab','==',…)` não enxerga documento sem o campo. O `toFirestore` grava **só
+`hints`**: o documento antigo fica com o `steps` órfão até a primeira edição, que o reescreve inteiro, e
+um `steps` sobrando não atrapalha ninguém.
+
+**O piso de uma dica continua valendo** (`@ArrayMinSize(1)`, teto de 30). A razão mudou de lugar e não
+sumiu: antes era o modal vazio, agora é que a Arena existe para ensinar raciocínio, e um desafio que não
+oferece nenhuma saída quando o membro trava só paga quem já sabia. Quem quiser o desafio duro escreve
+uma dica cara — o membro decide se gasta o XP nela.
+
+### O desconto sai do prêmio, nunca do saldo
+
+`POST /trainings/:trainingId/complete` recebe `{ hintsUsed? }` e paga:
+
+```
+Math.max(0, xpAmount - Math.min(hintsUsed, hints.length))
+```
+
+Descontar do **prêmio do desafio**, e não do saldo global, é o que impede o XP de andar para trás por
+alguém ter pedido ajuda — e de ficar negativo em quem acabou de entrar.
+
+**`hintsUsed` é opcional e ausente vale zero.** O front e o back desta spec entram juntos, mas não sobem
+no mesmo segundo: entre um deploy e outro a tela antiga manda `{}` para a rota nova, e com o campo
+obrigatório essa janela seria um `400` em cima de quem acabou de concluir um desafio.
+
+**O teto é a única desonestidade que dá para barrar.** O servidor não tem como saber quantas dicas foram
+realmente reveladas — o estado vive no componente —, e quem quiser trapacear manda `hintsUsed: 0` e leva
+o prêmio cheio. Isso é aceito de propósito: a alternativa seria uma escrita por dica revelada, três
+vezes mais cara para cobrar 1 XP de quem já está com a tela aberta. O `Math.min` impede o contrário, um
+número absurdo levando o cálculo para longe do desafio real; o `Math.max(0, …)` impede o XP negativo.
+
+**`hintsUsed` é gravado na conclusão, ao lado do `xpAwarded`**, e pelo mesmo motivo dele: é o registro
+do que aconteceu naquele dia, e sem ele nenhuma auditoria explica por que um desafio de 30 pagou 27. Ele
+**não** impede repetição — quem impede continua sendo o `ALREADY_EXISTS` do caminho
+`{uid}__{trainingId}`. Na segunda chamada nada é escrito: `xpAwarded: 0`, e o `hintsUsed` gravado segue
+sendo o da primeira.
+
+A propriedade auditável do XP (spec 019, revista na 023) ganha mais uma ressalva: os treinamentos agora
+pagam **`xpAmount` menos as dicas cobradas**, e é o `xpAwarded` de cada conclusão, nunca o `xpAmount` de
+hoje, que explica o total.
+
+### A geração por IA, no molde da spec 022
+
+`POST /admin/badges/:badgeId/trainings/generate` consome a Gemini com um prompt próprio e devolve
+`{ trainings, discarded }` — rascunhos **não persistidos**, sem `id`. Responde `503` sem
+`GEMINI_API_KEY` ou com a IA fora do ar, como a rota irmã de questões.
+
+**A instrução que importa é a que proíbe a solução pronta.** Um modelo solto devolve o código resolvido
+no lugar da dica, e aí a dica deixa de valer 1 XP porque entrega o desafio inteiro — a mecânica morre
+sem nenhum erro aparecer em lugar nenhum. O prompt diz isso com todas as letras e traz o exemplo dentro:
+"Precisamos de uma variável inteira para guardar a idade".
+
+**A conferência do `badgeId` vem antes da chamada paga**, como no `AdminGamesController`: gerar dez
+treinamentos para uma insígnia que não existe custaria a chamada inteira para responder `404` depois.
+
+**O `discarded` atravessa até a tela.** Sem ele, um rascunho de 3 quando se pediu 5 parece limite do
+produto em vez de um modelo que errou o formato.
+
+**Não existe rota de `bulk` para treinamentos, e esta spec não cria uma.** O admin salva os aprovados
+pelo `POST /admin/badges/:badgeId/trainings` que já existe, e a tela dispara as chamadas em
+`Promise.all`. A criação calcula a `position` no servidor como "última + 1", então a ordem final é a de
+chegada; se ela importar, o admin reordena depois pela rota de reorder.
+
+### O nada desta spec
+
+**Nenhum índice composto novo** — `hints` não entra em query, e a tabela de índices não ganha linha.
+Nenhuma coleção nova, nenhum cron, nenhuma isenção de guard, e nenhum campo novo guardando `uid` ao lado
+de dado pessoal.

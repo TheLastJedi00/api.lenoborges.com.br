@@ -27,7 +27,8 @@ describe('TrainingRepository', () => {
       badgeId: badgeId as 'logica',
       title: titulo,
       description: 'Descrição',
-      steps: ['Passo um'],
+      objective: 'Objetivo',
+      hints: ['Dica uma'],
       position,
     });
 
@@ -53,7 +54,8 @@ describe('TrainingRepository', () => {
         badgeId: 'logica',
         title: 'Um desafio longo',
         description: 'Descrição',
-        steps: ['Passo um'],
+        objective: 'Objetivo',
+        hints: ['Dica uma'],
         position: 0,
         xpAmount: 80,
       });
@@ -128,11 +130,11 @@ describe('TrainingRepository', () => {
 
       const { entry } = await repository.update(criado.id, {
         title: 'Título novo',
-        steps: ['Um', 'Dois'],
+        hints: ['Uma', 'Duas'],
       });
 
       expect(entry?.title).toBe('Título novo');
-      expect(entry?.steps).toEqual(['Um', 'Dois']);
+      expect(entry?.hints).toEqual(['Uma', 'Duas']);
     });
   });
 

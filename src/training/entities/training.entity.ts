@@ -32,14 +32,27 @@ export interface Training {
   title: string;
   description: string;
   /**
-   * Os passos a executar no código, na ordem, um por item.
+   * O resultado esperado do desafio (spec 025).
+   *
+   * Separado da `description` de propósito: a descrição conta o cenário, e o
+   * objetivo diz onde se chega. Enquanto os dois moravam no mesmo texto, o
+   * membro lia um parágrafo e adivinhava qual frase era o alvo.
+   */
+  objective: string;
+  /**
+   * As dicas de raciocínio, na ordem em que o pensamento caminha (spec 025).
+   *
+   * **Não é mais o passo a passo da execução**, que era o que `steps` guardava
+   * na spec 023: é a dica que o membro abre quando trava, e **cada uma custa
+   * 1 XP** do prêmio do desafio. Por isso a ordem importa mais do que antes --
+   * abrir a quinta antes da primeira entrega o final da história.
    *
    * É um array de strings e não um texto único com quebras de linha, porque a
-   * tela desenha um `<ol>` semântico e o admin edita passo a passo. Um blob de
-   * markdown aqui empurraria a numeração para o CSS e a edição para um textarea
-   * onde ninguém consegue mover o passo três para cima.
+   * tela revela uma de cada vez e o admin edita dica a dica. Um blob de
+   * markdown aqui empurraria a revelação para um `split` e a edição para um
+   * textarea onde ninguém consegue mover a dica três para cima.
    */
-  steps: string[];
+  hints: string[];
   /**
    * O vídeo de apoio, opcional.
    *
@@ -77,7 +90,16 @@ interface TrainingDocument extends DocumentData {
   badgeId: BadgeId;
   title: string;
   description: string;
-  steps: string[];
+  objective: string;
+  hints: string[];
+  /**
+   * Resquício da spec 023, **só para o lado da leitura tipar o fallback**.
+   *
+   * Nada escreve neste campo desde a spec 025 -- o `toFirestore` grava apenas
+   * `hints`. Ele continua declarado porque documento anterior à spec ainda o
+   * tem, e o `fromFirestore` precisa poder lê-lo sem um `as any` no meio.
+   */
+  steps?: string[];
   videoUrl: string | null;
   xpAmount: number;
   position: number;
@@ -91,7 +113,13 @@ export const trainingConverter: FirestoreDataConverter<Training> = {
       badgeId: training.badgeId,
       title: training.title,
       description: training.description,
-      steps: training.steps,
+      objective: training.objective,
+      // Grava **só `hints`**, nunca os dois (spec 025). O documento antigo fica
+      // com o `steps` órfão até a primeira edição, que o reescreve inteiro, e
+      // um `steps` sobrando não atrapalha ninguém: ele não entra em query
+      // nenhuma, ao contrário do `tab` da spec 021, onde o fallback não bastava
+      // justamente porque a query não enxerga campo ausente.
+      hints: training.hints,
       videoUrl: training.videoUrl,
       xpAmount: training.xpAmount,
       position: training.position,
@@ -108,10 +136,15 @@ export const trainingConverter: FirestoreDataConverter<Training> = {
       badgeId: data.badgeId,
       title: data.title,
       description: data.description ?? '',
-      // Sem o `?? []`, um documento escrito por um caminho que ninguém previu
-      // chega com `steps` indefinido e a tela estoura no `.map` -- o desafio
-      // some inteiro por causa de um campo que ninguém preencheu.
-      steps: data.steps ?? [],
+      // Documento anterior à spec 025 não tem objetivo, e `undefined` num
+      // template vira a palavra "undefined" na tela do membro.
+      objective: data.objective ?? '',
+      // A migração dos documentos antigos mora inteira nesta linha (spec 025):
+      // `hints` não é campo de query -- a listagem filtra por `badgeId` e
+      // ordena por `position` --, então o fallback resolve o legado por
+      // completo e não há script de migração a rodar. O `?? []` final é o de
+      // sempre: sem ele a tela estoura no `.map` e o desafio some inteiro.
+      hints: data.hints ?? data.steps ?? [],
       videoUrl: data.videoUrl ?? null,
       // `undefined + xp` é `NaN`, e um `NaN` gravado no perfil contamina o
       // contador para sempre: ele não volta a ser número com nenhuma soma

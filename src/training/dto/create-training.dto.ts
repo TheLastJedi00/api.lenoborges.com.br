@@ -29,7 +29,9 @@ export class CreateTrainingDto {
 
   @ApiProperty({
     example: 'Um exercício de leitura antes de escrever.',
-    description: 'A descrição curta do card, expandida dentro do modal',
+    description:
+      'O cenário do desafio, expandido dentro do modal. **Conta a situação, ' +
+      'não o alvo** — onde se chega é o `objective` (spec 025)',
   })
   @IsString()
   @Transform(trim)
@@ -37,11 +39,30 @@ export class CreateTrainingDto {
   description: string;
 
   @ApiProperty({
-    type: [String],
-    example: ['Clone o repositório', 'Rode os testes', 'Extraia as funções'],
+    example: 'Um laço lido de cima a baixo sem rolar a tela.',
     description:
-      'Os passos a executar, na ordem, um por item. **Pelo menos um** — um ' +
-      'desafio sem passo é um card que abre num modal vazio',
+      'O resultado esperado do desafio. Separado da descrição de propósito: ' +
+      'enquanto os dois moravam no mesmo texto, o membro lia um parágrafo e ' +
+      'adivinhava qual frase era o alvo (spec 025)',
+  })
+  @IsString()
+  @Transform(trim)
+  @Length(3, 300)
+  objective: string;
+
+  @ApiProperty({
+    type: [String],
+    example: [
+      'Repare quantas responsabilidades o laço acumula.',
+      'Uma delas dá nome a uma função sozinha.',
+      'Extraia a menor primeiro, e rode os testes.',
+    ],
+    description:
+      'As dicas de raciocínio, na ordem do pensamento, uma por item. Cada ' +
+      'dica revelada custa 1 XP ao membro. **Pelo menos uma** — a Arena ' +
+      'existe para ensinar raciocínio, e um desafio que não oferece nenhuma ' +
+      'saída quando o membro trava só paga quem já sabia. Quem quiser o ' +
+      'desafio duro escreve uma dica cara (spec 025)',
   })
   @IsArray()
   @ArrayMinSize(1)
@@ -55,7 +76,7 @@ export class CreateTrainingDto {
         )
       : value,
   )
-  steps: string[];
+  hints: string[];
 
   @ApiProperty({
     required: false,
