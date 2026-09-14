@@ -62,13 +62,20 @@ export class TrainingCompletionRepository {
    */
   create(
     batch: WriteBatch,
-    data: { uid: string; trainingId: string; xpAwarded: number; now: Date },
+    data: {
+      uid: string;
+      trainingId: string;
+      xpAwarded: number;
+      hintsUsed: number;
+      now: Date;
+    },
   ): void {
     batch.create(this.docRef(data.uid, data.trainingId), {
       id: trainingCompletionDocId(data.uid, data.trainingId),
       uid: data.uid,
       trainingId: data.trainingId,
       xpAwarded: data.xpAwarded,
+      hintsUsed: data.hintsUsed,
       completedAt: data.now,
     });
   }

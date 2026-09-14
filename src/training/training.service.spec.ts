@@ -64,12 +64,18 @@ describe('TrainingService', () => {
 
   async function criarTreinamento(
     titulo = 'Refatore o laço',
-    { badgeId = 'logica', xpAmount = 30, position = 0 } = {},
+    {
+      badgeId = 'logica',
+      xpAmount = 30,
+      position = 0,
+      hints = ['Dica uma', 'Dica duas'],
+    } = {},
   ) {
     return service.createTraining(badgeId, {
       title: titulo,
       description: 'Descrição do desafio',
-      steps: ['Passo um', 'Passo dois'],
+      objective: 'Objetivo do desafio',
+      hints,
       xpAmount,
       ...(position ? {} : {}),
     });
@@ -190,6 +196,125 @@ describe('TrainingService', () => {
     });
 
     /**
+     * **O custo das dicas** (spec 025, decisão 2).
+     *
+     * Cada dica revelada desconta 1 do prêmio do desafio, e não do saldo do
+     * membro: debitar do saldo global deixaria o XP andar para trás -- e, num
+     * membro novo, negativo -- por ter pedido ajuda.
+     */
+    describe('o desconto das dicas reveladas', () => {
+      it('sem dica revelada, paga o prêmio cheio', async () => {
+        semearPerfil('ana');
+        const treinamento = await criarTreinamento('Primeiro', {
+          xpAmount: 30,
+        });
+
+        const resultado = await service.complete('ana', treinamento.id, 0);
+
+        expect(resultado.xpAwarded).toBe(30);
+        expect(resultado.xp).toBe(30);
+      });
+
+      it('desconta 1 XP por dica revelada', async () => {
+        semearPerfil('ana');
+        const treinamento = await criarTreinamento('Primeiro', {
+          xpAmount: 30,
+          hints: ['Uma', 'Duas', 'Três'],
+        });
+
+        const resultado = await service.complete('ana', treinamento.id, 2);
+
+        expect(resultado.xpAwarded).toBe(28);
+        expect(resultado.xp).toBe(28);
+      });
+
+      /**
+       * **O teto é o número de dicas, e é a única desonestidade que dá para
+       * barrar.** O servidor não sabe quantas dicas foram realmente abertas --
+       * quem quiser trapacear manda zero e leva o prêmio cheio, e isso é
+       * aceito. O que o `Math.min` impede é o contrário: um número absurdo
+       * levando o cálculo para longe do desafio real.
+       */
+      it('corta o `hintsUsed` no número de dicas do desafio', async () => {
+        semearPerfil('ana');
+        const treinamento = await criarTreinamento('Primeiro', {
+          xpAmount: 30,
+          hints: ['Uma', 'Duas'],
+        });
+
+        const resultado = await service.complete('ana', treinamento.id, 999);
+
+        expect(resultado.xpAwarded).toBe(28);
+      });
+
+      /** O `Math.max(0, ...)` impede o XP negativo. */
+      it('nunca paga menos que zero, nem quando as dicas valem mais que o prêmio', async () => {
+        semearPerfil('ana');
+        const treinamento = await criarTreinamento('Barato', {
+          xpAmount: 2,
+          hints: ['Uma', 'Duas', 'Três', 'Quatro', 'Cinco'],
+        });
+
+        const resultado = await service.complete('ana', treinamento.id, 5);
+
+        expect(resultado.xpAwarded).toBe(0);
+        expect(resultado.xp).toBe(0);
+      });
+
+      it('grava na conclusão quantas dicas foram cobradas', async () => {
+        semearPerfil('ana');
+        const treinamento = await criarTreinamento('Primeiro', {
+          xpAmount: 30,
+          hints: ['Uma', 'Duas'],
+        });
+
+        await service.complete('ana', treinamento.id, 999);
+
+        expect(
+          firestore.raw(`training_completions/ana__${treinamento.id}`)
+            ?.hintsUsed,
+        ).toBe(2);
+      });
+
+      /**
+       * **A segunda chamada não escreve nada, nem com outro `hintsUsed`.**
+       *
+       * Quem impede o segundo pagamento continua sendo o `ALREADY_EXISTS` do
+       * caminho, e não o campo novo: mandar `0` na segunda tentativa não
+       * reabre o pagamento nem reescreve o que ficou registrado na primeira.
+       */
+      it('a segunda conclusão paga zero e não reescreve as dicas da primeira', async () => {
+        semearPerfil('ana');
+        const treinamento = await criarTreinamento('Primeiro', {
+          xpAmount: 30,
+          hints: ['Uma', 'Duas'],
+        });
+
+        await service.complete('ana', treinamento.id, 2);
+        const segunda = await service.complete('ana', treinamento.id, 0);
+
+        expect(segunda.xpAwarded).toBe(0);
+        expect(segunda.xp).toBe(28);
+        expect(
+          firestore.raw(`training_completions/ana__${treinamento.id}`)
+            ?.hintsUsed,
+        ).toBe(2);
+      });
+
+      /** O `hintsUsed` ausente é zero: é o que a tela anterior à spec fazia. */
+      it('sem o argumento, paga o prêmio cheio', async () => {
+        semearPerfil('ana');
+        const treinamento = await criarTreinamento('Primeiro', {
+          xpAmount: 30,
+        });
+
+        expect((await service.complete('ana', treinamento.id)).xpAwarded).toBe(
+          30,
+        );
+      });
+    });
+
+    /**
      * **A mesma idempotência, no transporte que produção usa.**
      *
      * Os dois casos acima rodam em gRPC, onde a recusa do `create()` chega como
@@ -224,7 +349,8 @@ describe('TrainingService', () => {
       const treinamento = await servicoRest.createTraining('logica', {
         title: 'Primeiro',
         description: 'Descrição do desafio',
-        steps: ['Passo um', 'Passo dois'],
+        objective: 'Objetivo do desafio',
+        hints: ['Dica uma', 'Dica duas'],
         xpAmount: 30,
       });
 
@@ -598,7 +724,8 @@ describe('TrainingService', () => {
       const daPoo = await service.createTraining('poo', {
         title: 'Da POO',
         description: 'Descrição',
-        steps: ['Passo'],
+        objective: 'Objetivo',
+        hints: ['Dica'],
       });
 
       await expect(

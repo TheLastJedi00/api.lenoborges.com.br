@@ -10,7 +10,7 @@ export const TRAINING_COLLECTION = 'trainings';
 /** Campos que o chamador informa ao criar; o resto o repository preenche. */
 export type CreateTrainingData = Pick<
   Training,
-  'badgeId' | 'title' | 'description' | 'steps' | 'position'
+  'badgeId' | 'title' | 'description' | 'objective' | 'hints' | 'position'
 > & {
   videoUrl?: string | null;
   xpAmount?: number;
@@ -20,7 +20,13 @@ export type CreateTrainingData = Pick<
 export type UpdateTrainingData = Partial<
   Pick<
     Training,
-    'title' | 'description' | 'steps' | 'videoUrl' | 'xpAmount' | 'position'
+    | 'title'
+    | 'description'
+    | 'objective'
+    | 'hints'
+    | 'videoUrl'
+    | 'xpAmount'
+    | 'position'
   >
 >;
 

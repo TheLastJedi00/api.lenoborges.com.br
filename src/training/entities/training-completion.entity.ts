@@ -27,12 +27,25 @@ import {
  * registra é o que **foi pago naquele dia**. Sem ele, uma auditoria do XP
  * somaria o valor de hoje sobre conclusões de ontem e acusaria uma divergência
  * que nunca existiu.
+ *
+ * **`hintsUsed` está aqui pelo mesmo motivo, e é o que explica o valor pago**
+ * (spec 025). Sem ele, uma auditoria olha um desafio de 30 que pagou 27 e não
+ * tem como saber se houve desconto de três dicas ou um erro de cálculo. Ele é
+ * gravado "como cobrado", nunca recontado: o admin pode editar as dicas do
+ * desafio depois, e recontar a partir do treinamento de hoje acusaria a mesma
+ * divergência inventada.
+ *
+ * **Ele não é a trava de repetição.** Quem impede o segundo pagamento continua
+ * sendo o `ALREADY_EXISTS` do caminho, e na segunda chamada nada é escrito: o
+ * `hintsUsed` gravado segue sendo o da primeira, com `xpAwarded: 0` na resposta.
  */
 export interface TrainingCompletion {
   id: string;
   uid: string;
   trainingId: string;
   xpAwarded: number;
+  /** Quantas dicas foram cobradas nesta conclusão (spec 025). */
+  hintsUsed: number;
   completedAt: Date;
 }
 
@@ -40,6 +53,7 @@ interface TrainingCompletionDocument extends DocumentData {
   uid: string;
   trainingId: string;
   xpAwarded: number;
+  hintsUsed: number;
   completedAt: Timestamp;
 }
 
@@ -58,6 +72,7 @@ export const trainingCompletionConverter: FirestoreDataConverter<TrainingComplet
         uid: completion.uid,
         trainingId: completion.trainingId,
         xpAwarded: completion.xpAwarded,
+        hintsUsed: completion.hintsUsed,
         completedAt: Timestamp.fromDate(completion.completedAt),
       };
     },
@@ -73,6 +88,9 @@ export const trainingCompletionConverter: FirestoreDataConverter<TrainingComplet
         // conclusão de que não se sabe o valor, e chutar o padrão inventaria XP
         // numa auditoria. Zero diz "não sei", que é a verdade.
         xpAwarded: data.xpAwarded ?? 0,
+        // Toda conclusão anterior à spec 025 chega sem o campo, e zero é a
+        // verdade sobre ela: naquele dia não havia dica a revelar.
+        hintsUsed: data.hintsUsed ?? 0,
         completedAt: data.completedAt.toDate(),
       };
     },

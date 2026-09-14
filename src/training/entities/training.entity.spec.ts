@@ -25,7 +25,12 @@ function documentoBase(extra: Record<string, unknown> = {}) {
     badgeId: 'logica',
     title: 'Refatore o laço em três funções',
     description: 'Um exercício de leitura antes de escrever.',
-    steps: ['Clone o repositório', 'Rode os testes', 'Extraia as funções'],
+    objective: 'Um laço lido de cima a baixo sem rolar a tela.',
+    hints: [
+      'Repare quantas responsabilidades o laço acumula.',
+      'Uma delas dá nome a uma função sozinha.',
+      'Extraia a menor primeiro, e rode os testes.',
+    ],
     videoUrl: null,
     xpAmount: DEFAULT_TRAINING_XP,
     position: 0,
@@ -43,7 +48,11 @@ describe('trainingConverter', () => {
         badgeId: 'logica',
         title: 'Refatore o laço em três funções',
         description: 'Um exercício de leitura antes de escrever.',
-        steps: ['Clone o repositório', 'Rode os testes', 'Extraia as funções'],
+        objective: 'Um laço lido de cima a baixo sem rolar a tela.',
+        hints: [
+          'Repare quantas responsabilidades o laço acumula.',
+          'Uma delas dá nome a uma função sozinha.',
+        ],
         videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
         xpAmount: 45,
         position: 2,
@@ -63,7 +72,8 @@ describe('trainingConverter', () => {
         badgeId: 'logica',
         title: 'Título',
         description: 'Descrição',
-        steps: ['Passo único'],
+        objective: 'Objetivo',
+        hints: ['Dica única'],
         videoUrl: null,
         xpAmount: DEFAULT_TRAINING_XP,
         position: 0,
@@ -76,19 +86,21 @@ describe('trainingConverter', () => {
     });
 
     /**
-     * **`steps` é array e continua array.**
+     * **`hints` é array e continua array, e a ordem é o produto.**
      *
-     * Se o converter achatasse os passos num texto -- por conveniência de
-     * exibição, que é a tentação -- a edição passo a passo do admin deixaria de
-     * existir e a lista `<ol>` da tela viraria um `<p>` com quebras de linha.
+     * Se o converter achatasse as dicas num texto -- por conveniência de
+     * exibição, que é a tentação -- a edição dica a dica do admin deixaria de
+     * existir, e a revelação sequencial de uma por vez, que é o que cobra o
+     * 1 XP, não teria mais item nenhum para contar.
      */
-    it('preserva os passos como array, na ordem em que foram escritos', () => {
+    it('preserva as dicas como array, na ordem em que foram escritas', () => {
       const gravado = trainingConverter.toFirestore({
         id: 'trn-001',
         badgeId: 'logica',
         title: 'Título',
         description: 'Descrição',
-        steps: ['Primeiro', 'Segundo', 'Terceiro'],
+        objective: 'Objetivo',
+        hints: ['Primeira', 'Segunda', 'Terceira'],
         videoUrl: null,
         xpAmount: DEFAULT_TRAINING_XP,
         position: 0,
@@ -96,12 +108,38 @@ describe('trainingConverter', () => {
         updatedAt: AGORA,
       });
 
-      expect(gravado.steps).toEqual(['Primeiro', 'Segundo', 'Terceiro']);
-      expect(trainingConverter.fromFirestore(snapshot(gravado)).steps).toEqual([
-        'Primeiro',
-        'Segundo',
-        'Terceiro',
+      expect(gravado.hints).toEqual(['Primeira', 'Segunda', 'Terceira']);
+      expect(trainingConverter.fromFirestore(snapshot(gravado)).hints).toEqual([
+        'Primeira',
+        'Segunda',
+        'Terceira',
       ]);
+    });
+
+    /**
+     * **O `toFirestore` grava `hints` e não grava `steps`** (spec 025).
+     *
+     * Gravar os dois seria a saída preguiçosa da renomeação, e ela custa caro
+     * mais tarde: dois campos com o mesmo conteúdo divergem na primeira edição
+     * feita por um caminho que só conhece um deles, e a partir daí ninguém sabe
+     * qual dos dois a tela está lendo.
+     */
+    it('não emite `steps` no documento gravado', () => {
+      const gravado = trainingConverter.toFirestore({
+        id: 'trn-001',
+        badgeId: 'logica',
+        title: 'Título',
+        description: 'Descrição',
+        objective: 'Objetivo',
+        hints: ['Primeira'],
+        videoUrl: null,
+        xpAmount: DEFAULT_TRAINING_XP,
+        position: 0,
+        createdAt: AGORA,
+        updatedAt: AGORA,
+      });
+
+      expect('steps' in gravado).toBe(false);
     });
   });
 
@@ -115,13 +153,52 @@ describe('trainingConverter', () => {
    * seguinte. Nos dois casos não há erro em log nenhum -- só um número errado.
    */
   describe('documento gravado sem os campos opcionais', () => {
-    it('lê `steps` como lista vazia em vez de `undefined`', () => {
+    it('lê `hints` como lista vazia em vez de `undefined`', () => {
       const documento = documentoBase();
-      delete (documento as Record<string, unknown>).steps;
+      delete (documento as Record<string, unknown>).hints;
 
       expect(
-        trainingConverter.fromFirestore(snapshot(documento)).steps,
+        trainingConverter.fromFirestore(snapshot(documento)).hints,
       ).toEqual([]);
+    });
+
+    /**
+     * **A migração inteira da spec 025 é este teste.**
+     *
+     * Todo treinamento criado pela spec 023 tem `steps` e não tem `hints`, e
+     * nenhum script vai passar neles. Sem este fallback, a Arena aparece com o
+     * desafio certo e **zero dicas** -- 200, sem erro em log nenhum, e o único
+     * a perceber é o membro que travou e não tinha onde se apoiar.
+     */
+    it('lê o `steps` de um documento anterior à spec 025 como `hints`', () => {
+      const documento = documentoBase();
+      delete (documento as Record<string, unknown>).hints;
+      (documento as Record<string, unknown>).steps = [
+        'Clone o repositório',
+        'Rode os testes',
+      ];
+
+      expect(
+        trainingConverter.fromFirestore(snapshot(documento)).hints,
+      ).toEqual(['Clone o repositório', 'Rode os testes']);
+    });
+
+    it('prefere `hints` quando o documento tem os dois campos', () => {
+      const documento = documentoBase({ hints: ['A dica nova'] });
+      (documento as Record<string, unknown>).steps = ['O passo velho'];
+
+      expect(
+        trainingConverter.fromFirestore(snapshot(documento)).hints,
+      ).toEqual(['A dica nova']);
+    });
+
+    it('lê `objective` como texto vazio num documento legado', () => {
+      const documento = documentoBase();
+      delete (documento as Record<string, unknown>).objective;
+
+      expect(
+        trainingConverter.fromFirestore(snapshot(documento)).objective,
+      ).toBe('');
     });
 
     it('lê `videoUrl` como nulo quando o campo não existe', () => {

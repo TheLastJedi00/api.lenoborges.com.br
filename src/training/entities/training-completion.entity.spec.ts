@@ -35,7 +35,8 @@ describe('trainingCompletionConverter', () => {
       id: 'uid-123__trn-001',
       uid: 'uid-123',
       trainingId: 'trn-001',
-      xpAwarded: 30,
+      xpAwarded: 28,
+      hintsUsed: 2,
       completedAt: AGORA,
     };
 
@@ -52,6 +53,7 @@ describe('trainingCompletionConverter', () => {
       uid: 'uid-123',
       trainingId: 'trn-001',
       xpAwarded: 30,
+      hintsUsed: 0,
       completedAt: AGORA,
     });
 
@@ -71,12 +73,39 @@ describe('trainingCompletionConverter', () => {
       uid: 'uid-123',
       trainingId: 'trn-001',
       xpAwarded: 80,
+      hintsUsed: 0,
       completedAt: AGORA,
     });
 
     expect(
       trainingCompletionConverter.fromFirestore(snapshot(gravado)).xpAwarded,
     ).toBe(80);
+  });
+
+  /**
+   * **`hintsUsed` é o que explica, numa auditoria, por que um desafio de 30
+   * pagou 27** (spec 025).
+   *
+   * Ele fica ao lado do `xpAwarded`, gravado "como pago" e nunca recalculado,
+   * e pelo mesmo motivo: o admin pode editar as dicas do desafio depois, e
+   * recontar a partir do treinamento de hoje acusaria uma divergência que nunca
+   * existiu. **Ele não é a trava de repetição** -- quem impede o segundo
+   * pagamento continua sendo o `ALREADY_EXISTS` do caminho `{uid}__{trainingId}`.
+   */
+  it('guarda quantas dicas foram cobradas naquela conclusão', () => {
+    const gravado = trainingCompletionConverter.toFirestore({
+      id: 'uid-123__trn-001',
+      uid: 'uid-123',
+      trainingId: 'trn-001',
+      xpAwarded: 27,
+      hintsUsed: 3,
+      completedAt: AGORA,
+    });
+
+    expect(gravado.hintsUsed).toBe(3);
+    expect(
+      trainingCompletionConverter.fromFirestore(snapshot(gravado)).hintsUsed,
+    ).toBe(3);
   });
 
   it('lê `xpAwarded` como zero num documento sem o campo, e nunca como o padrão', () => {
@@ -89,5 +118,24 @@ describe('trainingCompletionConverter', () => {
     expect(
       trainingCompletionConverter.fromFirestore(snapshot(documento)).xpAwarded,
     ).toBe(0);
+  });
+
+  /**
+   * Toda conclusão anterior à spec 025 é um documento sem `hintsUsed`, e
+   * nenhum script vai passar nelas. Zero é a verdade sobre elas: naquele dia
+   * não havia dica a revelar, e o desafio pagou o prêmio cheio.
+   */
+  it('lê `hintsUsed` como zero numa conclusão anterior à spec 025', () => {
+    const documento = {
+      uid: 'uid-123',
+      trainingId: 'trn-001',
+      xpAwarded: 30,
+      completedAt: Timestamp.fromDate(AGORA),
+    };
+
+    const lido = trainingCompletionConverter.fromFirestore(snapshot(documento));
+
+    expect(lido.hintsUsed).toBe(0);
+    expect(Number.isNaN(lido.hintsUsed)).toBe(false);
   });
 });

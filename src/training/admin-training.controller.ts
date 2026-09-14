@@ -19,10 +19,15 @@ import { FirebaseAuthGuard } from '../auth/guards/firebase-auth.guard';
 import { AdminGuard } from '../auth/guards/admin.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { CurrentUserData } from '../auth/decorators/current-user.decorator';
+import { BADGE_TITLES } from '../track/track.constants';
+import type { BadgeId } from '../track/track.constants';
 import { TrainingService } from './training.service';
+import { GeminiService } from './gemini.service';
 import { CreateTrainingDto } from './dto/create-training.dto';
 import { UpdateTrainingDto } from './dto/update-training.dto';
 import { ReorderTrainingsDto } from './dto/reorder-trainings.dto';
+import { GenerateTrainingsDto } from './dto/generate-training.dto';
+import type { GeneratedTrainingsDto } from './dto/generate-training.dto';
 import { AdminReplyDto } from './dto/admin-reply.dto';
 import {
   AdminTrainingCommentListDto,
@@ -44,7 +49,10 @@ import {
 @Controller('admin')
 @UseGuards(FirebaseAuthGuard, AdminGuard)
 export class AdminTrainingController {
-  constructor(private readonly trainings: TrainingService) {}
+  constructor(
+    private readonly trainings: TrainingService,
+    private readonly gemini: GeminiService,
+  ) {}
 
   @Get('badges/:badgeId/trainings')
   @ApiOperation({ summary: 'Desafios da insígnia, para administrar' })
@@ -69,6 +77,39 @@ export class AdminTrainingController {
     @Body() dto: CreateTrainingDto,
   ): Promise<TrainingDto> {
     return this.trainings.createTraining(badgeId, dto);
+  }
+
+  @Post('badges/:badgeId/trainings/generate')
+  @ApiOperation({
+    summary: 'Gera treinamentos com IA — rascunho, sem gravar nada',
+    description:
+      'Devolve uma proposta para o admin revisar. **Nada é persistido aqui**: ' +
+      'o que grava é a criação de sempre, uma chamada por rascunho aprovado — ' +
+      'não existe rota de `bulk` para treinamentos. Treinamento fora do ' +
+      'formato é descartado em silêncio, e `discarded` diz quantos foram.',
+  })
+  @ApiResponse({ status: 201, description: 'Rascunho de treinamentos' })
+  @ApiResponse({ status: 404, description: 'Insígnia inexistente.' })
+  @ApiResponse({
+    status: 503,
+    description: 'Sem GEMINI_API_KEY, ou a IA não respondeu',
+  })
+  async generate(
+    @Param('badgeId') badgeId: string,
+    @Body() dto: GenerateTrainingsDto,
+  ): Promise<GeneratedTrainingsDto> {
+    // A conferência do `badgeId` vem **antes** da chamada paga. Gerar dez
+    // treinamentos para uma insígnia que não existe custaria a chamada inteira
+    // para responder 404 depois, e o admin pagaria por um rascunho que nunca
+    // teve onde ser salvo.
+    await this.trainings.listByBadgeForAdmin(badgeId);
+
+    return this.gemini.generate({
+      badgeTitle: BADGE_TITLES[badgeId as BadgeId],
+      prompt: dto.prompt,
+      difficulty: dto.difficulty,
+      count: dto.count,
+    });
   }
 
   @Patch('badges/:badgeId/trainings/reorder')
