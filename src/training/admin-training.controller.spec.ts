@@ -59,7 +59,8 @@ describe('AdminTrainingController', () => {
       const dto = {
         title: 'Refatore o laço',
         description: 'Descrição',
-        steps: ['Passo um'],
+        objective: 'Objetivo',
+        hints: ['Dica uma'],
       };
       service.createTraining.mockResolvedValue({ id: 'trn-1' });
 
@@ -75,7 +76,8 @@ describe('AdminTrainingController', () => {
         controller.create('nao-existe', {
           title: 'x',
           description: 'y',
-          steps: ['z'],
+          objective: 'z',
+          hints: ['w'],
         }),
       ).rejects.toThrow(NotFoundException);
     });
