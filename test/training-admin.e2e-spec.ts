@@ -232,7 +232,7 @@ describe('Arena de Treinamento — admin (e2e)', () => {
 
       expect(body.title).toBe('Título novo');
       expect(body.xpAmount).toBe(55);
-      expect(body.steps).toEqual(treinamento.steps);
+      expect(body.hints).toEqual(treinamento.hints);
     });
   });
 

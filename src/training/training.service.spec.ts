@@ -69,7 +69,8 @@ describe('TrainingService', () => {
     return service.createTraining(badgeId, {
       title: titulo,
       description: 'Descrição do desafio',
-      steps: ['Passo um', 'Passo dois'],
+      objective: 'Objetivo do desafio',
+      hints: ['Dica uma', 'Dica duas'],
       xpAmount,
       ...(position ? {} : {}),
     });
@@ -224,7 +225,8 @@ describe('TrainingService', () => {
       const treinamento = await servicoRest.createTraining('logica', {
         title: 'Primeiro',
         description: 'Descrição do desafio',
-        steps: ['Passo um', 'Passo dois'],
+        objective: 'Objetivo do desafio',
+        hints: ['Dica uma', 'Dica duas'],
         xpAmount: 30,
       });
 
@@ -598,7 +600,8 @@ describe('TrainingService', () => {
       const daPoo = await service.createTraining('poo', {
         title: 'Da POO',
         description: 'Descrição',
-        steps: ['Passo'],
+        objective: 'Objetivo',
+        hints: ['Dica'],
       });
 
       await expect(

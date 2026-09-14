@@ -10,15 +10,30 @@ export class TrainingDto {
   @ApiProperty({ example: 'Refatore o laço em três funções' })
   title: string;
 
-  @ApiProperty({ example: 'Um exercício de leitura antes de escrever.' })
+  @ApiProperty({
+    example: 'Um exercício de leitura antes de escrever.',
+    description: 'O cenário do desafio, sem o alvo — o alvo é o `objective`',
+  })
   description: string;
 
   @ApiProperty({
-    type: [String],
-    example: ['Clone o repositório', 'Rode os testes'],
-    description: 'Os passos, na ordem. A tela desenha um `<ol>`',
+    example: 'Um laço lido de cima a baixo sem rolar a tela.',
+    description: 'O resultado esperado do desafio (spec 025)',
   })
-  steps: string[];
+  objective: string;
+
+  @ApiProperty({
+    type: [String],
+    example: [
+      'Repare quantas responsabilidades o laço acumula.',
+      'Uma delas dá nome a uma função sozinha.',
+    ],
+    description:
+      'As dicas de raciocínio, na ordem. **A tela não desenha todas de uma ' +
+      'vez**: o membro revela uma por vez e cada uma custa 1 XP do prêmio, ' +
+      'e a dica fechada não chega a entrar no DOM (spec 025)',
+  })
+  hints: string[];
 
   @ApiProperty({
     nullable: true,
