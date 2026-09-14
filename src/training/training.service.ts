@@ -103,8 +103,24 @@ export class TrainingService {
   async complete(
     uid: string,
     trainingId: string,
+    hintsUsed = 0,
   ): Promise<TrainingCompletionDto> {
     const training = await this.assertTraining(trainingId);
+
+    // O custo das dicas (spec 025, decisão 2). O desconto sai do **prêmio do
+    // desafio**, e não do saldo do membro: debitar do saldo global faria o XP
+    // andar para trás por ter pedido ajuda, e ficaria negativo em quem acabou
+    // de entrar.
+    //
+    // **O teto é o número de dicas, e é a única desonestidade que dá para
+    // barrar.** O servidor não tem como saber quantas foram realmente abertas
+    // -- o estado vive no componente --, então quem quiser trapacear manda
+    // zero e leva o prêmio cheio; isso é aceito, porque a alternativa seria uma
+    // escrita por dica revelada, três vezes mais cara para cobrar 1 XP. O que
+    // o `min` impede é um número absurdo levando o cálculo para longe do
+    // desafio real, e o `max` impede o XP negativo.
+    const cobradas = Math.min(hintsUsed, training.hints.length);
+    const finalXp = Math.max(0, training.xpAmount - cobradas);
 
     // A linha do placar é lida **antes** do lote. O `addXpToBatch` não usa
     // `FieldValue.increment` de propósito: um increment sobre documento
@@ -118,18 +134,19 @@ export class TrainingService {
     this.completions.create(batch, {
       uid,
       trainingId,
-      xpAwarded: training.xpAmount,
+      xpAwarded: finalXp,
+      hintsUsed: cobradas,
       now,
     });
     batch.update(this.profileDoc(uid), {
-      xp: FieldValue.increment(training.xpAmount),
+      xp: FieldValue.increment(finalXp),
       updatedAt: Timestamp.fromDate(now),
     });
     this.ranking.addXpToBatch(
       batch,
       uid,
       rankingRow.found,
-      training.xpAmount,
+      finalXp,
       rankingRow.entry?.xp ?? 0,
     );
 
@@ -139,7 +156,7 @@ export class TrainingService {
       return {
         trainingId,
         completed: true,
-        xpAwarded: training.xpAmount,
+        xpAwarded: finalXp,
         xp: await this.xpOf(uid),
       };
     } catch (error) {

@@ -27,20 +27,20 @@ Ao fim desta fase, a entidade `Training` tem `objective` e `hints` no lugar de `
 
 ---
 
-# Fase 02: O Custo das Dicas (Completion e XP) [ ]
+# Fase 02: O Custo das Dicas (Completion e XP) [x]
 
 Ao fim desta fase, concluir um treinamento desconta do prêmio as dicas reveladas.
 
-- [ ] Task 01: `src/training/entities/training-completion.entity.ts` e `.spec.ts` — adicionar `hintsUsed: number` na interface, no `toFirestore` e no `fromFirestore` com `data.hintsUsed ?? 0` para os legados.
+- [x] Task 01: `src/training/entities/training-completion.entity.ts` e `.spec.ts` — adicionar `hintsUsed: number` na interface, no `toFirestore` e no `fromFirestore` com `data.hintsUsed ?? 0` para os legados.
   O comentário diz por que ele é gravado: **explicar numa auditoria por que um desafio de 30 pagou 27**, ao lado do `xpAwarded` que já é gravado "como pago" e nunca recalculado. **Ele não é a trava de repetição** — quem impede o segundo pagamento continua sendo o `ALREADY_EXISTS` do caminho `{uid}__{trainingId}` (decisão 2).
-- [ ] Task 02: `src/training/training-completion.repository.ts` e `.spec.ts` — o `create(batch, data)` ganha `hintsUsed` no objeto que recebe e no documento que escreve. **Esta task não pode faltar**: é ele, e não o service, quem chama `batch.create`.
-- [ ] Task 03: `src/training/dto/complete-training.dto.ts` — criar o DTO do corpo: `hintsUsed` com `@IsOptional() @IsInt() @Min(0)`.
+- [x] Task 02: `src/training/training-completion.repository.ts` e `.spec.ts` — o `create(batch, data)` ganha `hintsUsed` no objeto que recebe e no documento que escreve. **Esta task não pode faltar**: é ele, e não o service, quem chama `batch.create`.
+- [x] Task 03: `src/training/dto/complete-training.dto.ts` — criar o DTO do corpo: `hintsUsed` com `@IsOptional() @IsInt() @Min(0)`.
   **Opcional de propósito** (decisão 2): entre o deploy do back e o do front a tela antiga manda `{}`, e obrigatório transformaria essa janela num `400` em cima de quem concluiu o desafio. O controller normaliza o ausente para `0`.
-- [ ] Task 04: `src/training/training.service.ts` e `.spec.ts` — **testes primeiro**. `complete(uid, trainingId, hintsUsed = 0)`:
+- [x] Task 04: `src/training/training.service.ts` e `.spec.ts` — **testes primeiro**. `complete(uid, trainingId, hintsUsed = 0)`:
   `const cobradas = Math.min(hintsUsed, training.hints.length);` e `const finalXp = Math.max(0, training.xpAmount - cobradas);`.
   O `completions.create` recebe `xpAwarded: finalXp` e `hintsUsed: cobradas`; o `batch.update` do perfil incrementa `finalXp`; o `addXpToBatch` recebe `finalXp` — os três, e não o `xpAmount`.
   Testes: sem dica paga o cheio; duas dicas pagam `xpAmount - 2`; `hintsUsed` maior que `hints.length` é cortado no teto; `xpAmount` menor que as dicas paga `0` e nunca negativo; a **segunda chamada continua respondendo `xpAwarded: 0`** sem escrever nada, inclusive quando manda outro `hintsUsed`.
-- [ ] Task 05: `src/training/training.controller.ts` e `.spec.ts` — `POST /trainings/:trainingId/complete` passa a consumir `@Body() dto: CompleteTrainingDto` e repassa `dto.hintsUsed ?? 0`. Atualizar a descrição do `ApiOperation`: o XP pago agora depende das dicas reveladas, e o servidor **não tem como conferir esse número** — o teto é a única defesa, e está escrito na decisão 2.
+- [x] Task 05: `src/training/training.controller.ts` e `.spec.ts` — `POST /trainings/:trainingId/complete` passa a consumir `@Body() dto: CompleteTrainingDto` e repassa `dto.hintsUsed ?? 0`. Atualizar a descrição do `ApiOperation`: o XP pago agora depende das dicas reveladas, e o servidor **não tem como conferir esse número** — o teto é a única defesa, e está escrito na decisão 2.
 
 ---
 
