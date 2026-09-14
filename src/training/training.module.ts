@@ -3,6 +3,7 @@ import { TrainingDataModule } from './training-data.module';
 import { TrainingService } from './training.service';
 import { TrainingController } from './training.controller';
 import { AdminTrainingController } from './admin-training.controller';
+import { GeminiService } from './gemini.service';
 import { ProfileModule } from '../profile/profile.module';
 import { GamesDataModule } from '../games/games-data.module';
 
@@ -19,11 +20,17 @@ import { GamesDataModule } from '../games/games-data.module';
  * perfil e no placar **no mesmo lote**. Ele não importa nada e só depende do
  * `FirebaseService`, que é global, então pode entrar aqui sem reabrir volta
  * nenhuma.
+ *
+ * O `GeminiService` (spec 025) é provido aqui e **injetado só no
+ * `AdminTrainingController`**: nenhuma rota pública o alcança, e é isso que
+ * mantém a chamada paga atrás do `AdminGuard`. Ele só depende do
+ * `ConfigService`, e o `ConfigModule` é global -- não há import de módulo a
+ * fazer.
  */
 @Module({
   imports: [TrainingDataModule, GamesDataModule, ProfileModule],
   controllers: [TrainingController, AdminTrainingController],
-  providers: [TrainingService],
+  providers: [TrainingService, GeminiService],
   exports: [TrainingService, TrainingDataModule],
 })
 export class TrainingModule {}

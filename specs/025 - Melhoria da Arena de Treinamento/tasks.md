@@ -44,20 +44,20 @@ Ao fim desta fase, concluir um treinamento desconta do prêmio as dicas revelada
 
 ---
 
-# Fase 03: Geração com IA [ ]
+# Fase 03: Geração com IA [x]
 
 Ao fim desta fase, o admin pede treinamentos à IA como já faz no GYM Challenge.
 
-- [ ] Task 01: `src/training/dto/generate-training.dto.ts` — `GenerateTrainingsDto` no molde do `GenerateQuestionsDto`: `prompt` (`@IsString() @Transform(trim) @Length(10, 2000)`), `difficulty` (`@IsIn(DIFFICULTIES)` com o tipo `Difficulty` importado de `../games/games.constants` — constante, não módulo) e `count` (`@Type(() => Number) @IsInt() @Min(1) @Max(10)`; o teto é 10 e não 30 porque um treinamento é muito maior que uma questão e a resposta tem que caber numa chamada).
+- [x] Task 01: `src/training/dto/generate-training.dto.ts` — `GenerateTrainingsDto` no molde do `GenerateQuestionsDto`: `prompt` (`@IsString() @Transform(trim) @Length(10, 2000)`), `difficulty` (`@IsIn(DIFFICULTIES)` com o tipo `Difficulty` importado de `../games/games.constants` — constante, não módulo) e `count` (`@Type(() => Number) @IsInt() @Min(1) @Max(10)`; o teto é 10 e não 30 porque um treinamento é muito maior que uma questão e a resposta tem que caber numa chamada).
   No mesmo arquivo, `GeneratedTrainingsDto` com `trainings` (rascunhos **sem id**, porque nada foi gravado) e `discarded`.
-- [ ] Task 02: `src/training/gemini.service.ts` — serviço exclusivo de IA para treinamentos, no molde de `src/games/gemini.service.ts`: `ConfigService` (o `ConfigModule` é global, então não há import de módulo a fazer), `GEMINI_API_KEY` ausente vira `ServiceUnavailableException`, chave **no cabeçalho `x-goog-api-key` e nunca na query**, `temperature: 0.4` e `responseMimeType: 'application/json'`.
+- [x] Task 02: `src/training/gemini.service.ts` — serviço exclusivo de IA para treinamentos, no molde de `src/games/gemini.service.ts`: `ConfigService` (o `ConfigModule` é global, então não há import de módulo a fazer), `GEMINI_API_KEY` ausente vira `ServiceUnavailableException`, chave **no cabeçalho `x-goog-api-key` e nunca na query**, `temperature: 0.4` e `responseMimeType: 'application/json'`.
   **O Prompt:** recebe tema, `badgeTitle` e dificuldade e pede um array JSON `[{ title, description, objective, hints }]`. A `description` é o cenário do desafio, o `objective` é o resultado esperado, e as `hints` são **raciocínio, nunca código pronto** — o exemplo a colocar no prompt é "Precisamos de uma variável inteira para guardar a idade", e o prompt diz explicitamente para não escrever a solução.
   O `parse` tolera cerca de markdown e **descarta em silêncio** o que não encaixa no formato, contando os descartes — mesma resiliência da spec 022.
-- [ ] Task 03: `src/training/gemini.service.spec.ts` — testar o `buildPrompt` (leva tema, título da insígnia, dificuldade e contagem), o `fetch` mockado, o JSON malformado, a cerca de markdown, o item fora do formato entrando no `discarded`, e a ausência da chave virando `503`.
-- [ ] Task 04: `src/training/admin-training.controller.ts` e `.spec.ts` — a rota `POST /admin/badges/:badgeId/trainings/generate`, injetando `GeminiService`.
+- [x] Task 03: `src/training/gemini.service.spec.ts` — testar o `buildPrompt` (leva tema, título da insígnia, dificuldade e contagem), o `fetch` mockado, o JSON malformado, a cerca de markdown, o item fora do formato entrando no `discarded`, e a ausência da chave virando `503`.
+- [x] Task 04: `src/training/admin-training.controller.ts` e `.spec.ts` — a rota `POST /admin/badges/:badgeId/trainings/generate`, injetando `GeminiService`.
   **Confere o `badgeId` antes da chamada paga** (decisão 3), como o `AdminGamesController` faz: gerar dez treinamentos para uma insígnia inexistente custaria a chamada inteira para responder `404` depois. O `badgeTitle` sai de `BADGE_TITLES[badgeId]`.
   Documentar os `ApiResponse`: `200` com o rascunho, `503` sem chave ou com a IA fora do ar.
-- [ ] Task 05: `src/training/training.module.ts` — prover o `GeminiService`. Ele fica injetado **só** no `AdminTrainingController`; nenhuma rota pública o alcança, e o comentário do módulo diz isso.
+- [x] Task 05: `src/training/training.module.ts` — prover o `GeminiService`. Ele fica injetado **só** no `AdminTrainingController`; nenhuma rota pública o alcança, e o comentário do módulo diz isso.
 
 ---
 

@@ -1,6 +1,11 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  NotFoundException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { AdminTrainingController } from './admin-training.controller';
 import { TrainingService } from './training.service';
+import { GeminiService } from './gemini.service';
 import { AdminGuard } from '../auth/guards/admin.guard';
 import type { CurrentUserData } from '../auth/decorators/current-user.decorator';
 
@@ -20,6 +25,7 @@ describe('AdminTrainingController', () => {
     listRecentComments: jest.Mock;
     replyComment: jest.Mock;
   };
+  let gemini: { generate: jest.Mock };
   let controller: AdminTrainingController;
 
   beforeEach(() => {
@@ -33,8 +39,11 @@ describe('AdminTrainingController', () => {
       replyComment: jest.fn(),
     };
 
+    gemini = { generate: jest.fn() };
+
     controller = new AdminTrainingController(
       service as unknown as TrainingService,
+      gemini as unknown as GeminiService,
     );
   });
 
@@ -168,6 +177,75 @@ describe('AdminTrainingController', () => {
       await expect(
         controller.reply(ADMIN, 'fantasma', { content: 'Oi' }),
       ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('POST /admin/badges/:badgeId/trainings/generate', () => {
+    const PEDIDO = {
+      prompt:
+        'Desafios sobre laços de repetição, partindo de um problema real.',
+      difficulty: 'medium' as const,
+      count: 3,
+    };
+
+    beforeEach(() => {
+      service.listByBadgeForAdmin.mockResolvedValue({
+        badgeId: 'logica',
+        trainings: [],
+      });
+      gemini.generate.mockResolvedValue({ trainings: [], discarded: 0 });
+    });
+
+    it('manda o título da insígnia junto do que o admin pediu', async () => {
+      await controller.generate('logica', PEDIDO);
+
+      expect(gemini.generate).toHaveBeenCalledWith({
+        badgeTitle: 'Insígnia da Lógica',
+        prompt: PEDIDO.prompt,
+        difficulty: 'medium',
+        count: 3,
+      });
+    });
+
+    /**
+     * **A conferência do `badgeId` vem antes da chamada paga** (decisão 3).
+     *
+     * Gerar dez treinamentos para uma insígnia que não existe custaria a
+     * chamada inteira para responder 404 depois -- e o admin pagaria por um
+     * rascunho que nunca teve onde ser salvo.
+     */
+    it('não chama a IA quando a insígnia não existe', async () => {
+      service.listByBadgeForAdmin.mockRejectedValue(new NotFoundException());
+
+      await expect(controller.generate('nao-existe', PEDIDO)).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(gemini.generate).not.toHaveBeenCalled();
+    });
+
+    it('deixa o 503 da IA indisponível subir', async () => {
+      gemini.generate.mockRejectedValue(new ServiceUnavailableException());
+
+      await expect(controller.generate('logica', PEDIDO)).rejects.toThrow(
+        ServiceUnavailableException,
+      );
+    });
+
+    /**
+     * **O `discarded` atravessa até a tela.** Sem ele, um rascunho de 3 quando
+     * se pediu 5 parece limite do produto em vez de um modelo que errou o
+     * formato.
+     */
+    it('devolve o rascunho com a contagem de descartes', async () => {
+      gemini.generate.mockResolvedValue({
+        trainings: [{ title: 'Um' }],
+        discarded: 2,
+      });
+
+      await expect(controller.generate('logica', PEDIDO)).resolves.toEqual({
+        trainings: [{ title: 'Um' }],
+        discarded: 2,
+      });
     });
   });
 });
