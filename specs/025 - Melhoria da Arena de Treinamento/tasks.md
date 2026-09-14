@@ -9,21 +9,21 @@
 
 ---
 
-# Fase 01: O novo formato do Treinamento [ ]
+# Fase 01: O novo formato do Treinamento [x]
 
 Ao fim desta fase, a entidade `Training` tem `objective` e `hints` no lugar de `steps`, e o converter lê documento antigo sem quebrar.
 
-- [ ] Task 01: `src/training/entities/training.entity.ts` — atualizar a interface `Training` removendo `steps` e adicionando `objective: string` e `hints: string[]`.
+- [x] Task 01: `src/training/entities/training.entity.ts` — atualizar a interface `Training` removendo `steps` e adicionando `objective: string` e `hints: string[]`.
   No `FirestoreDataConverter`, o `toFirestore` grava **só `hints`** (nunca os dois), e o `fromFirestore` migra o legado: `objective: data.objective ?? ''` e `hints: data.hints ?? data.steps ?? []`.
   O `TrainingDocument` ganha `hints` e `objective`, e mantém `steps?: string[]` **apenas para o lado da leitura tipar o fallback** — com o comentário dizendo que é resquício e que nada escreve nesse campo.
   Reescrever o comentário do campo explicando o que mudou: não é mais o passo a passo da execução, é a dica de raciocínio que custa 1 XP para abrir.
-- [ ] Task 02: `src/training/entities/training.entity.spec.ts` — testar o round-trip do converter, o fallback de `steps` para `hints` em documento anterior a esta spec, o `objective` ausente virando `''`, e que o `toFirestore` **não** emite `steps`.
-- [ ] Task 03: `src/training/dto/create-training.dto.ts` — substituir `steps` por `hints` (`@IsArray() @ArrayMinSize(1) @ArrayMaxSize(30) @IsString({ each: true }) @Length(1, 500, { each: true })`, com o mesmo `@Transform` que apara cada item) e adicionar `objective` (`@IsString() @Transform(trim) @Length(3, 300)`).
+- [x] Task 02: `src/training/entities/training.entity.spec.ts` — testar o round-trip do converter, o fallback de `steps` para `hints` em documento anterior a esta spec, o `objective` ausente virando `''`, e que o `toFirestore` **não** emite `steps`.
+- [x] Task 03: `src/training/dto/create-training.dto.ts` — substituir `steps` por `hints` (`@IsArray() @ArrayMinSize(1) @ArrayMaxSize(30) @IsString({ each: true }) @Length(1, 500, { each: true })`, com o mesmo `@Transform` que apara cada item) e adicionar `objective` (`@IsString() @Transform(trim) @Length(3, 300)`).
   **O `@ArrayMinSize(1)` fica** (decisão 1), mas o texto do `ApiProperty` muda junto com a razão: não é mais "um desafio sem passo abre num modal vazio", é que um desafio sem nenhuma saída quando o membro trava só paga quem já sabia.
-- [ ] Task 04: `src/training/dto/update-training.dto.ts` — confirmar que o `PartialType(CreateTrainingDto)` já cobre os campos novos; nenhuma validação sobrescrita a mudar, só o comentário se ele citar passos.
-- [ ] Task 05: `src/training/dto/training.dto.ts` — expor `objective` e `hints` no `TrainingDto`, removendo `steps`, com os `ApiProperty` atualizados (o exemplo de `hints` precisa ser dica de raciocínio, não comando de terminal).
-- [ ] Task 06: `src/training/training.service.ts` e `.spec.ts` — **é aqui que os campos novos entram de verdade**: `create` e `update` montam o `Training` com `objective` e `hints` vindos do DTO, e o `toDto` privado passa a devolvê-los. Sem esta task, as quatro anteriores compilam e a API continua servindo `steps`.
-- [ ] Task 07: `src/training/admin-training.controller.spec.ts` e `training.controller.spec.ts` — atualizar os fixtures que montam treinamento com `steps`.
+- [x] Task 04: `src/training/dto/update-training.dto.ts` — confirmar que o `PartialType(CreateTrainingDto)` já cobre os campos novos; nenhuma validação sobrescrita a mudar, só o comentário se ele citar passos.
+- [x] Task 05: `src/training/dto/training.dto.ts` — expor `objective` e `hints` no `TrainingDto`, removendo `steps`, com os `ApiProperty` atualizados (o exemplo de `hints` precisa ser dica de raciocínio, não comando de terminal).
+- [x] Task 06: `src/training/training.service.ts` e `.spec.ts` — **é aqui que os campos novos entram de verdade**: `create` e `update` montam o `Training` com `objective` e `hints` vindos do DTO, e o `toDto` privado passa a devolvê-los. Sem esta task, as quatro anteriores compilam e a API continua servindo `steps`.
+- [x] Task 07: `src/training/admin-training.controller.spec.ts` e `training.controller.spec.ts` — atualizar os fixtures que montam treinamento com `steps`.
 
 ---
 
