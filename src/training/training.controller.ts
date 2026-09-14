@@ -19,6 +19,7 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { CurrentUserData } from '../auth/decorators/current-user.decorator';
 import { TrainingService } from './training.service';
 import { CreateTrainingCommentDto } from './dto/create-comment.dto';
+import { CompleteTrainingDto } from './dto/complete-training.dto';
 import {
   TrainingCommentDto,
   TrainingCommentListDto,
@@ -88,15 +89,21 @@ export class TrainingController {
       'inteiro, e não um `if` antes da escrita.\n\n' +
       'O `xp` da resposta é **o do servidor**: a tela pinta este número em vez ' +
       'de somar localmente, senão ela acerta no primeiro clique de cada desafio ' +
-      'e erra em todos os seguintes.',
+      'e erra em todos os seguintes.\n\n' +
+      'O valor pago depende das dicas reveladas: `xpAmount` menos 1 por dica, ' +
+      'nunca abaixo de zero (spec 025). **O servidor não tem como conferir esse ' +
+      'número** — o estado vive na tela, e quem quiser mandar `0` leva o prêmio ' +
+      'cheio. O teto, no número de dicas do desafio, é a única defesa, e o ' +
+      'corpo é opcional: ausente é zero, que é o que a tela anterior fazia.',
   })
   @ApiResponse({ status: 201, type: TrainingCompletionDto })
   @ApiResponse({ status: 404, description: 'Treinamento inexistente.' })
   async complete(
     @CurrentUser() user: CurrentUserData,
     @Param('trainingId') trainingId: string,
+    @Body() dto: CompleteTrainingDto,
   ): Promise<TrainingCompletionDto> {
-    return this.trainings.complete(user.id, trainingId);
+    return this.trainings.complete(user.id, trainingId, dto.hintsUsed ?? 0);
   }
 
   @Get('trainings/:trainingId/comments')
