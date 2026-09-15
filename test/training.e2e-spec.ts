@@ -6,6 +6,7 @@ import { App } from 'supertest/types';
 import { Firestore } from 'firebase-admin/firestore';
 import { acceptCurrentLegalDocuments } from './accept-legal.helper';
 import { AppModule } from '../src/app.module';
+import { StorageService } from '../src/storage/storage.service';
 import { FirebaseService } from '../src/auth/firebase.service';
 import { PROFILE_COLLECTION } from '../src/profile/profile.repository';
 import { TRAINING_COLLECTION } from '../src/training/training.repository';
@@ -119,7 +120,22 @@ describe('Arena de Treinamento — membro (e2e)', () => {
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
-    }).compile();
+    })
+      // O emulador de Storage nao entra nesta spec: o que se trava aqui e o
+      // contrato das nossas rotas, e nao o upload do Google. Ver a nota igual no
+      // `me.e2e-spec.ts`.
+      .overrideProvider(StorageService)
+      .useValue({
+        upload: (path: string) =>
+          Promise.resolve(
+            `https://storage.googleapis.com/bucket-de-teste/${path}?v=1757000000000`,
+          ),
+        remove: () => Promise.resolve(),
+        isOwnUrl: (url: string, path: string) =>
+          url ===
+          `https://storage.googleapis.com/bucket-de-teste/${path}?v=1757000000000`,
+      })
+      .compile();
 
     app = moduleFixture.createNestApplication();
     app.use(cookieParser());
@@ -485,6 +501,120 @@ describe('Arena de Treinamento — membro (e2e)', () => {
         .get(`/trainings/${treinamento.id}/comments?limit=0`)
         .set('Authorization', `Bearer ${pagoToken}`)
         .expect(400);
+    });
+  });
+
+  describe('submissao do resultado (spec 027)', () => {
+    const PNG = Buffer.from([
+      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d,
+    ]);
+
+    it('o Dev Tier conclui com o codigo e recebe o XP cheio', async () => {
+      const treinamento = await criarTreinamento('Com codigo', 30);
+
+      const resposta = await request(app.getHttpServer())
+        .post(`/trainings/${treinamento.id}/complete`)
+        .set('Authorization', `Bearer ${gratuitoToken}`)
+        .send({ mainCode: 'public static void main(String[] a) {}' })
+        .expect(201);
+
+      expect((resposta.body as TrainingCompletionDto).xpAwarded).toBe(30);
+    });
+
+    it('teste-trava: o Dev Tier levando 403 ao subir a foto', async () => {
+      const treinamento = await criarTreinamento('Foto negada', 30);
+
+      await request(app.getHttpServer())
+        .post(`/trainings/${treinamento.id}/result-image`)
+        .set('Authorization', `Bearer ${gratuitoToken}`)
+        .attach('file', PNG, {
+          filename: 'r.png',
+          contentType: 'image/png',
+        })
+        .expect(403);
+    });
+
+    it('teste-trava: o Dev Tier levando 403 no complete, e sem pagar XP', async () => {
+      // A rota de upload ja barra o tier, mas ela e o complete sao duas chamadas:
+      // sem a segunda conferencia, o Dev Tier manda uma URL qualquer aqui.
+      const treinamento = await criarTreinamento('Foto negada 2', 30);
+
+      await request(app.getHttpServer())
+        .post(`/trainings/${treinamento.id}/complete`)
+        .set('Authorization', `Bearer ${gratuitoToken}`)
+        .send({
+          resultImageUrl:
+            'https://storage.googleapis.com/bucket-de-teste/trainings/x/y?v=1757000000000',
+        })
+        .expect(403);
+
+      // E o desafio continua nao concluido: o 403 nao pode ter pago nada.
+      const depois = await request(app.getHttpServer())
+        .get(`/trainings/${treinamento.id}`)
+        .set('Authorization', `Bearer ${gratuitoToken}`)
+        .expect(200);
+      expect((depois.body as TrainingDto).completed).toBe(false);
+    });
+
+    it('o Great Dev sobe a foto, conclui, e o GET devolve a submissao', async () => {
+      const treinamento = await criarTreinamento('Com foto', 30);
+
+      const subida = await request(app.getHttpServer())
+        .post(`/trainings/${treinamento.id}/result-image`)
+        .set('Authorization', `Bearer ${pagoToken}`)
+        .attach('file', PNG, { filename: 'r.png', contentType: 'image/png' })
+        .expect(201);
+
+      const resultImageUrl = (subida.body as { resultImageUrl: string })
+        .resultImageUrl;
+      expect(resultImageUrl).toContain(`/trainings/${pagoUid}/`);
+
+      await request(app.getHttpServer())
+        .post(`/trainings/${treinamento.id}/complete`)
+        .set('Authorization', `Bearer ${pagoToken}`)
+        .send({ mainCode: 'o codigo', resultImageUrl })
+        .expect(201);
+
+      const lido = await request(app.getHttpServer())
+        .get(`/trainings/${treinamento.id}`)
+        .set('Authorization', `Bearer ${pagoToken}`)
+        .expect(200);
+
+      expect((lido.body as TrainingDto).submission).toEqual({
+        mainCode: 'o codigo',
+        resultImageUrl,
+      });
+    });
+
+    it('teste-trava: URL de host de fora e 400', async () => {
+      const treinamento = await criarTreinamento('URL de fora', 30);
+
+      await request(app.getHttpServer())
+        .post(`/trainings/${treinamento.id}/complete`)
+        .set('Authorization', `Bearer ${pagoToken}`)
+        .send({ resultImageUrl: 'https://evil.com/foto.png' })
+        .expect(400);
+    });
+
+    it('recusa arquivo que nao e imagem, mesmo dizendo que e', async () => {
+      const treinamento = await criarTreinamento('Nao imagem', 30);
+
+      await request(app.getHttpServer())
+        .post(`/trainings/${treinamento.id}/result-image`)
+        .set('Authorization', `Bearer ${pagoToken}`)
+        .attach('file', Buffer.from('nao sou imagem nenhuma, nem de longe'), {
+          filename: 'r.png',
+          contentType: 'image/png',
+        })
+        .expect(400);
+    });
+
+    it('a rota de upload recusa treinamento inexistente', async () => {
+      await request(app.getHttpServer())
+        .post('/trainings/fantasma/result-image')
+        .set('Authorization', `Bearer ${pagoToken}`)
+        .attach('file', PNG, { filename: 'r.png', contentType: 'image/png' })
+        .expect(404);
     });
   });
 });
