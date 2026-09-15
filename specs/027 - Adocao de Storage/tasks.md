@@ -328,3 +328,40 @@ com a razão ao lado (`min-width: 0` na coluna do gamertag, `flex-direction` tro
 em 22rem e 24rem) e os testes cobrem a estrutura, mas **estrutura não é a mesma coisa
 que nada estourando**. Fica para uma conferência no DevTools à mão, ou num navegador
 que aceite o redimensionamento.
+
+### O check de tela estreita
+
+Feito em **430px de viewport**, com a emulação de dispositivo do DevTools ligada e os
+dois servidores no ar contra o `dev-liga-dev`. Medido por script, e não a olho: para
+cada tela, a lista de todo elemento cuja borda direita passa da janela, mais o
+`scrollWidth` do documento.
+
+**Nenhuma das telas desta spec produziu um único elemento estourando, e nenhuma
+ganhou rolagem horizontal.** O único elemento fora da janela em qualquer medição é o
+`aside` do painel, inteiramente à esquerda com `right <= 0` — é o drawer fechado do
+celular, e o auditor o ignora de propósito.
+
+Os três casos que valia a pena forçar, porque são os que a spec introduziu:
+
+- **A tabela do Ranking com gamertag longa.** Semeadas linhas com nicks no teto de 20
+  caracteres. `JoaoPedroDaSilva_99` com avatar **quebrou em duas linhas** dentro de
+  uma célula de 175px, e as colunas de XP e INSÍGNIAS continuaram visíveis. É o
+  `min-width: 0` do `.table__nickname` fazendo o que existe para fazer: sem ele o
+  item de flex não encolhe abaixo do próprio conteúdo e empurra as colunas para fora.
+- **O bloco de código em leitura**, que é o caso mais arriscado porque o `<pre>` não
+  quebra linha por decisão. Conteúdo de **1177px dentro de um bloco de 352px**,
+  rolando **só ele**, com a página intacta. O `textarea` de digitação se comporta
+  igual.
+- **O modal da foto com o cropper.** Cabe com 19px de margem de cada lado (392 de 430),
+  a máscara redonda monta sobre uma foto em retrato de 900x1200, e os três botões
+  (Remover, Cancelar, Salvar) ficam na mesma linha sem rolagem vertical no modal.
+
+Também conferidos em 430px: a seção da foto em Meu Perfil, o modal do desafio inteiro
+com a área de resposta, e o aviso de tier do Dev Tier no lugar do botão de anexar.
+
+**O que não foi conferido:** larguras **abaixo de 430px**. O `resize_window` da
+extensão do Chrome reporta sucesso sem mudar o `innerWidth`, e `window.open` com
+dimensões é bloqueado — a largura veio da emulação de dispositivo que o usuário ligou
+à mão. As duas media queries que esta spec escreveu (`min-width: 22rem` no cartão de
+membro e `min-width: 24rem` na seção da foto) estão **ativas** em 430px, então o ramo
+em coluna delas, que é o de telas mais estreitas, continua sem passar por um olho.
