@@ -262,8 +262,7 @@ mural_questions/{weekId}__{uid}      depois da exclusão
   dado pessoal que a pessoa acabou de pedir para eliminar, e a única forma de fazer isso direito é uma
   conversa com jurídico, não uma decisão de arquitetura.
 - **Excluir conta de terceiros pelo admin** (decisão 11).
-- **Trocar a foto do perfil.** Não há avatar no produto: nenhuma tela mostra um, e armazenamento de
-  imagem é infraestrutura nova.
+- **[DEPRECADO pela spec 027] Trocar a foto do perfil.** A spec 027 introduziu a infraestrutura de Storage para suportar avatares, invalidando esta restrição.
 - **Verificar o e-mail atual.** Quem definiu a senha pelo link do cadastro já tem `emailVerified: true`;
   quem não tem cai no ponto em aberto 2.
 - **Segundo fator, sessões ativas e histórico de acesso.** Nenhum tem tela para morar.

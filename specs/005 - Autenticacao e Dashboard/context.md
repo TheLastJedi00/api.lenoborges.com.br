@@ -558,7 +558,7 @@ e-mail no painel, a tabela `profiles`, os sete endpoints com corpo e erros, o de
 - Trilha, jogos e ranking. O front vai ter botões para eles, inertes.
 - Login social (Google, GitHub) e 2FA. Confirmado com o usuário: login é e-mail e senha, sem 2FA.
 - Alteração de e-mail da conta e exclusão de conta.
-- Upload de avatar (exigiria Supabase Storage).
+- **[DEPRECADO pela spec 027]** Upload de avatar (exigiria Supabase Storage). A spec 027 trouxe a infraestrutura de Storage — pelo Firebase, e não pelo Supabase, que saiu do projeto na spec 007.
 - Painel administrativo, listagem de membros, qualquer leitura de `profiles` por terceiro.
 - Envio de e-mail próprio (SMTP customizado). Quem envia é o Supabase, com os templates dele.
 - CSRF token de double submit, pelos motivos registrados na seção de sessão.
