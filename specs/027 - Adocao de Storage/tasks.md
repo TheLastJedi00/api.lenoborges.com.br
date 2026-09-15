@@ -268,3 +268,63 @@ Ao fim desta fase o Great Dev+ sobe a foto do resultado e o Dev Tier manda o có
   implementado: a **005** e a **013** com `Deprecated` na recusa do avatar, e a **019**, **022**, **023**
   e **025** com o bloco de emendas no topo do `context.md`. A seção "Specs Afetadas" desta spec já lista
   as seis.
+
+---
+
+## A execução contra o `dev-liga-dev`
+
+Feita com o backend local apontado para o projeto de preview e o front em
+`localhost:4200`, com dois membros criados para isso (um Dev Tier, um Great Dev) e
+apagados no fim — conta, perfil, linha do placar, conclusões e os arquivos do bucket.
+
+**O Storage está habilitado no `dev-liga-dev`**, que era a dúvida que nenhum teste
+resolvia: o `makePublic()` funciona e a URL responde `200` com `image/png`.
+
+### Três defeitos que só a execução pegou
+
+Os três têm a mesma forma, e vale dizer qual: **cada lado tinha teste, e a ponte
+entre eles não tinha nenhum.**
+
+1. **A foto não ia junto ao entrar no placar pela gamertag.** O `upsert` preservava
+   "o `avatarUrl` da linha atual", e quem põe a foto antes de escolher a gamertag não
+   tem linha — o nulo ganhava. O comentário que eu tinha escrito no `updateAvatar`
+   afirmava o contrário, que o `upsert` lia a foto do perfil. Ele não lia.
+2. **O `avatarUrl` não saía no DTO do ranking.** Estava gravado no Firestore, o
+   converter lia, o repository tinha teste, o `app-avatar` sabia desenhar — e o DTO no
+   meio não levava o campo. A foto simplesmente não chegava na tela.
+3. **O desafio concluído dizia "sem anexar uma resposta" para quem tinha anexado.**
+   A listagem não traz a `submission` de propósito, e a página abria o modal com o
+   objeto da listagem. Faltava alguém ir buscar o detalhe.
+
+Os três viraram correção com teste-trava, e os testes novos afirmam **a travessia**,
+não cada lado: o do ranking afirma o valor saindo do `page()` do service, e não do
+repository, porque era o `toDto` que faltava.
+
+### O que a execução confirmou funcionando
+
+- O boot exige a `FIREBASE_STORAGE_BUCKET` e sobe com o valor real.
+- Upload → `profiles` + `ranking` + URL pública com `?v=`, em 2,5s.
+- O recorte da biblioteca sai em **200x200 exatos**, WebP, e a foto nova aparece na
+  tela **sem recarregar a página** — o `?v=` derruba o cache.
+- Arquivo de texto com nome e `Content-Type` de PNG: `400` com mensagem que diz o
+  formato aceito.
+- Membro **sem gamertag não ganha linha no placar** ao pôr foto.
+- `DELETE /me/avatar` idempotente (`204` duas vezes), objeto fora do bucket, e os dois
+  documentos zerados.
+- Dev Tier: `403` na rota de upload **e** no `complete`, com a frase que oferece a
+  saída; na tela, o campo de código presente e o aviso no lugar do botão de foto.
+- As três recusas de URL no `complete`: de outro membro, de host de fora, e do desafio
+  errado do mesmo membro.
+- A segunda conclusão paga `0`, o XP não se move, e **a submissão gravada segue sendo
+  a da primeira**.
+- O modal de foto abre com o foco em "Escolher imagem", e a moldura do recorte mostra
+  a dica do caminho por teclado.
+
+### O que continua sem conferir
+
+**A Task 03 (Mobile First em 360px).** O `resize_window` da extensão do Chrome
+reporta sucesso e o `innerWidth` não muda — a janela fica em 1536. O CSS foi escrito
+com a razão ao lado (`min-width: 0` na coluna do gamertag, `flex-direction` trocando
+em 22rem e 24rem) e os testes cobrem a estrutura, mas **estrutura não é a mesma coisa
+que nada estourando**. Fica para uma conferência no DevTools à mão, ou num navegador
+que aceite o redimensionamento.
