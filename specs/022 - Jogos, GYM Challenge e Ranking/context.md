@@ -206,8 +206,7 @@ inteira.
 O admin pode popular o banco de questões com IA generativa:
 
 - O admin escreve um **prompt descritivo** do tema da insígnia e a dificuldade desejada.
-- O backend chama a **Gemini API** (`GEMINI_API_KEY` no `.env`) com um prompt estruturado que pede
-  questões no formato exato do schema.
+- O backend chama a **Gemini API** (`GEMINI_API_KEY` no `.env` — **[DEPRECADO] na spec 026: O modelo utilizado nas chamadas também passará a ser lido do `.env` via `GEMINI_MODEL` em vez de ser hardcoded**) com um prompt estruturado que pede questões no formato exato do schema.
 - A resposta é parseada e devolvida ao admin como **rascunho** — não grava nada no banco ainda.
 - O admin revisa, **edita ou exclui** questões individuais do rascunho.
 - Ao confirmar, as questões aprovadas são gravadas em `gym_questions`.
