@@ -50,13 +50,17 @@ nenhuma rota mude de contrato.
 
 ---
 
-# Fase 03: Fechamento [ ]
+# Fase 03: Fechamento [~]
 
-- [ ] Task 01: `npm test` limpo e `npm run lint` sem erro (o Prettier roda como regra do ESLint e
-  reprova formatação).
-- [ ] Task 02: `npm run test:e2e` — o contrato das duas rotas de geração não muda, inclusive o `503`
-  sem `GEMINI_API_KEY`, que é o que o e2e trava.
-- [ ] Task 03: Conferir a variável nos **dois ambientes da Vercel** (Preview e Production) — nos dois
+- [x] Task 01: `npm test` limpo e `npm run lint` sem erro (o Prettier roda como regra do ESLint e
+  reprova formatação). **1025 testes verdes em 84 suítes**, `npm run lint` sem saída e `npm run build`
+  passando.
+- [~] Task 02: `npm run test:e2e` — **não rodou nesta máquina: não há Java no PATH**, e sem ele o
+  emulador do Firebase não sobe ("Could not spawn `java -version`"), com nenhum teste executado. O
+  que a suíte trava aqui é o `503` sem `GEMINI_API_KEY`, e esse caminho **não passa pelo modelo**: a
+  chave é lida e recusada antes, na primeira linha do `generate`, e o `fetch` nunca acontece. Fica
+  para a próxima máquina com Java, e é o único item desta spec que ninguém viu rodar.
+- [ ] Task 03: **Pendente, e é operação, não código.** Conferir a variável nos **dois ambientes da Vercel** (Preview e Production) — nos dois
   ou em nenhum. A ausência é o padrão e é segura; o que engana é configurar só um, porque aí o
   preview responde com um modelo e a produção com outro, sem nada na tela dizendo isso, e o teste
   feito em preview não vale para produção. É a mesma classe de defeito dos índices compostos e da
