@@ -6,13 +6,18 @@ import {
   Post,
   Query,
   UseGuards,
+  UseInterceptors,
+  UploadedFile,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import {
   ApiBearerAuth,
   ApiOperation,
   ApiQuery,
   ApiResponse,
   ApiTags,
+  ApiConsumes,
+  ApiBody,
 } from '@nestjs/swagger';
 import { FirebaseAuthGuard } from '../auth/guards/firebase-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -20,6 +25,8 @@ import type { CurrentUserData } from '../auth/decorators/current-user.decorator'
 import { TrainingService } from './training.service';
 import { CreateTrainingCommentDto } from './dto/create-comment.dto';
 import { CompleteTrainingDto } from './dto/complete-training.dto';
+import { ResultImageDto } from './dto/result-image.dto';
+import { MAX_UPLOAD_BYTES } from '../storage/storage.constants';
 import {
   TrainingCommentDto,
   TrainingCommentListDto,
@@ -94,16 +101,95 @@ export class TrainingController {
       'nunca abaixo de zero (spec 025). **O servidor não tem como conferir esse ' +
       'número** — o estado vive na tela, e quem quiser mandar `0` leva o prêmio ' +
       'cheio. O teto, no número de dicas do desafio, é a única defesa, e o ' +
-      'corpo é opcional: ausente é zero, que é o que a tela anterior fazia.',
+      'corpo é opcional: ausente é zero, que é o que a tela anterior fazia.' +
+      '\n\n' +
+      '**A submissão entra aqui** (spec 027): `mainCode` para qualquer tier, ' +
+      'e `resultImageUrl` só do Great Dev Tier para cima. A URL da foto ' +
+      'precisa ser a que `POST /trainings/:trainingId/result-image` ' +
+      'devolveu **para este membro e este desafio** — a rota de upload já barra ' +
+      'o tier, mas ela e esta são duas chamadas.\n\n' +
+      'Como a segunda conclusão não escreve nada, **a submissão gravada é a da ' +
+      'primeira**: não existe reenviar a resposta.',
   })
   @ApiResponse({ status: 201, type: TrainingCompletionDto })
+  @ApiResponse({
+    status: 400,
+    description:
+      'Código acima de 20000 caracteres, ou foto que não é a que esta API devolveu para este desafio.',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Dev Tier tentando enviar foto de resultado.',
+  })
   @ApiResponse({ status: 404, description: 'Treinamento inexistente.' })
   async complete(
     @CurrentUser() user: CurrentUserData,
     @Param('trainingId') trainingId: string,
     @Body() dto: CompleteTrainingDto,
   ): Promise<TrainingCompletionDto> {
-    return this.trainings.complete(user.id, trainingId, dto.hintsUsed ?? 0);
+    return this.trainings.complete(user.id, trainingId, dto);
+  }
+
+  /**
+   * Sobe a foto do resultado (spec 027).
+   *
+   * **Rota separada da conclusao de proposito.** Um `complete` multipart
+   * misturaria o corpo JSON com o arquivo e faria a conclusao -- que paga XP e e
+   * idempotente -- depender de um upload que pode falhar no meio. Aqui o arquivo
+   * sobe primeiro, a URL volta, e a conclusao segue sendo JSON.
+   *
+   * **A trava de tier de verdade esta aqui**, antes de o byte entrar no bucket. O
+   * `complete` confere de novo, porque sao duas chamadas.
+   */
+  @Post('trainings/:trainingId/result-image')
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: MAX_UPLOAD_BYTES } }),
+  )
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+          description: 'A foto do resultado, no maximo 5 MB, jpeg/png/webp',
+        },
+      },
+    },
+  })
+  @ApiOperation({
+    summary: 'Enviar a foto do resultado do desafio (Great Dev Tier ou acima)',
+    description:
+      'Devolve a `resultImageUrl` para mandar no `complete`. ' +
+      '**O tier é conferido antes de o arquivo entrar no bucket**: validar ' +
+      'depois deixaria no Storage a foto de quem não tinha direito de mandá-la, ' +
+      'cobrada e pública, para responder `403` em seguida.\n\n' +
+      'O tipo sai dos bytes do arquivo, nunca do `Content-Type` da parte ' +
+      'nem da extensão do nome.',
+  })
+  @ApiResponse({ status: 201, type: ResultImageDto })
+  @ApiResponse({
+    status: 400,
+    description: 'Arquivo ausente, acima de 5 MB, ou que não é jpeg/png/webp.',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Dev Tier. A mensagem diz como assinar.',
+  })
+  @ApiResponse({ status: 404, description: 'Treinamento inexistente.' })
+  async uploadResultImage(
+    @CurrentUser() user: CurrentUserData,
+    @Param('trainingId') trainingId: string,
+    @UploadedFile() file: Express.Multer.File,
+  ): Promise<ResultImageDto> {
+    const resultImageUrl = await this.trainings.uploadResultImage(
+      user.id,
+      trainingId,
+      file,
+    );
+
+    return { resultImageUrl };
   }
 
   @Get('trainings/:trainingId/comments')

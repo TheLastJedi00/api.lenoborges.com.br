@@ -10,6 +10,7 @@ describe('TrainingController', () => {
     listByBadge: jest.Mock;
     getOne: jest.Mock;
     complete: jest.Mock;
+    uploadResultImage: jest.Mock;
     listComments: jest.Mock;
     addComment: jest.Mock;
   };
@@ -20,6 +21,7 @@ describe('TrainingController', () => {
       listByBadge: jest.fn(),
       getOne: jest.fn(),
       complete: jest.fn(),
+      uploadResultImage: jest.fn(),
       listComments: jest.fn(),
       addComment: jest.fn(),
     };
@@ -78,7 +80,12 @@ describe('TrainingController', () => {
         hintsUsed: 2,
       });
 
-      expect(service.complete).toHaveBeenCalledWith('ana', 'trn-1', 2);
+      // **O controller repassa o corpo inteiro desde a spec 027**, e nao mais o
+      // hintsUsed extraido. Com tres campos, extrair um por um no controller seria
+      // um lugar a mais para esquecer o quarto.
+      expect(service.complete).toHaveBeenCalledWith('ana', 'trn-1', {
+        hintsUsed: 2,
+      });
       expect(resposta.xp).toBe(30);
     });
 
@@ -90,8 +97,13 @@ describe('TrainingController', () => {
      * obrigatório, o intervalo entre o deploy do back e o do front seria um
      * 400 em cima de quem acabou de concluir um desafio -- e o membro perderia
      * o XP de um clique que deu certo.
+     *
+     * **Quem aplica o zero e o service desde a spec 027** (`dto.hintsUsed ?? 0`).
+     * O que este teste trava aqui e que o corpo vazio chega intacto ao service, em
+     * vez de o controller inventar um valor -- e o teste do default mora no
+     * `training.service.spec.ts`, junto da conta que o usa.
      */
-    it('trata o corpo vazio como nenhuma dica revelada', async () => {
+    it('repassa o corpo vazio intacto, e o zero fica com o service', async () => {
       service.complete.mockResolvedValue({
         trainingId: 'trn-1',
         completed: true,
@@ -101,7 +113,7 @@ describe('TrainingController', () => {
 
       await controller.complete(ANA, 'trn-1', {});
 
-      expect(service.complete).toHaveBeenCalledWith('ana', 'trn-1', 0);
+      expect(service.complete).toHaveBeenCalledWith('ana', 'trn-1', {});
     });
 
     /**
@@ -204,6 +216,26 @@ describe('TrainingController', () => {
       await expect(
         controller.addComment(ANA, 'fantasma', { content: 'Oi' }),
       ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('POST /trainings/:id/result-image (spec 027)', () => {
+    it('devolve a URL que o service cunhou', async () => {
+      const file = { buffer: Buffer.from([1]) } as Express.Multer.File;
+      service.uploadResultImage.mockResolvedValue(
+        'https://s/b/trainings/ana/trn-1?v=1',
+      );
+
+      const result = await controller.uploadResultImage(ANA, 'trn-1', file);
+
+      expect(result).toEqual({
+        resultImageUrl: 'https://s/b/trainings/ana/trn-1?v=1',
+      });
+      expect(service.uploadResultImage).toHaveBeenCalledWith(
+        'ana',
+        'trn-1',
+        file,
+      );
     });
   });
 });

@@ -18,7 +18,10 @@ describe('TrainingCompletionRepository', () => {
     trainingId: string,
     xpAwarded = 30,
     hintsUsed = 0,
-    submissao: { mainCode?: string | null; resultImageUrl?: string | null } = {},
+    submissao: {
+      mainCode?: string | null;
+      resultImageUrl?: string | null;
+    } = {},
   ) {
     const batch = firestore.batch();
     repository.create(batch as never, {

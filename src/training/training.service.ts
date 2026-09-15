@@ -11,6 +11,14 @@ import {
   ProfileRepository,
 } from '../profile/profile.repository';
 import { RankingRepository } from '../games/ranking.repository';
+import { StorageService } from '../storage/storage.service';
+import {
+  ALLOWED_IMAGE_TYPES,
+  MAX_UPLOAD_BYTES,
+  trainingResultPath,
+} from '../storage/storage.constants';
+import { detectImageType } from '../storage/image-type';
+import { CompleteTrainingDto } from './dto/complete-training.dto';
 import { BadgeId, isBadgeId } from '../track/track.constants';
 import { isAlreadyExists } from '../waitlist/waitlist.repository';
 import { Training } from './entities/training.entity';
@@ -48,6 +56,18 @@ export interface ListCommentsQuery {
  * desafio**, **comentar exige tier pago**, e **excluir um treinamento leva
  * junto o que pendurou nele**.
  */
+/**
+ * A recusa da foto de resultado, numa constante so (spec 027).
+ *
+ * **Duas rotas negam a mesma coisa** -- a de upload, antes de gravar o arquivo, e
+ * o `complete`, quando a URL chega no corpo -- e duas mensagens iguais
+ * escritas em lugares diferentes divergem no dia em que alguem melhora uma. A
+ * frase oferece a saida, como a do Mural e a dos comentarios: um 403 sem caminho e
+ * a forma mais cara de perder um upgrade.
+ */
+const TIER_FOTO_RECUSADA =
+  'Enviar a foto do resultado é do Great Dev Tier para cima. Veja o Financeiro para assinar.';
+
 @Injectable()
 export class TrainingService {
   constructor(
@@ -57,6 +77,7 @@ export class TrainingService {
     private readonly profiles: ProfileRepository,
     private readonly ranking: RankingRepository,
     private readonly firebase: FirebaseService,
+    private readonly storage: StorageService,
   ) {}
 
   /**
@@ -81,9 +102,78 @@ export class TrainingService {
 
   async getOne(uid: string, trainingId: string): Promise<TrainingDto> {
     const training = await this.assertTraining(trainingId);
-    const { found } = await this.completions.findById(uid, trainingId);
+    const { found, entry } = await this.completions.findById(uid, trainingId);
 
-    return this.toDto(training, found);
+    // A submissao entra so aqui, e nao no `listByBadge` (spec 027): esta leitura
+    // ja carregava o documento da conclusao e jogava fora tudo menos o `found`, e
+    // a tela do desafio concluido e a unica que tem o que fazer com o codigo. Na
+    // listagem, um `mainCode` de 20000 caracteres por desafio seria o corpo de
+    // uma tela inteira para desenhar vinte cartoes.
+    const submission =
+      found && entry
+        ? { mainCode: entry.mainCode, resultImageUrl: entry.resultImageUrl }
+        : null;
+
+    return { ...this.toDto(training, found), submission };
+  }
+
+  /**
+   * Sobe a foto do resultado de um desafio (spec 027).
+   *
+   * **O tier e conferido antes de o arquivo entrar no bucket**, e essa ordem e a
+   * decisao: validar depois deixaria no Storage a foto de quem nao tinha direito
+   * de manda-la, cobrada e publica, para responder 403 em seguida.
+   *
+   * **A validacao mora aqui e nao num guard.** Um guard no controller barraria
+   * tambem a conclusao e a leitura da Arena, e o Dev Tier tem direito as duas: o
+   * que ele nao tem e a foto. Mesmo desenho da trava de comentarios, e a mensagem
+   * carrega a saida pela mesma razao -- um 403 sem caminho e a forma mais cara de
+   * perder um upgrade.
+   *
+   * **O treinamento e conferido antes do arquivo**, pela razao da spec 019: o
+   * `trainingId` vem da URL e e escolhido pelo cliente, e uma rota que grava
+   * a partir de string do cliente grava a partir de qualquer string.
+   */
+  async uploadResultImage(
+    uid: string,
+    trainingId: string,
+    file: Express.Multer.File,
+  ): Promise<string> {
+    await this.assertTraining(trainingId);
+
+    const profile = await this.profiles.findById(uid);
+    if (!profile.found || !profile.entry) {
+      throw new NotFoundException('Perfil não encontrado.');
+    }
+
+    if (profile.entry.tier === 'dev-tier') {
+      throw new ForbiddenException(TIER_FOTO_RECUSADA);
+    }
+
+    if (!file?.buffer?.length) {
+      throw new BadRequestException('Envie um arquivo de imagem.');
+    }
+
+    if (file.size > MAX_UPLOAD_BYTES) {
+      throw new BadRequestException(
+        'A imagem precisa ter no máximo 5 MB. Tente uma foto menor.',
+      );
+    }
+
+    const tipo = detectImageType(file.buffer);
+    if (!tipo) {
+      throw new BadRequestException(
+        `A imagem precisa ser ${ALLOWED_IMAGE_TYPES.map((t) =>
+          t.replace('image/', ''),
+        ).join(', ')}.`,
+      );
+    }
+
+    return this.storage.upload(
+      trainingResultPath(uid, trainingId),
+      file.buffer,
+      tipo,
+    );
   }
 
   /**
@@ -103,9 +193,41 @@ export class TrainingService {
   async complete(
     uid: string,
     trainingId: string,
-    hintsUsed = 0,
+    dto: CompleteTrainingDto = {},
   ): Promise<TrainingCompletionDto> {
     const training = await this.assertTraining(trainingId);
+    const hintsUsed = dto.hintsUsed ?? 0;
+
+    // A submissao (spec 027). **A foto e conferida duas vezes, e a segunda e
+    // aqui.** A rota de upload ja barrou o tier antes de gravar o arquivo, mas ela
+    // e esta chamada sao duas requisicoes: sem esta conferencia, o Dev Tier leva
+    // 403 no upload e manda um resultImageUrl qualquer na conclusao.
+    const resultImageUrl = dto.resultImageUrl?.trim() ?? '';
+    if (resultImageUrl) {
+      const profile = await this.profiles.findById(uid);
+      if (!profile.found || !profile.entry) {
+        throw new NotFoundException('Perfil não encontrado.');
+      }
+
+      if (profile.entry.tier === 'dev-tier') {
+        throw new ForbiddenException(TIER_FOTO_RECUSADA);
+      }
+
+      // E a URL tem que ser uma que esta API cunhou **para este membro e para este
+      // desafio**. Sem isto, a foto de outra pessoa entra como prova desta -- o
+      // caminho leva o uid justamente para esta comparacao ser possivel sem
+      // consultar nada.
+      if (
+        !this.storage.isOwnUrl(
+          resultImageUrl,
+          trainingResultPath(uid, trainingId),
+        )
+      ) {
+        throw new BadRequestException(
+          'A foto do resultado precisa ser a que esta API devolveu para este desafio. Envie a imagem de novo.',
+        );
+      }
+    }
 
     // O custo das dicas (spec 025, decisão 2). O desconto sai do **prêmio do
     // desafio**, e não do saldo do membro: debitar do saldo global faria o XP
@@ -136,6 +258,8 @@ export class TrainingService {
       trainingId,
       xpAwarded: finalXp,
       hintsUsed: cobradas,
+      mainCode: dto.mainCode?.trim() || null,
+      resultImageUrl: resultImageUrl || null,
       now,
     });
     batch.update(this.profileDoc(uid), {
