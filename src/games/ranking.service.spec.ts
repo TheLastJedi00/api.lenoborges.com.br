@@ -18,7 +18,12 @@ function makeService(): {
 
 async function seed(
   repository: RankingRepository,
-  rows: { uid: string; xp: number; badgeCount?: number }[],
+  rows: {
+    uid: string;
+    xp: number;
+    badgeCount?: number;
+    avatarUrl?: string | null;
+  }[],
 ) {
   for (const row of rows) {
     await repository.upsert({
@@ -26,11 +31,38 @@ async function seed(
       nickname: row.uid.toUpperCase(),
       xp: row.xp,
       badgeCount: row.badgeCount ?? 0,
+      avatarUrl: row.avatarUrl ?? null,
     });
   }
 }
 
 describe('RankingService', () => {
+  /**
+   * **Teste-trava, e ele nasceu de um defeito que so apareceu no navegador.**
+   *
+   * O campo estava gravado no Firestore, o converter sabia ler, o repository tinha
+   * teste e o componente do front sabia desenhar -- e a foto nao aparecia no
+   * placar, porque **o DTO no meio nao levava o campo**. Cada lado tinha teste; a
+   * ponte entre eles nao tinha nenhum.
+   *
+   * E por isso que este teste afirma o valor saindo do metodo page(), e nao do
+   * repository: e o toDto que estava faltando.
+   */
+  it('teste-trava: a foto do membro chega ao DTO da pagina', async () => {
+    const { service, repository } = makeService();
+    await seed(repository, [
+      { uid: 'a', xp: 100, avatarUrl: 'https://s/b/avatars/a?v=1' },
+      { uid: 'b', xp: 900 },
+    ]);
+
+    const pagina = await service.page({ uid: 'a' });
+
+    expect(pagina.entries.map((e) => [e.uid, e.avatarUrl])).toEqual([
+      ['b', null],
+      ['a', 'https://s/b/avatars/a?v=1'],
+    ]);
+  });
+
   it('devolve a pagina ordenada, com a posicao contando de 1', async () => {
     const { service, repository } = makeService();
     await seed(repository, [

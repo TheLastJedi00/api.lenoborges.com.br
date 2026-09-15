@@ -21,6 +21,17 @@ export class RankingEntryDto {
   @ApiProperty({ example: 'LenoDev' })
   nickname: string;
 
+  @ApiProperty({
+    example:
+      'https://storage.googleapis.com/dev-liga-dev.firebasestorage.app/avatars/uid-2?v=1757000000000',
+    nullable: true,
+    description:
+      'A foto do membro, ou nulo (spec 027). Vem daqui e **não de uma leitura ' +
+      'por membro**: buscar o avatar no perfil de cada linha transformaria uma ' +
+      'tela de lista em N requisições para trazer uma URL por linha',
+  })
+  avatarUrl: string | null;
+
   @ApiProperty({ example: 340 })
   xp: number;
 
