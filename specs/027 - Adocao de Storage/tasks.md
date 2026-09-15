@@ -14,33 +14,33 @@
 
 ---
 
-# Fase 01: O Storage no Admin SDK []
+# Fase 01: O Storage no Admin SDK [x]
 
 Ao fim desta fase a aplicação sabe escrever e apagar um objeto no bucket. Nenhuma rota existe ainda.
 
-- [] Task 01: `src/config/env.validation.ts` e `.spec.ts` — adicionar `FIREBASE_STORAGE_BUCKET` como
+- [x] Task 01: `src/config/env.validation.ts` e `.spec.ts` — adicionar `FIREBASE_STORAGE_BUCKET` como
   obrigatória, no mesmo molde de `FIREBASE_WEB_API_KEY`.
   **Obrigatória e não opcional com padrão** (decisão 4): sem a variável, a ausência só apareceria no
   primeiro membro que tentasse trocar a foto, num `500` que ninguém liga ao deploy. O valor é **um por
   projeto**, como tudo que é de console neste repositório — anotar isso no comentário, ao lado da
   mesma advertência que a action URL e os índices compostos já carregam.
-- [] Task 02: `src/auth/firebase.service.ts` — passar `storageBucket` no `initializeApp` (vindo da
+- [x] Task 02: `src/auth/firebase.service.ts` — passar `storageBucket` no `initializeApp` (vindo da
   config) e expor `readonly storage: Storage` com `getStorage(this.app)` de `firebase-admin/storage`,
   ao lado de `auth` e `firestore`.
   **O `initializeApp` só roda quando `getApps().length === 0`** — o bucket entra nesse mesmo bloco, e o
   comentário existente sobre reaproveitamento de processo na Vercel continua valendo sem mudança.
-- [] Task 03: `package.json` — adicionar `@types/multer` em `devDependencies`.
+- [x] Task 03: `package.json` — adicionar `@types/multer` em `devDependencies`.
   `@nestjs/platform-express` já está nas dependências, então o `FileInterceptor` funciona; o que falta é
   o **tipo** `Express.Multer.File`, e sem ele o parâmetro do controller vira `any` e o `no-unsafe-*` do
   ESLint reclama no lugar errado.
-- [] Task 04: `src/storage/storage.constants.ts` — os limites e caminhos num lugar só (decisão 4):
+- [x] Task 04: `src/storage/storage.constants.ts` — os limites e caminhos num lugar só (decisão 4):
   `MAX_UPLOAD_BYTES = 5 * 1024 * 1024`, `ALLOWED_IMAGE_TYPES` (`image/jpeg`, `image/png`, `image/webp`),
   `avatarPath(uid)` = `avatars/{uid}` e `trainingResultPath(uid, trainingId)` =
   `trainings/{uid}/{trainingId}`.
   As funções de caminho ficam aqui **para a regra ter um dono só**, como o `trainingCompletionDocId`:
   o caminho é lido na escrita, na remoção e na validação da URL no `complete`, e três literais iguais em
   arquivos diferentes divergem no dia em que alguém muda um.
-- [] Task 05: `src/storage/image-type.ts` e `.spec.ts` — `detectImageType(buffer)` que lê os **bytes
+- [x] Task 05: `src/storage/image-type.ts` e `.spec.ts` — `detectImageType(buffer)` que lê os **bytes
   iniciais** e devolve o tipo detectado ou `null`: `FF D8 FF` (jpeg), `89 50 4E 47` (png), `RIFF....WEBP`
   (webp).
   **Nunca o `mimetype` do multipart nem a extensão do nome** (decisão 4): os dois são campos que quem
@@ -48,7 +48,7 @@ Ao fim desta fase a aplicação sabe escrever e apagar um objeto no bucket. Nenh
   `includes('linkedin.com')` do `social-url.ts` documenta. Testes: um buffer de cada tipo aceito, um
   buffer de texto, um buffer vazio, e um arquivo cujo `mimetype` diz `image/png` com bytes de outra
   coisa.
-- [] Task 06: `src/storage/storage.service.ts` e `.spec.ts` — **testes primeiro**. O único lugar que
+- [x] Task 06: `src/storage/storage.service.ts` e `.spec.ts` — **testes primeiro**. O único lugar que
   fala com o bucket:
   - `upload(path, buffer, contentType): Promise<string>` — `file.save(buffer, { contentType, metadata })`,
     `makePublic()`, e devolve a URL pública **com `?v=<Date.now()>`**. O `?v=` é o que faz a foto nova
@@ -62,16 +62,21 @@ Ao fim desta fase a aplicação sabe escrever e apagar um objeto no bucket. Nenh
     por um `includes`.
   - O `.spec.ts` roda contra um duplo do bucket, no molde do `fake-firestore`: o emulador de Storage não
     está no `firebase.json` e esta spec não o adiciona.
-- [] Task 07: `src/storage/storage.module.ts` — módulo que provê e exporta o `StorageService`.
+- [x] Task 07: `src/storage/storage.module.ts` — módulo que provê e exporta o `StorageService`.
   **Não importa nada**, pelo mesmo desenho do `GamesDataModule` e do `TrainingDataModule`: ele vai ser
   importado pelo `ProfileModule` e pelo `TrainingModule`, e qualquer import de volta aqui fecharia o
   ciclo de arquivos que derruba o boot sem nenhum teste unitário notar.
-- [] Task 08: `storage.rules` na raiz e o bloco `storage` no `firebase.json` — **negar tudo**, com o
+- [x] Task 08: `storage.rules` na raiz e o bloco `storage` no `firebase.json` — **negar tudo**, com o
   comentário dizendo por quê: só o Admin SDK escreve, exatamente como no Firestore (decisão 1). A
   leitura é pública pelo `makePublic()` do objeto, e não por regra.
   Registrar em `README.md` o comando com **`--project` explícito**
   (`firebase deploy --only storage --project <id>`) e a advertência de sempre: **são dois projetos**, e
   configurar só um é o defeito que nenhum teste pega.
+
+
+> **Fase 01 concluida.** 1048 testes verdes, lint limpo. O `.env` carregava uma
+> `FIREBASE_BUCKET_URL="gs://..."` sem leitor desde a migracao, e a validacao passou a aparar o
+> `gs://` por causa dela: quem copiasse aquele valor acertaria o boot e erraria o bucket.
 
 ---
 
