@@ -217,17 +217,26 @@ Ao fim desta fase o Great Dev+ sobe a foto do resultado e o Dev Tier manda o có
 
 ---
 
-# Fase 04: O avatar no card público []
+# Fase 04: O avatar no card público [x]
 
-- [] Task 01: `src/profile/dto/public-member.dto.ts` e `.spec.ts` — `avatarUrl` no `PublicMemberDto`.
+- [x] Task 01: `src/profile/dto/public-member.dto.ts` e `.spec.ts` — `avatarUrl` no `PublicMemberDto`.
   **É o único DTO deste repositório onde um campo novo não entra por padrão** (decisão 3): ele é
   definido pelo que deixa de fora. A decisão aqui é que a foto é pública, porque ela já está no placar,
   que é tela aberta a toda a liga — e esconder no card o que o ranking mostra três linhas acima seria
   teatro. Não entra nada além disso: nada de e-mail, telefone, `tier`, `role` ou `completedAt`.
   O teste de vazamento continua comparando **o conjunto de chaves por igualdade**, nunca
   `toMatchObject`, que passa feliz com um campo a mais.
-- [] Task 02: `src/profile/members.controller.spec.ts` e `src/games/ranking.service.spec.ts` — atualizar
+- [x] Task 02: `src/profile/members.controller.spec.ts` e `src/games/ranking.service.spec.ts` — atualizar
   os fixtures que montam perfil e linha de placar, agora com o campo novo.
+
+
+> **Fase 04 concluida.** 1087 testes verdes. **Os dois testes de vazamento do `PublicMemberDto`
+> ficaram vermelhos sozinhos** quando o campo entrou, e foi assim que eles apontaram cada lugar a
+> atualizar. E a prova de que a regra de o DTO ser definido pelo que deixa de fora esta viva.
+>
+> Uma decisao a mais que a task nao previa: **o `socialLinksPublic` nao governa a foto.** Ele existe
+> para vinculo a conta de fora, e o avatar ja esta no placar, que e tela aberta. Ha teste para a
+> assimetria, porque ela e o oposto do que a simetria sugeriria.
 
 ---
 
