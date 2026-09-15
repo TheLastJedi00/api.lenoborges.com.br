@@ -92,6 +92,11 @@ export class ProfileRepository {
       // esqueca de definir o campo e grave `undefined` no documento.
       linkedin: null,
       instagram: null,
+      // E nasce sem foto (spec 027). Aqui pelo mesmo motivo dos campos acima: um
+      // caminho de criacao que esquecesse o campo gravaria `undefined` no
+      // documento, e ai o `?? null` do converter -- que existe para
+      // documento antigo -- passaria a cobrir documento recem-criado.
+      avatarUrl: null,
       // E nasce sem gamertag (spec 022, decisao 20). O nickname e escolhido
       // depois, no modal que abre ao entrar em Jogos, e e imutavel a partir dali
       // -- por isso ele nao pode nascer de um default nem ser inferido do nome.
