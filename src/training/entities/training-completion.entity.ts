@@ -46,6 +46,30 @@ export interface TrainingCompletion {
   xpAwarded: number;
   /** Quantas dicas foram cobradas nesta conclusão (spec 025). */
   hintsUsed: number;
+  /**
+   * O codigo que o membro colou ao concluir, ou nulo (spec 027).
+   *
+   * **E a prova do que foi entregue, e e o que o admin abre para conferir.** Nao
+   * participa da trava de repeticao e nao muda o XP: quem impede o segundo
+   * pagamento continua sendo o `ALREADY_EXISTS` do caminho.
+   *
+   * **A consequencia disso e que a submissao gravada e a da primeira chamada.**
+   * Concluir de novo nao escreve nada -- nem o XP, nem estes campos --, entao um
+   * segundo envio com codigo diferente nao substitui o primeiro. Nao existe
+   * "reenviar a resposta", e a tela nao oferece isso.
+   */
+  mainCode: string | null;
+  /**
+   * A foto do resultado, URL do nosso bucket ou nulo (spec 027).
+   *
+   * **Exclusiva do Great Dev Tier em diante**, conferido no service antes de o
+   * arquivo entrar no bucket e outra vez na conclusao -- a rota de upload e o
+   * `complete` sao duas chamadas, e a segunda tambem confere que a URL e uma
+   * que esta API cunhou para este membro.
+   *
+   * Mesma regra do `mainCode` quanto a repeticao: fica a da primeira.
+   */
+  resultImageUrl: string | null;
   completedAt: Date;
 }
 
@@ -54,6 +78,8 @@ interface TrainingCompletionDocument extends DocumentData {
   trainingId: string;
   xpAwarded: number;
   hintsUsed: number;
+  mainCode: string | null;
+  resultImageUrl: string | null;
   completedAt: Timestamp;
 }
 
@@ -73,6 +99,8 @@ export const trainingCompletionConverter: FirestoreDataConverter<TrainingComplet
         trainingId: completion.trainingId,
         xpAwarded: completion.xpAwarded,
         hintsUsed: completion.hintsUsed,
+        mainCode: completion.mainCode,
+        resultImageUrl: completion.resultImageUrl,
         completedAt: Timestamp.fromDate(completion.completedAt),
       };
     },
@@ -91,6 +119,10 @@ export const trainingCompletionConverter: FirestoreDataConverter<TrainingComplet
         // Toda conclusão anterior à spec 025 chega sem o campo, e zero é a
         // verdade sobre ela: naquele dia não havia dica a revelar.
         hintsUsed: data.hintsUsed ?? 0,
+        // Toda conclusao anterior a spec 027 chega sem os campos, e `null` e a
+        // verdade sobre ela: naquele dia nao havia o que enviar.
+        mainCode: data.mainCode ?? null,
+        resultImageUrl: data.resultImageUrl ?? null,
         completedAt: data.completedAt.toDate(),
       };
     },
