@@ -11,7 +11,10 @@ import {
   HttpStatus,
   Res,
   UseGuards,
+  UseInterceptors,
+  UploadedFile,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
 import { Throttle } from '@nestjs/throttler';
 import {
@@ -19,6 +22,8 @@ import {
   ApiOperation,
   ApiResponse,
   ApiBearerAuth,
+  ApiConsumes,
+  ApiBody,
 } from '@nestjs/swagger';
 import { ProfileService } from './profile.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
@@ -32,6 +37,8 @@ import { WatchedVideoService } from '../track/watched-video.service';
 import { SetWatchedDto, WatchedVideoDto } from '../track/dto/set-watched.dto';
 import { CookieService } from '../auth/cookie.service';
 import { ProfileDto } from './dto/profile.dto';
+import { AvatarDto } from './dto/avatar.dto';
+import { MAX_UPLOAD_BYTES } from '../storage/storage.constants';
 import { FirebaseAuthGuard } from '../auth/guards/firebase-auth.guard';
 import { LegalService } from '../legal/legal.service';
 import { AcceptLegalDto } from '../legal/dto/accept-legal.dto';
@@ -257,6 +264,92 @@ export class ProfileController {
    * desenho do `PATCH /me/emails` logo abaixo, pela mesma razão.
    */
   @Throttle({ default: { limit: 10, ttl: 60000 } })
+  /**
+   * Troca a foto do perfil (spec 027).
+   *
+   * **Rota propria, e nao um campo de `PATCH /me/profile`** -- exatamente a
+   * razao escrita no `PATCH /me/privacy` logo abaixo: aquela rota exige
+   * nome, telefone e bio e estampa o `completedAt`, e trocar a foto por ela
+   * obrigaria o modal a reenviar o cadastro inteiro.
+   *
+   * **O `limits` do interceptor e a primeira barreira, e o service revalida.**
+   * Nao e redundancia: o multer corta o upload no meio e protege a memoria do
+   * processo antes de o arquivo existir por inteiro, enquanto a checagem do
+   * service e a que vale para quem chamar o metodo por outro caminho. Sem o
+   * `limits`, um arquivo de 2 GB entra na memoria da function so para levar
+   * um 400 depois.
+   *
+   * **Nao e isenta do `LegalAcceptanceGuard`**, como nenhuma rota de
+   * `/me` fora das excecoes da spec 018: quem nao aceitou os documentos nao
+   * troca a foto.
+   */
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @Post('avatar')
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: MAX_UPLOAD_BYTES } }),
+  )
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+          description: 'A imagem, no maximo 5 MB, jpeg/png/webp',
+        },
+      },
+    },
+  })
+  @ApiOperation({
+    summary: 'Enviar ou trocar a foto do perfil',
+    description:
+      'Recebe a imagem em `multipart/form-data` e devolve a URL publica **já ' +
+      'persistida** em `profiles/{uid}` e refletida em `ranking/{uid}`.\n\n' +
+      '**O tipo é conferido pelos bytes do arquivo**, nunca pelo ' +
+      '`Content-Type` da parte nem pela extensão do nome, que são dois campos ' +
+      'que quem envia escreve.\n\n' +
+      'A URL carrega um `?v=` que muda a cada troca: o caminho no bucket é ' +
+      'fixo, para a foto nova sobrescrever a velha, e sem o parâmetro o ' +
+      'navegador serviria a anterior do cache.',
+  })
+  @ApiResponse({ status: 201, description: 'Foto trocada.', type: AvatarDto })
+  @ApiResponse({
+    status: 400,
+    description: 'Arquivo ausente, acima de 5 MB, ou que não é jpeg/png/webp.',
+  })
+  @ApiResponse({ status: 404, description: 'Perfil não encontrado.' })
+  @ApiResponse({ status: 429, description: 'Limite de requisições excedido.' })
+  async setAvatar(
+    @CurrentUser() user: CurrentUserData,
+    @UploadedFile() file: Express.Multer.File,
+  ): Promise<AvatarDto> {
+    const avatarUrl = await this.profileService.setAvatar(user.id, file);
+
+    return { avatarUrl };
+  }
+
+  /**
+   * Tira a foto do perfil (spec 027).
+   *
+   * **Existe porque trocar nao e o mesmo que tirar.** Sem ela, quem subiu a foto
+   * errada so pode substituir por outra, e nunca voltar a nao ter nenhuma.
+   */
+  @Delete('avatar')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({
+    summary: 'Remover a foto do perfil',
+    description:
+      'Apaga o objeto do bucket e grava `null` no perfil e no ranking. ' +
+      'Remover a foto de quem não tem uma responde `204` do mesmo jeito: o ' +
+      'estado final pedido já era verdade.',
+  })
+  @ApiResponse({ status: 204, description: 'Foto removida.' })
+  @ApiResponse({ status: 404, description: 'Perfil não encontrado.' })
+  async removeAvatar(@CurrentUser() user: CurrentUserData): Promise<void> {
+    await this.profileService.removeAvatar(user.id);
+  }
+
   @Patch('privacy')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({

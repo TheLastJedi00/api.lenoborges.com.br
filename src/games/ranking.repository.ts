@@ -105,12 +105,46 @@ export class RankingRepository {
       previousPosition: current.entry?.previousPosition ?? null,
       currentPosition: current.entry?.currentPosition ?? null,
       positionUpdatedAt: current.entry?.positionUpdatedAt ?? null,
+      // **A foto entra na lista de preservados, e nao no `entry` que chega**
+      // (spec 027). Quem chama o `upsert` e a escolha da gamertag e o ganho
+      // de XP, e nenhum dos dois sabe da foto: sem esta linha, ganhar XP
+      // sobrescreveria com `undefined` o avatar de quem ja tinha um, e o
+      // membro perderia a foto por ter assistido um video. E exatamente a
+      // armadilha que o comentario deste metodo descreve para as posicoes.
+      avatarUrl: current.entry?.avatarUrl ?? null,
       updatedAt: new Date(),
     };
 
     await this.collection.doc(entry.uid).set(next);
 
     return next;
+  }
+
+  /**
+   * Grava a foto do membro na linha do placar (spec 027).
+   *
+   * **Atualiza, nunca cria, e essa e a regra que importa aqui** -- a mesma do
+   * `addXpToBatch` logo abaixo, pela mesma razao. A linha do placar nasce
+   * quando a pessoa escolhe a gamertag (spec 022, decisao 20), e nao no primeiro
+   * XP: criar aqui daria ao ranking uma linha em branco de quem nunca escolheu
+   * nome, exatamente quem aquela decisao mantem fora. Quem trocou a foto antes de
+   * escolher a gamertag entra no placar depois, pelo `upsert`, que ja le a
+   * foto do documento do perfil.
+   *
+   * **Quem nao tem linha nao e erro.** Trocar a foto e uma acao do perfil, e o
+   * placar e um efeito dela: recusar a troca porque a pessoa ainda nao joga seria
+   * deixar o menos importante mandar no mais importante.
+   */
+  async updateAvatar(uid: string, avatarUrl: string | null): Promise<void> {
+    const current = await this.findByUid(uid);
+    if (!current.found) {
+      return;
+    }
+
+    await this.docRef(uid).update({
+      avatarUrl,
+      updatedAt: Timestamp.now(),
+    });
   }
 
   /**

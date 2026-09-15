@@ -42,6 +42,18 @@ export interface RankingEntry {
   currentPosition: number | null;
   positionUpdatedAt: Date | null;
   updatedAt: Date;
+  /**
+   * A foto do membro, copiada de `profiles/{uid}` (spec 027).
+   *
+   * **Copia deliberada, e nao join.** O placar e uma tela de lista: buscar o
+   * avatar no perfil de cada linha custaria uma leitura por membro exibido, e a
+   * unica coisa que essa leitura traria a mais e uma URL. E a mesma razao do
+   * `nickname` estar aqui em vez de vir do perfil.
+   *
+   * O preco da copia e a sincronia, e quem paga e o `updateAvatar` do
+   * repository, chamado junto da escrita no perfil.
+   */
+  avatarUrl: string | null;
 }
 
 interface RankingEntryDocument {
@@ -53,6 +65,7 @@ interface RankingEntryDocument {
   currentPosition: number | null;
   positionUpdatedAt: Timestamp | null;
   updatedAt: Timestamp;
+  avatarUrl: string | null;
 }
 
 export const rankingEntryConverter: FirestoreDataConverter<RankingEntry> = {
@@ -72,6 +85,7 @@ export const rankingEntryConverter: FirestoreDataConverter<RankingEntry> = {
         ? Timestamp.fromDate(entry.positionUpdatedAt)
         : null,
       updatedAt: Timestamp.fromDate(entry.updatedAt),
+      avatarUrl: entry.avatarUrl,
     };
   },
 
@@ -90,6 +104,10 @@ export const rankingEntryConverter: FirestoreDataConverter<RankingEntry> = {
       currentPosition: data.currentPosition ?? null,
       positionUpdatedAt: data.positionUpdatedAt?.toDate() ?? null,
       updatedAt: data.updatedAt?.toDate() ?? new Date(0),
+      // Toda linha do placar e anterior ao campo no dia em que a spec 027 sobe, e
+      // `undefined` num `<img src>` pinta um quebrado em vez de
+      // cair nas iniciais.
+      avatarUrl: data.avatarUrl ?? null,
     };
   },
 };

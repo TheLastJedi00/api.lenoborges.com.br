@@ -31,6 +31,7 @@ function profile(tier: TierId, name: string | null = 'Leno Borges'): Profile {
     tier,
     linkedin: null,
     instagram: null,
+    avatarUrl: null,
     emailOptOut: false,
     emailOptOutReason: null,
     emailOptOutAt: null,

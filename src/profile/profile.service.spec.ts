@@ -18,6 +18,7 @@ import { LegalAcceptanceRepository } from '../legal/legal-acceptance.repository'
 import { WatchedVideoRepository } from '../track/watched-video.repository';
 import { NicknameRepository } from './nickname.repository';
 import { RankingRepository } from '../games/ranking.repository';
+import { StorageService } from '../storage/storage.service';
 import { GymChallengeRepository } from '../games/gym-challenge.repository';
 import { TrainingCompletionRepository } from '../training/training-completion.repository';
 import { TrainingCommentRepository } from '../training/training-comment.repository';
@@ -47,7 +48,16 @@ describe('ProfileService', () => {
   let legalAcceptanceRepository: { removeAll: jest.Mock };
   let watchedVideoRepository: { removeAll: jest.Mock };
   let nicknameRepository: { claim: jest.Mock; release: jest.Mock };
-  let rankingRepository: { upsert: jest.Mock; remove: jest.Mock };
+  let rankingRepository: {
+    upsert: jest.Mock;
+    remove: jest.Mock;
+    updateAvatar: jest.Mock;
+  };
+  let storageService: {
+    upload: jest.Mock;
+    remove: jest.Mock;
+    isOwnUrl: jest.Mock;
+  };
   let gymChallengeRepository: { removeAll: jest.Mock };
   let trainingCompletionRepository: { removeAll: jest.Mock };
   let trainingCommentRepository: { removeAllByUid: jest.Mock };
@@ -94,7 +104,19 @@ describe('ProfileService', () => {
       upsert: jest.fn().mockResolvedValue(undefined),
       release: jest.fn(),
       remove: registra('ranking.remove'),
-    } as unknown as { upsert: jest.Mock; remove: jest.Mock };
+      updateAvatar: jest.fn().mockResolvedValue(undefined),
+    } as unknown as {
+      upsert: jest.Mock;
+      remove: jest.Mock;
+      updateAvatar: jest.Mock;
+    };
+    storageService = {
+      upload: jest
+        .fn()
+        .mockResolvedValue('https://s/b/avatars/user-1?v=1757000000000'),
+      remove: jest.fn().mockResolvedValue(undefined),
+      isOwnUrl: jest.fn().mockReturnValue(true),
+    };
     gymChallengeRepository = { removeAll: registra('gym.removeAll') };
     trainingCompletionRepository = {
       removeAll: registra('trainingCompletion.removeAll'),
@@ -129,6 +151,7 @@ describe('ProfileService', () => {
         },
         { provide: NicknameRepository, useValue: nicknameRepository },
         { provide: RankingRepository, useValue: rankingRepository },
+        { provide: StorageService, useValue: storageService },
         {
           provide: GymChallengeRepository,
           useValue: gymChallengeRepository,
@@ -159,6 +182,7 @@ describe('ProfileService', () => {
         tier: 'dev-tier',
         linkedin: null,
         instagram: null,
+        avatarUrl: null,
         emailOptOut: false,
         emailOptOutReason: null,
         emailOptOutAt: null,
@@ -1043,6 +1067,144 @@ describe('ProfileService', () => {
       expect(repository.update).not.toHaveBeenCalledWith(
         'user-1',
         expect.objectContaining({ grade: 33 }),
+      );
+    });
+  });
+
+  describe('setAvatar e removeAvatar (spec 027)', () => {
+    const PNG = Buffer.from([
+      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0,
+    ]);
+    const TEXTO = Buffer.from('nao sou imagem nenhuma, nem de longe');
+
+    function arquivo(buffer: Buffer, mimetype = 'image/png') {
+      return { buffer, mimetype, size: buffer.length } as Express.Multer.File;
+    }
+
+    function perfil(extra: Partial<Profile> = {}): Profile {
+      return {
+        id: 'user-1',
+        name: 'Leno',
+        phone: '47999990000',
+        bio: 'bio',
+        grade: 0,
+        tier: 'dev-tier',
+        linkedin: null,
+        instagram: null,
+        avatarUrl: null,
+        emailOptOut: false,
+        emailOptOutReason: null,
+        emailOptOutAt: null,
+        legalAcceptances: {},
+        xp: 0,
+        socialLinksPublic: false,
+        nickname: null,
+        completedAt: new Date(),
+        waitlistEntryId: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        ...extra,
+      };
+    }
+
+    beforeEach(() => {
+      repository.findById.mockResolvedValue({ found: true, entry: perfil() });
+      repository.update.mockResolvedValue({ entry: perfil() });
+    });
+
+    it('sobe o arquivo e grava a URL no perfil', async () => {
+      const url = await service.setAvatar('user-1', arquivo(PNG));
+
+      expect(storageService.upload).toHaveBeenCalledWith(
+        'avatars/user-1',
+        PNG,
+        'image/png',
+      );
+      expect(repository.update).toHaveBeenCalledWith('user-1', {
+        avatarUrl: 'https://s/b/avatars/user-1?v=1757000000000',
+      });
+      expect(url).toBe('https://s/b/avatars/user-1?v=1757000000000');
+    });
+
+    it('grava a mesma URL no placar', async () => {
+      await service.setAvatar('user-1', arquivo(PNG));
+
+      expect(rankingRepository.updateAvatar).toHaveBeenCalledWith(
+        'user-1',
+        'https://s/b/avatars/user-1?v=1757000000000',
+      );
+    });
+
+    it('teste-trava: recusa o que nao e imagem sem tocar no bucket', async () => {
+      // A ordem importa: validar depois de subir deixaria no bucket um arquivo que
+      // a API recusou, cobrado e sem nada apontando para ele.
+      await expect(service.setAvatar('user-1', arquivo(TEXTO))).rejects.toThrow(
+        BadRequestException,
+      );
+
+      expect(storageService.upload).not.toHaveBeenCalled();
+      expect(repository.update).not.toHaveBeenCalled();
+    });
+
+    it('teste-trava: nao acredita no mimetype que o cliente manda', async () => {
+      // O arquivo se declara PNG e tem bytes de texto. Confiar no mimetype aqui
+      // seria aceitar o que quem envia escreveu sobre o proprio arquivo.
+      await expect(
+        service.setAvatar('user-1', arquivo(TEXTO, 'image/png')),
+      ).rejects.toThrow(BadRequestException);
+
+      expect(storageService.upload).not.toHaveBeenCalled();
+    });
+
+    it('recusa arquivo acima do teto', async () => {
+      const grande = {
+        buffer: PNG,
+        mimetype: 'image/png',
+        size: 6 * 1024 * 1024,
+      } as Express.Multer.File;
+
+      await expect(service.setAvatar('user-1', grande)).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(storageService.upload).not.toHaveBeenCalled();
+    });
+
+    it('teste-trava: o placar que estoura nao derruba a troca da foto', async () => {
+      // Mesmo desenho do catch do upsert da gamertag e do catch da notificacao da
+      // spec 012: a foto ja esta no bucket e no perfil, e um 500 aqui diria que a
+      // troca falhou quando ela deu certo. O placar e eventualmente consistente.
+      rankingRepository.updateAvatar.mockRejectedValue(
+        new Error('placar caiu'),
+      );
+
+      await expect(service.setAvatar('user-1', arquivo(PNG))).resolves.toBe(
+        'https://s/b/avatars/user-1?v=1757000000000',
+      );
+
+      expect(repository.update).toHaveBeenCalled();
+    });
+
+    it('removeAvatar apaga o objeto e zera os dois lugares', async () => {
+      await service.removeAvatar('user-1');
+
+      expect(storageService.remove).toHaveBeenCalledWith('avatars/user-1');
+      expect(repository.update).toHaveBeenCalledWith('user-1', {
+        avatarUrl: null,
+      });
+      expect(rankingRepository.updateAvatar).toHaveBeenCalledWith(
+        'user-1',
+        null,
+      );
+    });
+
+    it('perfil inexistente e 404 nas duas operacoes', async () => {
+      repository.findById.mockResolvedValue({ found: false, entry: null });
+
+      await expect(service.setAvatar('fantasma', arquivo(PNG))).rejects.toThrow(
+        NotFoundException,
+      );
+      await expect(service.removeAvatar('fantasma')).rejects.toThrow(
+        NotFoundException,
       );
     });
   });

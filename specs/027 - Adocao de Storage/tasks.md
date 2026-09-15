@@ -80,30 +80,30 @@ Ao fim desta fase a aplicação sabe escrever e apagar um objeto no bucket. Nenh
 
 ---
 
-# Fase 02: Avatar no perfil e no placar []
+# Fase 02: Avatar no perfil e no placar [x]
 
 Ao fim desta fase o membro troca e remove a foto, e o placar acompanha.
 
-- [] Task 01: `src/profile/entities/profile.entity.ts` e `.spec.ts` — `avatarUrl: string | null` na
+- [x] Task 01: `src/profile/entities/profile.entity.ts` e `.spec.ts` — `avatarUrl: string | null` na
   interface, no `ProfileDocument`, no `toFirestore` e no `fromFirestore` com `data.avatarUrl ?? null`.
   **Todo documento é anterior ao campo no dia do deploy**, e é o mesmo fallback que `tier`, `completedAt`
   e `legalAcceptances` já aplicam por essa razão. Testar o round-trip e o documento legado.
-- [] Task 02: `src/profile/profile.repository.ts` e `.spec.ts` — o tipo do `update` aceita
+- [x] Task 02: `src/profile/profile.repository.ts` e `.spec.ts` — o tipo do `update` aceita
   `avatarUrl?: string | null`. Nenhum método novo: gravar `null` é o caminho da remoção, e um
   `clearAvatar` separado seria um segundo jeito de fazer a mesma escrita.
-- [] Task 03: `src/games/entities/ranking-entry.entity.ts` e `.spec.ts` — `avatarUrl: string | null` na
+- [x] Task 03: `src/games/entities/ranking-entry.entity.ts` e `.spec.ts` — `avatarUrl: string | null` na
   interface, no `RankingEntryDocument` e nos dois lados do converter, com `?? null` para o legado.
   Cuidar do `upsert`: ele monta o `next` preservando `previousPosition`, `currentPosition` e
   `positionUpdatedAt` do documento atual, e o `avatarUrl` entra **nessa mesma lista de campos
   preservados** — senão escolher a gamertag ou ganhar XP apagaria a foto de quem já tinha uma, sem erro
   nenhum. É exatamente a armadilha que o comentário do `upsert` já descreve para as posições.
-- [] Task 04: `src/games/ranking.repository.ts` e `.spec.ts` — `updateAvatar(uid, avatarUrl)`, que dá
+- [x] Task 04: `src/games/ranking.repository.ts` e `.spec.ts` — `updateAvatar(uid, avatarUrl)`, que dá
   `update` **só se a linha existir**.
   **Nunca `set()` e nunca criar o documento**, pela razão já escrita no `addXpToBatch` logo acima: a
   linha do placar nasce quando a pessoa escolhe a gamertag (spec 022, decisão 20), e criar aqui daria ao
   ranking uma linha em branco de quem nunca escolheu nome. Testes: linha existente recebe a URL; membro
   sem linha não cria nada e não estoura.
-- [] Task 05: `src/profile/profile.service.ts` e `.spec.ts` — **testes primeiro**:
+- [x] Task 05: `src/profile/profile.service.ts` e `.spec.ts` — **testes primeiro**:
   - `setAvatar(uid, file)`: valida tamanho e tipo detectado, sobe por `StorageService.upload` em
     `avatarPath(uid)`, grava a URL no perfil e **chama `ranking.updateAvatar` num `catch` que engole e
     loga** — o mesmo desenho do `upsert` da gamertag vinte linhas acima e do `catch` da notificação da
@@ -113,12 +113,12 @@ Ao fim desta fase o membro troca e remove a foto, e o placar acompanha.
   - Testes: tipo recusado vira `400` **sem tocar no bucket**; arquivo acima do limite vira `400`;
     sucesso grava nos dois lugares; ranking inexistente não derruba a troca; ranking que estoura não
     derruba a troca.
-- [] Task 06: `src/profile/dto/profile.dto.ts` e `src/profile/dto/avatar.dto.ts` — `avatarUrl` no
+- [x] Task 06: `src/profile/dto/profile.dto.ts` e `src/profile/dto/avatar.dto.ts` — `avatarUrl` no
   `ProfileDto` (é o `GET /me`, e a tela precisa saber se há foto) e um `AvatarDto` com `{ avatarUrl }`
   para a resposta das rotas novas.
   **`UpdateProfileDto` não é tocado** (decisão 1): a foto não passa por `PATCH /me/profile`, que exige
   nome, telefone e bio e estampa o `completedAt`.
-- [] Task 07: `src/profile/profile.controller.ts` e `.spec.ts` — `POST /me/avatar` com
+- [x] Task 07: `src/profile/profile.controller.ts` e `.spec.ts` — `POST /me/avatar` com
   `@UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_UPLOAD_BYTES } }))` e
   `DELETE /me/avatar`.
   O `limits` do multer é a **primeira** barreira, e o service revalida: o interceptor protege a memória
@@ -127,9 +127,20 @@ Ao fim desta fase o membro troca e remove a foto, e o placar acompanha.
   `@ApiConsumes('multipart/form-data')`.
   **As duas rotas ficam sob o guard de aceite legal**, como todo o resto de `/me` fora das exceções
   listadas na spec 018 — não adicionar exceção nenhuma.
-- [] Task 08: `src/profile/profile.module.ts` — importar o `StorageModule`. Uma linha, e o comentário do
+- [x] Task 08: `src/profile/profile.module.ts` — importar o `StorageModule`. Uma linha, e o comentário do
   módulo ganha a frase: é o **sétimo** import que não virou ciclo, porque o `StorageModule` não importa
   nada.
+
+
+> **Fase 02 concluida.** 1064 testes verdes, lint limpo, build ok. Duas notas:
+>
+> - **A Task 02 nao precisou de mudanca.** O `update` do `ProfileRepository` recebe
+>   `Partial<Omit<Profile, 'id' | 'createdAt'>>`, entao ele passou a aceitar `avatarUrl` no momento em
+>   que o campo entrou na interface. O que o compilador cobrou ali foi outra coisa: o `create`, que
+>   monta o perfil inteiro e precisou do default `avatarUrl: null` junto dos outros sete.
+> - **O compilador apontou o `upsert` do ranking antes de qualquer teste**, e era a armadilha da Task
+>   03. Seis fixtures de spec tambem cairam, e sao as que provam que `Profile` ganhou campo
+>   obrigatorio em vez de opcional.
 
 ---
 

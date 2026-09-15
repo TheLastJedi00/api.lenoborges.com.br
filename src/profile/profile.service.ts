@@ -18,6 +18,13 @@ import { PrivacyPreferenceDto } from './dto/privacy-preference.dto';
 import { SetNicknameDto } from './dto/nickname.dto';
 import { NicknameRepository } from './nickname.repository';
 import { RankingRepository } from '../games/ranking.repository';
+import { StorageService } from '../storage/storage.service';
+import {
+  ALLOWED_IMAGE_TYPES,
+  MAX_UPLOAD_BYTES,
+  avatarPath,
+} from '../storage/storage.constants';
+import { detectImageType } from '../storage/image-type';
 import { GymChallengeRepository } from '../games/gym-challenge.repository';
 import { TrainingCompletionRepository } from '../training/training-completion.repository';
 import { TrainingCommentRepository } from '../training/training-comment.repository';
@@ -76,6 +83,7 @@ export class ProfileService {
     private readonly watchedVideoRepository: WatchedVideoRepository,
     private readonly nicknameRepository: NicknameRepository,
     private readonly rankingRepository: RankingRepository,
+    private readonly storageService: StorageService,
     private readonly gymChallengeRepository: GymChallengeRepository,
     private readonly trainingCompletionRepository: TrainingCompletionRepository,
     private readonly trainingCommentRepository: TrainingCommentRepository,
@@ -103,6 +111,7 @@ export class ProfileService {
       grade: profile.grade,
       linkedin: profile.linkedin,
       instagram: profile.instagram,
+      avatarUrl: profile.avatarUrl,
       emailOptOut: profile.emailOptOut,
       profileCompleted: profile.completedAt !== null,
       role,
@@ -499,6 +508,97 @@ export class ProfileService {
 
     if (!found) {
       throw new NotFoundException('Perfil não encontrado.');
+    }
+  }
+
+  /**
+   * Troca a foto do perfil (spec 027).
+   *
+   * **Valida antes de subir, e a ordem e a decisao.** Subir primeiro e conferir
+   * depois deixaria no bucket um arquivo que a API recusou -- cobrado, publico e
+   * sem nada apontando para ele, porque a URL nunca foi gravada em lugar nenhum.
+   *
+   * **O tipo sai dos bytes, nunca do `mimetype`** (decisao 4). O
+   * `mimetype` do multipart e a extensao do nome sao campos que quem envia
+   * escreve, e o nome do arquivo nao entra em caminho nenhum: o caminho e derivado
+   * do `uid`, e nome vindo do cliente dentro de caminho e o `../`
+   * de sempre.
+   *
+   * **A escrita no placar vai num catch que engole**, exatamente como o
+   * `upsert` da gamertag acima e o catch da notificacao da spec 012: a
+   * essa altura a foto ja esta no bucket e no perfil, e um 500 aqui diria que a
+   * troca falhou quando ela deu certo. O placar e eventualmente consistente por
+   * desenho.
+   */
+  async setAvatar(userId: string, file: Express.Multer.File): Promise<string> {
+    const profile = await this.repository.findById(userId);
+    if (!profile.found || !profile.entry) {
+      throw new NotFoundException('Perfil não encontrado.');
+    }
+
+    if (!file?.buffer?.length) {
+      throw new BadRequestException('Envie um arquivo de imagem.');
+    }
+
+    if (file.size > MAX_UPLOAD_BYTES) {
+      throw new BadRequestException(
+        'A imagem precisa ter no máximo 5 MB. Tente uma foto menor.',
+      );
+    }
+
+    const tipo = detectImageType(file.buffer);
+    if (!tipo) {
+      throw new BadRequestException(
+        `A imagem precisa ser ${ALLOWED_IMAGE_TYPES.map((t) => t.replace('image/', '')).join(', ')}.`,
+      );
+    }
+
+    const avatarUrl = await this.storageService.upload(
+      avatarPath(userId),
+      file.buffer,
+      tipo,
+    );
+
+    await this.repository.update(userId, { avatarUrl });
+    await this.syncAvatarNoPlacar(userId, avatarUrl);
+
+    return avatarUrl;
+  }
+
+  /**
+   * Tira a foto do perfil.
+   *
+   * **Existe porque trocar nao e o mesmo que tirar**: sem esta rota, quem subiu a
+   * foto errada so pode substituir por outra, e nunca voltar a ter nenhuma.
+   *
+   * O objeto e apagado **antes** da escrita no Firestore, e essa ordem e a menos
+   * ruim das duas. Se o `delete` falhar, o campo continua apontando para
+   * uma foto que ainda existe e a pessoa tenta de novo; na ordem inversa, o campo
+   * viraria `null` com o arquivo vivo no bucket -- publico, cobrado e sem
+   * nada apontando para ele, que e o orfao que ninguem acha depois.
+   */
+  async removeAvatar(userId: string): Promise<void> {
+    const profile = await this.repository.findById(userId);
+    if (!profile.found || !profile.entry) {
+      throw new NotFoundException('Perfil não encontrado.');
+    }
+
+    await this.storageService.remove(avatarPath(userId));
+    await this.repository.update(userId, { avatarUrl: null });
+    await this.syncAvatarNoPlacar(userId, null);
+  }
+
+  /** A copia da foto no placar, que nunca derruba a operacao do perfil. */
+  private async syncAvatarNoPlacar(
+    userId: string,
+    avatarUrl: string | null,
+  ): Promise<void> {
+    try {
+      await this.rankingRepository.updateAvatar(userId, avatarUrl);
+    } catch (error) {
+      this.logger.error(
+        `Falha ao refletir o avatar de ${userId} no ranking: ${String(error)}`,
+      );
     }
   }
 
