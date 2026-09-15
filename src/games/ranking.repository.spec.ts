@@ -167,7 +167,12 @@ describe('RankingRepository', () => {
       // o avatar de quem ja tinha um -- sem erro, e sem nada dizendo por que a
       // foto sumiu.
       const { repository } = makeRepository();
-      await repository.upsert({ uid: 'a', nickname: 'A', xp: 10, badgeCount: 0 });
+      await repository.upsert({
+        uid: 'a',
+        nickname: 'A',
+        xp: 10,
+        badgeCount: 0,
+      });
       await repository.updateAvatar('a', 'https://s/b/avatars/a?v=1');
 
       await repository.upsert({
@@ -186,7 +191,12 @@ describe('RankingRepository', () => {
   describe('updateAvatar', () => {
     it('grava a URL na linha existente', async () => {
       const { repository } = makeRepository();
-      await repository.upsert({ uid: 'a', nickname: 'A', xp: 10, badgeCount: 0 });
+      await repository.upsert({
+        uid: 'a',
+        nickname: 'A',
+        xp: 10,
+        badgeCount: 0,
+      });
 
       await repository.updateAvatar('a', 'https://s/b/avatars/a?v=1');
 
@@ -196,7 +206,12 @@ describe('RankingRepository', () => {
 
     it('aceita null, que e a remocao da foto', async () => {
       const { repository } = makeRepository();
-      await repository.upsert({ uid: 'a', nickname: 'A', xp: 10, badgeCount: 0 });
+      await repository.upsert({
+        uid: 'a',
+        nickname: 'A',
+        xp: 10,
+        badgeCount: 0,
+      });
       await repository.updateAvatar('a', 'https://s/b/avatars/a?v=1');
 
       await repository.updateAvatar('a', null);

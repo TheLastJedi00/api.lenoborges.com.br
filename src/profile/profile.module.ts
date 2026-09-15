@@ -11,6 +11,7 @@ import { WatchedVideoModule } from '../track/watched-video.module';
 import { MembersController } from './members.controller';
 import { GamesDataModule } from '../games/games-data.module';
 import { TrainingDataModule } from '../training/training-data.module';
+import { StorageModule } from '../storage/storage.module';
 
 /**
  * O `forwardRef` no `AuthModule` e a spec 013 chegando: as tres operacoes de
@@ -59,6 +60,12 @@ import { TrainingDataModule } from '../training/training-data.module';
     // fecharia o ciclo de arquivos que derruba o boot sem nenhum teste unitario
     // notar. O TrainingDataModule nao importa nada e corta a volta na raiz.
     TrainingDataModule,
+    // **E o setimo que NAO virou ciclo, e pelo motivo mais simples de todos**
+    // (spec 027): o StorageModule nao importa nada. Trocar a foto do perfil
+    // escreve no bucket, e quem sabe fazer isso e o StorageService. Pendura-lo no
+    // modulo de quem usa, ou fazer o StorageModule importar este de volta,
+    // repetiria o erro que derrubou o boot na spec 019.
+    StorageModule,
   ],
   controllers: [ProfileController, MembersController],
   providers: [ProfileRepository, ProfileService, NicknameRepository],
