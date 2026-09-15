@@ -596,12 +596,14 @@ describe('ProfileService', () => {
      * dia em que alguem acrescentar `phone` ao perfil e a um mapeador
      * compartilhado, e este teste que fica vermelho.
      */
-    it('teste-trava: a resposta tem exatamente sete campos', async () => {
+    it('teste-trava: a resposta tem exatamente oito campos', async () => {
       repository.findById.mockResolvedValue({ found: true, entry: membro });
 
       const cartao = await service.findPublicMember('uid-2');
 
       expect(Object.keys(cartao).sort()).toEqual([
+        'avatarUrl',
+
         'bio',
         'grade',
         'id',
@@ -610,6 +612,28 @@ describe('ProfileService', () => {
         'name',
         'xp',
       ]);
+    });
+
+    it('a foto aparece no cartao mesmo com as redes escondidas', async () => {
+      // **Decisao da spec 027, e o oposto do que a simetria sugeriria.** O
+      // interruptor governa vinculo a conta de fora; a foto ja esta no placar, que
+      // e tela aberta a toda a liga. Esconder no cartao o que o ranking mostra
+      // tres linhas acima nao protege nada -- so faz a mesma pessoa aparecer com
+      // foto numa tela e sem foto na outra.
+      repository.findById.mockResolvedValue({
+        found: true,
+        entry: {
+          ...membro,
+          socialLinksPublic: false,
+          avatarUrl: 'https://s/b/avatars/uid-2?v=1',
+        },
+      });
+
+      const cartao = await service.findPublicMember('uid-2');
+
+      expect(cartao.linkedin).toBeNull();
+      expect(cartao.instagram).toBeNull();
+      expect(cartao.avatarUrl).toBe('https://s/b/avatars/uid-2?v=1');
     });
 
     it('teste-trava: o nickname nao entra no cartao publico', async () => {
@@ -628,7 +652,7 @@ describe('ProfileService', () => {
       )) as unknown as Record<string, unknown>;
 
       expect(cartao.nickname).toBeUndefined();
-      expect(Object.keys(cartao)).toHaveLength(7);
+      expect(Object.keys(cartao)).toHaveLength(8);
     });
 
     it('teste-trava: nao vaza telefone, tier nem preferencia de e-mail', async () => {

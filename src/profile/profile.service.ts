@@ -199,6 +199,10 @@ export class ProfileService {
       xp: member.xp,
       linkedin: showLinks ? member.linkedin : null,
       instagram: showLinks ? member.instagram : null,
+      // **Sem `showLinks` aqui, e isso e decisao** (spec 027): a foto ja esta no
+      // placar, que e tela aberta, e o interruptor das redes governa vinculo a
+      // conta de fora -- nao a foto que a pessoa escolheu para este produto.
+      avatarUrl: member.avatarUrl,
     };
   }
 
