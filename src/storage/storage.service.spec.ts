@@ -17,18 +17,21 @@ function fakeBucket() {
 
   const file = (path: string) => ({
     save: jest.fn(
-      async (buffer: Buffer, opts: { contentType: string }): Promise<void> => {
+      (buffer: Buffer, opts: { contentType: string }): Promise<void> => {
         saved.set(path, { buffer, contentType: opts.contentType });
+        return Promise.resolve();
       },
     ),
-    makePublic: jest.fn(async (): Promise<void> => {
+    makePublic: jest.fn((): Promise<void> => {
       publicados.add(path);
+      return Promise.resolve();
     }),
-    delete: jest.fn(async (): Promise<void> => {
+    delete: jest.fn((): Promise<void> => {
       if (erroAoApagar) {
-        throw erroAoApagar;
+        return Promise.reject(erroAoApagar);
       }
       apagados.push(path);
+      return Promise.resolve();
     }),
   });
 
@@ -88,9 +91,7 @@ describe('StorageService', () => {
     it('nao devolve a URL quando a escrita falha', async () => {
       const fake = fakeBucket();
       fake.bucket.file = jest.fn(() => ({
-        save: jest.fn(async () => {
-          throw new Error('bucket fora do ar');
-        }),
+        save: jest.fn(() => Promise.reject(new Error('bucket fora do ar'))),
         makePublic: jest.fn(),
         delete: jest.fn(),
       })) as unknown as typeof fake.bucket.file;
@@ -133,7 +134,9 @@ describe('StorageService', () => {
       );
       const service = build(fake);
 
-      await expect(service.remove('avatars/uid-1')).rejects.toThrow('Forbidden');
+      await expect(service.remove('avatars/uid-1')).rejects.toThrow(
+        'Forbidden',
+      );
     });
   });
 

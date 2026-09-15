@@ -1,0 +1,39 @@
+rules_version = '2';
+
+// Nega tudo, de proposito -- a mesma decisao e a mesma razao do `firestore.rules`
+// (spec 027, decisao 1).
+//
+// Quem escreve neste bucket e so a API, sempre pelo Admin SDK, que ignora estas
+// regras por ser credencial de administrador. **Nao existe caminho legitimo de
+// cliente falando direto com o Storage neste produto**: o front manda o arquivo
+// para `POST /me/avatar` ou `POST /trainings/:id/result-image` em multipart, e o
+// SDK web do Firebase nao esta no bundle dele.
+//
+// Essa ausencia e uma decisao caminhada, nao um acidente: a spec 005 decidiu que
+// o front nunca fala com o provedor de auth, e a spec 020 manteve isso ao preco de
+// tres rotas publicas nesta API para tratar o `oobCode`, quando instalar o SDK
+// web teria sido menos codigo. Uma foto de perfil nao e motivo para reabrir a
+// porta que aquela spec pagou para fechar.
+//
+// A superficie que isto fecha e o SDK cliente do Storage, que fala com o Google a
+// partir de qualquer navegador que tenha a Web API Key -- e ela e publica por
+// desenho. Sem estas regras, o bucket aceita upload de qualquer pessoa
+// autenticada, em qualquer caminho, e o produto passa a hospedar o que
+// aparecer.
+//
+// **A leitura publica das fotos nao vem daqui, e por isso negar leitura tambem
+// nao as quebra.** Cada objeto e liberado individualmente pelo `makePublic()` do
+// `StorageService`, que serve pelo `storage.googleapis.com`; estas regras valem
+// para o caminho autenticado do SDK cliente, que ninguem usa. O que fica legivel e
+// o objeto que a API escreveu, e nao todo caminho que exista ou venha a existir.
+//
+// Se um dia o cliente precisar escrever direto, a regra correta e abrir aquele
+// caminho especifico com a condicao de dono (`request.auth.uid == uid`), nunca
+// afrouxar este catch-all.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
