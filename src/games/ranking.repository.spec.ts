@@ -160,6 +160,26 @@ describe('RankingRepository', () => {
       expect(entry!.badgeCount).toBe(2);
     });
 
+    it('teste-trava: quem ja tem foto entra no placar COM ela', async () => {
+      // **Defeito real, achado ao rodar contra o dev-liga-dev.** Quem poe a foto
+      // antes de escolher a gamertag nao tem linha no placar, entao preservar
+      // "a foto da linha atual" preservava nada: a pessoa entrava no ranking sem
+      // foto e so aparecia na proxima troca. Quem chama ja leu o perfil -- a foto
+      // vem pela mesma carona do xp e do badgeCount.
+      const { repository } = makeRepository();
+
+      await repository.upsert({
+        uid: 'a',
+        nickname: 'A',
+        xp: 40,
+        badgeCount: 1,
+        avatarUrl: 'https://s/b/avatars/a?v=1',
+      });
+
+      const { entry } = await repository.findByUid('a');
+      expect(entry!.avatarUrl).toBe('https://s/b/avatars/a?v=1');
+    });
+
     it('teste-trava: nao apaga a foto ao somar XP', async () => {
       // **Mesma armadilha do previousPosition acima, e o mesmo custo** (spec 027).
       // Quem chama o upsert e a escolha da gamertag e o ganho de XP, e nenhum dos

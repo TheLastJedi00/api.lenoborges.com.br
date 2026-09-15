@@ -97,6 +97,19 @@ export class RankingRepository {
     nickname: string;
     xp: number;
     badgeCount: number;
+    /**
+     * A foto que o membro **ja tem no perfil** (spec 027).
+     *
+     * **Vem de quem chama, e nao da linha do placar**, e a diferenca foi um defeito
+     * real: quem poe a foto antes de escolher a gamertag nao tem linha aqui, entao
+     * ler `current.entry?.avatarUrl` devolvia nulo e a pessoa entrava no placar
+     * sem foto -- ate a proxima troca. Quem chama o `upsert` ja leu o perfil para
+     * pegar `xp` e `badgeCount`; a foto vem pela mesma carona.
+     *
+     * Ausente mantem o que estiver gravado, que e o caso de quem chama por ganho de
+     * XP e nao sabe da foto.
+     */
+    avatarUrl?: string | null;
   }): Promise<RankingEntry> {
     const current = await this.findByUid(entry.uid);
 
@@ -105,13 +118,16 @@ export class RankingRepository {
       previousPosition: current.entry?.previousPosition ?? null,
       currentPosition: current.entry?.currentPosition ?? null,
       positionUpdatedAt: current.entry?.positionUpdatedAt ?? null,
-      // **A foto entra na lista de preservados, e nao no `entry` que chega**
-      // (spec 027). Quem chama o `upsert` e a escolha da gamertag e o ganho
-      // de XP, e nenhum dos dois sabe da foto: sem esta linha, ganhar XP
-      // sobrescreveria com `undefined` o avatar de quem ja tinha um, e o
-      // membro perderia a foto por ter assistido um video. E exatamente a
-      // armadilha que o comentario deste metodo descreve para as posicoes.
-      avatarUrl: current.entry?.avatarUrl ?? null,
+      // **Quem chama manda a foto quando sabe dela; quem nao sabe preserva a
+      // gravada** (spec 027). As duas metades importam:
+      //
+      // - sem o `entry.avatarUrl`, quem poe a foto ANTES de escolher a gamertag
+      //   entra no placar sem foto: nao ha linha para preservar, e o nulo ganha.
+      //   Foi o defeito que a execucao contra o dev-liga-dev pegou.
+      // - sem o fallback para o documento atual, ganhar XP -- que chama daqui sem
+      //   saber da foto -- apagaria o avatar de quem ja tinha um. E a mesma
+      //   armadilha que o comentario deste metodo descreve para as posicoes.
+      avatarUrl: entry.avatarUrl ?? current.entry?.avatarUrl ?? null,
       updatedAt: new Date(),
     };
 

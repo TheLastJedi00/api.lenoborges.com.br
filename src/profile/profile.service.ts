@@ -279,6 +279,9 @@ export class ProfileService {
         nickname: dto.nickname,
         xp: entry.xp,
         badgeCount: badgeCountOf(entry.grade),
+        // A foto vai junto (spec 027): quem ja trocou o avatar antes de escolher a
+        // gamertag tem que entrar no placar COM ela. O perfil ja esta em maos aqui.
+        avatarUrl: entry.avatarUrl,
       });
     } catch (error) {
       this.logger.error(
