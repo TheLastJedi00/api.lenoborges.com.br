@@ -15,6 +15,8 @@ describe('ProfileController', () => {
     changeEmail: jest.Mock;
     changePassword: jest.Mock;
     setEmailPreference: jest.Mock;
+    setAvatar: jest.Mock;
+    removeAvatar: jest.Mock;
   };
   let cookieService: { clearRefreshToken: jest.Mock };
   let legalService: { accept: jest.Mock };
@@ -32,6 +34,8 @@ describe('ProfileController', () => {
       changeEmail: jest.fn(),
       changePassword: jest.fn(),
       setEmailPreference: jest.fn(),
+      setAvatar: jest.fn(),
+      removeAvatar: jest.fn(),
     };
 
     cookieService = { clearRefreshToken: jest.fn() };
@@ -110,6 +114,28 @@ describe('ProfileController', () => {
     expect(service.setEmailPreference).toHaveBeenCalledWith('user-123', {
       receber: false,
     });
+  });
+
+  it('POST /me/avatar devolve a URL que o service persistiu', async () => {
+    // A rota responde com a URL porque ela **ja esta gravada**: o front pinta a
+    // foto na hora, sem um GET /me novo. Uma rota que so subisse o arquivo
+    // exigiria um segundo pedido para gravar, e a foto ficaria sem dono no bucket
+    // quando o segundo falhasse.
+    const file = { buffer: Buffer.from([1]) } as Express.Multer.File;
+    service.setAvatar.mockResolvedValue('https://s/b/avatars/user-123?v=1');
+
+    const result = await controller.setAvatar(mockUser, file);
+
+    expect(result).toEqual({ avatarUrl: 'https://s/b/avatars/user-123?v=1' });
+    expect(service.setAvatar).toHaveBeenCalledWith('user-123', file);
+  });
+
+  it('DELETE /me/avatar repassa para o service', async () => {
+    service.removeAvatar.mockResolvedValue(undefined);
+
+    await controller.removeAvatar(mockUser);
+
+    expect(service.removeAvatar).toHaveBeenCalledWith('user-123');
   });
 
   it('should call profileService.updateProfile on PATCH /me/profile', async () => {

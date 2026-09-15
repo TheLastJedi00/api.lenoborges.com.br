@@ -85,6 +85,17 @@ export class ProfileDto {
   instagram: string | null;
 
   @ApiProperty({
+    example:
+      'https://storage.googleapis.com/dev-liga-dev.firebasestorage.app/avatars/uid-1?v=1757000000000',
+    nullable: true,
+    description:
+      'Foto de perfil, ou nulo. A URL e cunhada por esta API e carrega um ?v= ' +
+      'que muda a cada troca -- o caminho no bucket e fixo, e sem o parametro o ' +
+      'navegador serviria a foto anterior do cache',
+  })
+  avatarUrl: string | null;
+
+  @ApiProperty({
     example: false,
     description:
       'Se este membro saiu da lista de e-mails. O front desenha o interruptor ' +

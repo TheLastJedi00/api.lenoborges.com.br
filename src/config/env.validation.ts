@@ -1,4 +1,4 @@
-import { plainToInstance } from 'class-transformer';
+import { plainToInstance, Transform } from 'class-transformer';
 import {
   IsIn,
   IsNotEmpty,
@@ -51,6 +51,36 @@ class EnvironmentVariables {
   @IsString()
   @IsNotEmpty()
   FIREBASE_WEB_API_KEY: string;
+
+  // Bucket do Cloud Storage onde moram o avatar do perfil e a foto de resultado
+  // da Arena (spec 027, decisao 4). Formato `<projeto>.firebasestorage.app`.
+  //
+  // **Obrigatoria, e nao opcional com padrao.** O padrao obvio seria derivar do
+  // projectId da chave de servico, e e justamente o que nao se quer aqui: uma
+  // derivacao errada acerta o boot e erra o bucket, e o sintoma chega como
+  // "arquivo nao encontrado" na primeira troca de foto, longe do deploy que a
+  // causou. Exigir a variavel troca isso por uma linha no boot.
+  //
+  // **E uma por projeto**, como tudo que e de console neste repositorio: a
+  // action URL, os indices compostos e o SMTP ja ensinaram que configurar so um
+  // dos dois e o defeito que nenhum teste pega -- funciona em preview e quebra
+  // em producao.
+  //
+  // **O `gs://` e aparado aqui, e isso nao e conveniencia.** O `.env` deste
+  // repositorio carregava desde a migracao uma FIREBASE_BUCKET_URL no formato
+  // `gs://<projeto>.firebasestorage.app`, que nenhum codigo lia; o Admin SDK
+  // quer o nome do bucket pelado. Quem copiar o valor antigo para a variavel
+  // nova acerta o boot e erra o bucket, e o erro chega como "arquivo nao
+  // encontrado" na primeira troca de foto. Aparar aqui e mais barato que a
+  // mensagem de erro que explicaria isso depois.
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string'
+      ? value.replace(/^gs:\/\//, '').replace(/\/+$/, '')
+      : value,
+  )
+  @IsString()
+  @IsNotEmpty()
+  FIREBASE_STORAGE_BUCKET: string;
 
   // Cookie de refresh token
   @IsIn(['true', 'false'])

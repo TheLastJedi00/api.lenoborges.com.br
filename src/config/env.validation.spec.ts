@@ -15,6 +15,7 @@ const baseEnv = {
       '-----BEGIN PRIVATE KEY-----\\nMIIEv\\n-----END PRIVATE KEY-----\\n',
   }),
   FIREBASE_WEB_API_KEY: 'web-api-key',
+  FIREBASE_STORAGE_BUCKET: 'eduleno-test.firebasestorage.app',
   EMAIL_FROM: 'Liga Dev <comunidade@lenoborges.com.br>',
   EMAIL_REPLY_TO: 'leno@lenoborges.com.br',
   EMAIL_UNSUBSCRIBE_SECRET: 'segredo-de-teste',
@@ -29,6 +30,36 @@ describe('validate (env)', () => {
     const { FIREBASE_WEB_API_KEY, ...semWebApiKey } = baseEnv;
     expect(FIREBASE_WEB_API_KEY).toBeDefined();
     expect(() => validate(semWebApiKey)).toThrow();
+  });
+
+  it('falha quando falta o bucket do Storage', () => {
+    // Obrigatoria de proposito (spec 027, decisao 4): derivar do projectId
+    // acertaria o boot e erraria o bucket, e o sintoma chegaria como "arquivo
+    // nao encontrado" na primeira troca de foto, longe do deploy que causou.
+    const { FIREBASE_STORAGE_BUCKET, ...semBucket } = baseEnv;
+    expect(FIREBASE_STORAGE_BUCKET).toBeDefined();
+    expect(() => validate(semBucket)).toThrow();
+  });
+
+  it('apara o gs:// e a barra final do bucket', () => {
+    // O .env carregava FIREBASE_BUCKET_URL="gs://projeto.firebasestorage.app"
+    // desde a migracao, sem leitor. Quem copiar aquele valor para a variavel
+    // nova acerta o boot e erra o bucket, e o erro so aparece na primeira troca
+    // de foto -- longe da causa.
+    const comEsquema = validate({
+      ...baseEnv,
+      FIREBASE_STORAGE_BUCKET: 'gs://eduleno-test.firebasestorage.app/',
+    });
+    expect(comEsquema.FIREBASE_STORAGE_BUCKET).toBe(
+      'eduleno-test.firebasestorage.app',
+    );
+  });
+
+  it('deixa o nome pelado do bucket intacto', () => {
+    const pelado = validate({ ...baseEnv });
+    expect(pelado.FIREBASE_STORAGE_BUCKET).toBe(
+      'eduleno-test.firebasestorage.app',
+    );
   });
 
   it('falha no boot quando a chave de servico esta malformada', () => {

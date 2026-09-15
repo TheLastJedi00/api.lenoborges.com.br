@@ -97,6 +97,19 @@ export class RankingRepository {
     nickname: string;
     xp: number;
     badgeCount: number;
+    /**
+     * A foto que o membro **ja tem no perfil** (spec 027).
+     *
+     * **Vem de quem chama, e nao da linha do placar**, e a diferenca foi um defeito
+     * real: quem poe a foto antes de escolher a gamertag nao tem linha aqui, entao
+     * ler `current.entry?.avatarUrl` devolvia nulo e a pessoa entrava no placar
+     * sem foto -- ate a proxima troca. Quem chama o `upsert` ja leu o perfil para
+     * pegar `xp` e `badgeCount`; a foto vem pela mesma carona.
+     *
+     * Ausente mantem o que estiver gravado, que e o caso de quem chama por ganho de
+     * XP e nao sabe da foto.
+     */
+    avatarUrl?: string | null;
   }): Promise<RankingEntry> {
     const current = await this.findByUid(entry.uid);
 
@@ -105,12 +118,49 @@ export class RankingRepository {
       previousPosition: current.entry?.previousPosition ?? null,
       currentPosition: current.entry?.currentPosition ?? null,
       positionUpdatedAt: current.entry?.positionUpdatedAt ?? null,
+      // **Quem chama manda a foto quando sabe dela; quem nao sabe preserva a
+      // gravada** (spec 027). As duas metades importam:
+      //
+      // - sem o `entry.avatarUrl`, quem poe a foto ANTES de escolher a gamertag
+      //   entra no placar sem foto: nao ha linha para preservar, e o nulo ganha.
+      //   Foi o defeito que a execucao contra o dev-liga-dev pegou.
+      // - sem o fallback para o documento atual, ganhar XP -- que chama daqui sem
+      //   saber da foto -- apagaria o avatar de quem ja tinha um. E a mesma
+      //   armadilha que o comentario deste metodo descreve para as posicoes.
+      avatarUrl: entry.avatarUrl ?? current.entry?.avatarUrl ?? null,
       updatedAt: new Date(),
     };
 
     await this.collection.doc(entry.uid).set(next);
 
     return next;
+  }
+
+  /**
+   * Grava a foto do membro na linha do placar (spec 027).
+   *
+   * **Atualiza, nunca cria, e essa e a regra que importa aqui** -- a mesma do
+   * `addXpToBatch` logo abaixo, pela mesma razao. A linha do placar nasce
+   * quando a pessoa escolhe a gamertag (spec 022, decisao 20), e nao no primeiro
+   * XP: criar aqui daria ao ranking uma linha em branco de quem nunca escolheu
+   * nome, exatamente quem aquela decisao mantem fora. Quem trocou a foto antes de
+   * escolher a gamertag entra no placar depois, pelo `upsert`, que ja le a
+   * foto do documento do perfil.
+   *
+   * **Quem nao tem linha nao e erro.** Trocar a foto e uma acao do perfil, e o
+   * placar e um efeito dela: recusar a troca porque a pessoa ainda nao joga seria
+   * deixar o menos importante mandar no mais importante.
+   */
+  async updateAvatar(uid: string, avatarUrl: string | null): Promise<void> {
+    const current = await this.findByUid(uid);
+    if (!current.found) {
+      return;
+    }
+
+    await this.docRef(uid).update({
+      avatarUrl,
+      updatedAt: Timestamp.now(),
+    });
   }
 
   /**

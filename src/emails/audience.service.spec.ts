@@ -22,6 +22,7 @@ function perfil(overrides: Partial<Profile> = {}): Profile {
     tier: 'dev-tier',
     linkedin: null,
     instagram: null,
+    avatarUrl: null,
     emailOptOut: false,
     emailOptOutReason: null,
     emailOptOutAt: null,

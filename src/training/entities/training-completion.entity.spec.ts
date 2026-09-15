@@ -37,6 +37,8 @@ describe('trainingCompletionConverter', () => {
       trainingId: 'trn-001',
       xpAwarded: 28,
       hintsUsed: 2,
+      mainCode: null,
+      resultImageUrl: null,
       completedAt: AGORA,
     };
 
@@ -54,6 +56,8 @@ describe('trainingCompletionConverter', () => {
       trainingId: 'trn-001',
       xpAwarded: 30,
       hintsUsed: 0,
+      mainCode: null,
+      resultImageUrl: null,
       completedAt: AGORA,
     });
 
@@ -74,6 +78,8 @@ describe('trainingCompletionConverter', () => {
       trainingId: 'trn-001',
       xpAwarded: 80,
       hintsUsed: 0,
+      mainCode: null,
+      resultImageUrl: null,
       completedAt: AGORA,
     });
 
@@ -99,6 +105,8 @@ describe('trainingCompletionConverter', () => {
       trainingId: 'trn-001',
       xpAwarded: 27,
       hintsUsed: 3,
+      mainCode: null,
+      resultImageUrl: null,
       completedAt: AGORA,
     });
 
@@ -137,5 +145,45 @@ describe('trainingCompletionConverter', () => {
 
     expect(lido.hintsUsed).toBe(0);
     expect(Number.isNaN(lido.hintsUsed)).toBe(false);
+  });
+
+  /**
+   * Mesma historia na spec 027: toda conclusao anterior a ela e um documento sem
+   * `mainCode` e sem `resultImageUrl`, e `null` e a verdade
+   * sobre ela -- naquele dia nao havia o que enviar.
+   */
+  it('le a submissao como nula numa conclusao anterior a spec 027', () => {
+    const documento = {
+      uid: 'uid-123',
+      trainingId: 'trn-001',
+      xpAwarded: 30,
+      hintsUsed: 2,
+      completedAt: Timestamp.fromDate(AGORA),
+    };
+
+    const lido = trainingCompletionConverter.fromFirestore(snapshot(documento));
+
+    expect(lido.mainCode).toBeNull();
+    expect(lido.resultImageUrl).toBeNull();
+  });
+
+  it('guarda a submissao como ela chegou', () => {
+    const gravado = trainingCompletionConverter.toFirestore({
+      id: 'uid-123__trn-001',
+      uid: 'uid-123',
+      trainingId: 'trn-001',
+      xpAwarded: 30,
+      hintsUsed: 0,
+      mainCode: 'public static void main(String[] args) {}',
+      resultImageUrl: 'https://s/b/trainings/uid-123/trn-001?v=1',
+      completedAt: AGORA,
+    });
+
+    const lido = trainingCompletionConverter.fromFirestore(snapshot(gravado));
+
+    expect(lido.mainCode).toBe('public static void main(String[] args) {}');
+    expect(lido.resultImageUrl).toBe(
+      'https://s/b/trainings/uid-123/trn-001?v=1',
+    );
   });
 });

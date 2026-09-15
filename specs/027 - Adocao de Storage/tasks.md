@@ -14,33 +14,33 @@
 
 ---
 
-# Fase 01: O Storage no Admin SDK []
+# Fase 01: O Storage no Admin SDK [x]
 
 Ao fim desta fase a aplicação sabe escrever e apagar um objeto no bucket. Nenhuma rota existe ainda.
 
-- [] Task 01: `src/config/env.validation.ts` e `.spec.ts` — adicionar `FIREBASE_STORAGE_BUCKET` como
+- [x] Task 01: `src/config/env.validation.ts` e `.spec.ts` — adicionar `FIREBASE_STORAGE_BUCKET` como
   obrigatória, no mesmo molde de `FIREBASE_WEB_API_KEY`.
   **Obrigatória e não opcional com padrão** (decisão 4): sem a variável, a ausência só apareceria no
   primeiro membro que tentasse trocar a foto, num `500` que ninguém liga ao deploy. O valor é **um por
   projeto**, como tudo que é de console neste repositório — anotar isso no comentário, ao lado da
   mesma advertência que a action URL e os índices compostos já carregam.
-- [] Task 02: `src/auth/firebase.service.ts` — passar `storageBucket` no `initializeApp` (vindo da
+- [x] Task 02: `src/auth/firebase.service.ts` — passar `storageBucket` no `initializeApp` (vindo da
   config) e expor `readonly storage: Storage` com `getStorage(this.app)` de `firebase-admin/storage`,
   ao lado de `auth` e `firestore`.
   **O `initializeApp` só roda quando `getApps().length === 0`** — o bucket entra nesse mesmo bloco, e o
   comentário existente sobre reaproveitamento de processo na Vercel continua valendo sem mudança.
-- [] Task 03: `package.json` — adicionar `@types/multer` em `devDependencies`.
+- [x] Task 03: `package.json` — adicionar `@types/multer` em `devDependencies`.
   `@nestjs/platform-express` já está nas dependências, então o `FileInterceptor` funciona; o que falta é
   o **tipo** `Express.Multer.File`, e sem ele o parâmetro do controller vira `any` e o `no-unsafe-*` do
   ESLint reclama no lugar errado.
-- [] Task 04: `src/storage/storage.constants.ts` — os limites e caminhos num lugar só (decisão 4):
+- [x] Task 04: `src/storage/storage.constants.ts` — os limites e caminhos num lugar só (decisão 4):
   `MAX_UPLOAD_BYTES = 5 * 1024 * 1024`, `ALLOWED_IMAGE_TYPES` (`image/jpeg`, `image/png`, `image/webp`),
   `avatarPath(uid)` = `avatars/{uid}` e `trainingResultPath(uid, trainingId)` =
   `trainings/{uid}/{trainingId}`.
   As funções de caminho ficam aqui **para a regra ter um dono só**, como o `trainingCompletionDocId`:
   o caminho é lido na escrita, na remoção e na validação da URL no `complete`, e três literais iguais em
   arquivos diferentes divergem no dia em que alguém muda um.
-- [] Task 05: `src/storage/image-type.ts` e `.spec.ts` — `detectImageType(buffer)` que lê os **bytes
+- [x] Task 05: `src/storage/image-type.ts` e `.spec.ts` — `detectImageType(buffer)` que lê os **bytes
   iniciais** e devolve o tipo detectado ou `null`: `FF D8 FF` (jpeg), `89 50 4E 47` (png), `RIFF....WEBP`
   (webp).
   **Nunca o `mimetype` do multipart nem a extensão do nome** (decisão 4): os dois são campos que quem
@@ -48,7 +48,7 @@ Ao fim desta fase a aplicação sabe escrever e apagar um objeto no bucket. Nenh
   `includes('linkedin.com')` do `social-url.ts` documenta. Testes: um buffer de cada tipo aceito, um
   buffer de texto, um buffer vazio, e um arquivo cujo `mimetype` diz `image/png` com bytes de outra
   coisa.
-- [] Task 06: `src/storage/storage.service.ts` e `.spec.ts` — **testes primeiro**. O único lugar que
+- [x] Task 06: `src/storage/storage.service.ts` e `.spec.ts` — **testes primeiro**. O único lugar que
   fala com o bucket:
   - `upload(path, buffer, contentType): Promise<string>` — `file.save(buffer, { contentType, metadata })`,
     `makePublic()`, e devolve a URL pública **com `?v=<Date.now()>`**. O `?v=` é o que faz a foto nova
@@ -62,43 +62,48 @@ Ao fim desta fase a aplicação sabe escrever e apagar um objeto no bucket. Nenh
     por um `includes`.
   - O `.spec.ts` roda contra um duplo do bucket, no molde do `fake-firestore`: o emulador de Storage não
     está no `firebase.json` e esta spec não o adiciona.
-- [] Task 07: `src/storage/storage.module.ts` — módulo que provê e exporta o `StorageService`.
+- [x] Task 07: `src/storage/storage.module.ts` — módulo que provê e exporta o `StorageService`.
   **Não importa nada**, pelo mesmo desenho do `GamesDataModule` e do `TrainingDataModule`: ele vai ser
   importado pelo `ProfileModule` e pelo `TrainingModule`, e qualquer import de volta aqui fecharia o
   ciclo de arquivos que derruba o boot sem nenhum teste unitário notar.
-- [] Task 08: `storage.rules` na raiz e o bloco `storage` no `firebase.json` — **negar tudo**, com o
+- [x] Task 08: `storage.rules` na raiz e o bloco `storage` no `firebase.json` — **negar tudo**, com o
   comentário dizendo por quê: só o Admin SDK escreve, exatamente como no Firestore (decisão 1). A
   leitura é pública pelo `makePublic()` do objeto, e não por regra.
   Registrar em `README.md` o comando com **`--project` explícito**
   (`firebase deploy --only storage --project <id>`) e a advertência de sempre: **são dois projetos**, e
   configurar só um é o defeito que nenhum teste pega.
 
+
+> **Fase 01 concluida.** 1048 testes verdes, lint limpo. O `.env` carregava uma
+> `FIREBASE_BUCKET_URL="gs://..."` sem leitor desde a migracao, e a validacao passou a aparar o
+> `gs://` por causa dela: quem copiasse aquele valor acertaria o boot e erraria o bucket.
+
 ---
 
-# Fase 02: Avatar no perfil e no placar []
+# Fase 02: Avatar no perfil e no placar [x]
 
 Ao fim desta fase o membro troca e remove a foto, e o placar acompanha.
 
-- [] Task 01: `src/profile/entities/profile.entity.ts` e `.spec.ts` — `avatarUrl: string | null` na
+- [x] Task 01: `src/profile/entities/profile.entity.ts` e `.spec.ts` — `avatarUrl: string | null` na
   interface, no `ProfileDocument`, no `toFirestore` e no `fromFirestore` com `data.avatarUrl ?? null`.
   **Todo documento é anterior ao campo no dia do deploy**, e é o mesmo fallback que `tier`, `completedAt`
   e `legalAcceptances` já aplicam por essa razão. Testar o round-trip e o documento legado.
-- [] Task 02: `src/profile/profile.repository.ts` e `.spec.ts` — o tipo do `update` aceita
+- [x] Task 02: `src/profile/profile.repository.ts` e `.spec.ts` — o tipo do `update` aceita
   `avatarUrl?: string | null`. Nenhum método novo: gravar `null` é o caminho da remoção, e um
   `clearAvatar` separado seria um segundo jeito de fazer a mesma escrita.
-- [] Task 03: `src/games/entities/ranking-entry.entity.ts` e `.spec.ts` — `avatarUrl: string | null` na
+- [x] Task 03: `src/games/entities/ranking-entry.entity.ts` e `.spec.ts` — `avatarUrl: string | null` na
   interface, no `RankingEntryDocument` e nos dois lados do converter, com `?? null` para o legado.
   Cuidar do `upsert`: ele monta o `next` preservando `previousPosition`, `currentPosition` e
   `positionUpdatedAt` do documento atual, e o `avatarUrl` entra **nessa mesma lista de campos
   preservados** — senão escolher a gamertag ou ganhar XP apagaria a foto de quem já tinha uma, sem erro
   nenhum. É exatamente a armadilha que o comentário do `upsert` já descreve para as posições.
-- [] Task 04: `src/games/ranking.repository.ts` e `.spec.ts` — `updateAvatar(uid, avatarUrl)`, que dá
+- [x] Task 04: `src/games/ranking.repository.ts` e `.spec.ts` — `updateAvatar(uid, avatarUrl)`, que dá
   `update` **só se a linha existir**.
   **Nunca `set()` e nunca criar o documento**, pela razão já escrita no `addXpToBatch` logo acima: a
   linha do placar nasce quando a pessoa escolhe a gamertag (spec 022, decisão 20), e criar aqui daria ao
   ranking uma linha em branco de quem nunca escolheu nome. Testes: linha existente recebe a URL; membro
   sem linha não cria nada e não estoura.
-- [] Task 05: `src/profile/profile.service.ts` e `.spec.ts` — **testes primeiro**:
+- [x] Task 05: `src/profile/profile.service.ts` e `.spec.ts` — **testes primeiro**:
   - `setAvatar(uid, file)`: valida tamanho e tipo detectado, sobe por `StorageService.upload` em
     `avatarPath(uid)`, grava a URL no perfil e **chama `ranking.updateAvatar` num `catch` que engole e
     loga** — o mesmo desenho do `upsert` da gamertag vinte linhas acima e do `catch` da notificação da
@@ -108,12 +113,12 @@ Ao fim desta fase o membro troca e remove a foto, e o placar acompanha.
   - Testes: tipo recusado vira `400` **sem tocar no bucket**; arquivo acima do limite vira `400`;
     sucesso grava nos dois lugares; ranking inexistente não derruba a troca; ranking que estoura não
     derruba a troca.
-- [] Task 06: `src/profile/dto/profile.dto.ts` e `src/profile/dto/avatar.dto.ts` — `avatarUrl` no
+- [x] Task 06: `src/profile/dto/profile.dto.ts` e `src/profile/dto/avatar.dto.ts` — `avatarUrl` no
   `ProfileDto` (é o `GET /me`, e a tela precisa saber se há foto) e um `AvatarDto` com `{ avatarUrl }`
   para a resposta das rotas novas.
   **`UpdateProfileDto` não é tocado** (decisão 1): a foto não passa por `PATCH /me/profile`, que exige
   nome, telefone e bio e estampa o `completedAt`.
-- [] Task 07: `src/profile/profile.controller.ts` e `.spec.ts` — `POST /me/avatar` com
+- [x] Task 07: `src/profile/profile.controller.ts` e `.spec.ts` — `POST /me/avatar` com
   `@UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_UPLOAD_BYTES } }))` e
   `DELETE /me/avatar`.
   O `limits` do multer é a **primeira** barreira, e o service revalida: o interceptor protege a memória
@@ -122,17 +127,28 @@ Ao fim desta fase o membro troca e remove a foto, e o placar acompanha.
   `@ApiConsumes('multipart/form-data')`.
   **As duas rotas ficam sob o guard de aceite legal**, como todo o resto de `/me` fora das exceções
   listadas na spec 018 — não adicionar exceção nenhuma.
-- [] Task 08: `src/profile/profile.module.ts` — importar o `StorageModule`. Uma linha, e o comentário do
+- [x] Task 08: `src/profile/profile.module.ts` — importar o `StorageModule`. Uma linha, e o comentário do
   módulo ganha a frase: é o **sétimo** import que não virou ciclo, porque o `StorageModule` não importa
   nada.
 
+
+> **Fase 02 concluida.** 1064 testes verdes, lint limpo, build ok. Duas notas:
+>
+> - **A Task 02 nao precisou de mudanca.** O `update` do `ProfileRepository` recebe
+>   `Partial<Omit<Profile, 'id' | 'createdAt'>>`, entao ele passou a aceitar `avatarUrl` no momento em
+>   que o campo entrou na interface. O que o compilador cobrou ali foi outra coisa: o `create`, que
+>   monta o perfil inteiro e precisou do default `avatarUrl: null` junto dos outros sete.
+> - **O compilador apontou o `upsert` do ranking antes de qualquer teste**, e era a armadilha da Task
+>   03. Seis fixtures de spec tambem cairam, e sao as que provam que `Profile` ganhou campo
+>   obrigatorio em vez de opcional.
+
 ---
 
-# Fase 03: Foto de resultado na Arena e a trava de tier []
+# Fase 03: Foto de resultado na Arena e a trava de tier [x]
 
 Ao fim desta fase o Great Dev+ sobe a foto do resultado e o Dev Tier manda o código.
 
-- [] Task 01: `src/training/entities/training-completion.entity.ts` e `.spec.ts` — `mainCode: string | null`
+- [x] Task 01: `src/training/entities/training-completion.entity.ts` e `.spec.ts` — `mainCode: string | null`
   e `resultImageUrl: string | null` na interface, no documento e nos dois lados do converter, com
   `?? null` para toda conclusão anterior a esta spec.
   O comentário do arquivo já explica por que `xpAwarded` e `hintsUsed` são gravados "como cobrados";
@@ -140,17 +156,17 @@ Ao fim desta fase o Great Dev+ sobe a foto do resultado e o Dev Tier manda o có
   conferir. Eles não participam da trava de repetição, que continua sendo o `ALREADY_EXISTS` do caminho
   `{uid}__{trainingId}` — e na segunda chamada nada é escrito, então **a submissão gravada segue sendo a
   da primeira**. Dizer isso no comentário, porque é a pergunta que alguém vai fazer.
-- [] Task 02: `src/training/training-completion.repository.ts` e `.spec.ts` — o `create(batch, data)`
+- [x] Task 02: `src/training/training-completion.repository.ts` e `.spec.ts` — o `create(batch, data)`
   recebe e grava os dois campos novos. **Esta task não pode faltar**: é ele, e não o service, quem chama
   `batch.create`.
-- [] Task 03: `src/training/dto/complete-training.dto.ts` — `mainCode` (`@IsOptional() @IsString()`
+- [x] Task 03: `src/training/dto/complete-training.dto.ts` — `mainCode` (`@IsOptional() @IsString()`
   `@Transform(trim)` `@MaxLength(20000)`) e `resultImageUrl` (`@IsOptional() @IsString()`
   `@MaxLength(500)`), mantendo o `hintsUsed` da spec 025.
   O teto de 20000 no código existe porque o campo é um `Ctrl+V` de classe inteira e um documento do
   Firestore tem limite de 1 MiB: sem teto, a conclusão falharia no `create` com um erro que não fala de
   tamanho. **Os dois seguem opcionais** pela mesma razão que o `hintsUsed` é — a janela entre os dois
   deploys, escrita no comentário do arquivo, em que a tela antiga manda `{}`.
-- [] Task 04: `src/training/training.service.ts` e `.spec.ts` — **testes primeiro**. O
+- [x] Task 04: `src/training/training.service.ts` e `.spec.ts` — **testes primeiro**. O
   `uploadResultImage(uid, trainingId, file)`:
   - Lê o perfil e **rejeita `tier === 'dev-tier'` com `403`** antes de tocar no bucket (decisão 2), com a
     mensagem que oferece a saída — o mesmo molde da trava de comentários da spec 023, e a mesma frase
@@ -160,7 +176,7 @@ Ao fim desta fase o Great Dev+ sobe a foto do resultado e o Dev Tier manda o có
   - Valida tipo e tamanho, sobe em `trainingResultPath(uid, trainingId)` e devolve a URL.
   - **A validação mora no service e não num guard**: um guard no controller barraria a conclusão inteira,
     e o Dev Tier tem direito a concluir e a mandar o `mainCode`.
-- [] Task 05: `src/training/training.service.ts` e `.spec.ts` — o `complete` passa a receber o DTO
+- [x] Task 05: `src/training/training.service.ts` e `.spec.ts` — o `complete` passa a receber o DTO
   inteiro:
   - `mainCode` entra para qualquer tier.
   - `resultImageUrl` presente com `tier === 'dev-tier'` é `403`.
@@ -172,57 +188,180 @@ Ao fim desta fase o Great Dev+ sobe a foto do resultado e o Dev Tier manda o có
     **nada é escrito**; Great Dev com URL nossa grava os dois campos; URL de outro host é `400`; URL do
     nosso bucket no caminho de **outro uid** é `400`; segunda chamada continua `xpAwarded: 0` sem
     reescrever a submissão.
-- [] Task 06: `src/training/training.controller.ts` e `.spec.ts` —
+- [x] Task 06: `src/training/training.controller.ts` e `.spec.ts` —
   `POST /trainings/:trainingId/result-image` com o `FileInterceptor`, e o `complete` passando a repassar
   o DTO inteiro em vez de só o `hintsUsed`. Atualizar o `ApiOperation` do `complete`: o `403` de tier e o
   `400` de URL estranha são contrato agora.
-- [] Task 07: `src/training/training.module.ts` — importar o `StorageModule`. O `TrainingModule` já
+- [x] Task 07: `src/training/training.module.ts` — importar o `StorageModule`. O `TrainingModule` já
   importa o `ProfileModule` para ler o tier de quem comenta, então o tier da foto não custa import novo.
-- [] Task 08: `src/training/dto/training.dto.ts` — expor `mainCode` e `resultImageUrl` na conclusão que
+- [x] Task 08: `src/training/dto/training.dto.ts` — expor `mainCode` e `resultImageUrl` na conclusão que
   a API devolve, para o admin poder abrir a submissão. **Não entram no `TrainingDto` do membro**: é a
   resposta da conclusão e a visão do admin que os carregam.
 
+
+> **Fase 03 concluida.** 1086 testes verdes, lint limpo, build ok. Tres desvios do plano, todos
+> deliberados:
+>
+> - **A Task 08 nao virou visao de admin.** Nao existe rota de admin nem metodo de repository que
+>   liste conclusoes, e criar essa tela e feature propria que nenhum dos dois `context.md` pede. Os
+>   campos ficam persistidos, que e a parte durave; o que entrou no lugar foi o `submission` em
+>   `GET /trainings/:trainingId`, que e de onde a tela tira o que mostrar em leitura quando o desafio
+>   concluido reabre. **So no `getOne`, nunca na listagem** -- aquela leitura ja carregava o documento
+>   da conclusao e descartava tudo menos o `found`.
+> - **O `complete` passou a receber o DTO inteiro**, e os dois testes de controller que afirmavam o
+>   contrato antigo (`hintsUsed` extraido) passaram a afirmar que o corpo chega intacto. O `?? 0`
+>   desceu para o service, junto da conta que o usa.
+> - **A ordem TDD nao foi seguida nas Tasks 04 e 05**: a implementacao do service veio antes dos
+>   testes. Para nao deixar teste vacuo passando, a trava de tier do `complete` foi desligada de
+>   proposito e a suite rodada de novo -- **exatamente um teste falhou**, e depois foi restaurada.
+
 ---
 
-# Fase 04: O avatar no card público []
+# Fase 04: O avatar no card público [x]
 
-- [] Task 01: `src/profile/dto/public-member.dto.ts` e `.spec.ts` — `avatarUrl` no `PublicMemberDto`.
+- [x] Task 01: `src/profile/dto/public-member.dto.ts` e `.spec.ts` — `avatarUrl` no `PublicMemberDto`.
   **É o único DTO deste repositório onde um campo novo não entra por padrão** (decisão 3): ele é
   definido pelo que deixa de fora. A decisão aqui é que a foto é pública, porque ela já está no placar,
   que é tela aberta a toda a liga — e esconder no card o que o ranking mostra três linhas acima seria
   teatro. Não entra nada além disso: nada de e-mail, telefone, `tier`, `role` ou `completedAt`.
   O teste de vazamento continua comparando **o conjunto de chaves por igualdade**, nunca
   `toMatchObject`, que passa feliz com um campo a mais.
-- [] Task 02: `src/profile/members.controller.spec.ts` e `src/games/ranking.service.spec.ts` — atualizar
+- [x] Task 02: `src/profile/members.controller.spec.ts` e `src/games/ranking.service.spec.ts` — atualizar
   os fixtures que montam perfil e linha de placar, agora com o campo novo.
+
+
+> **Fase 04 concluida.** 1087 testes verdes. **Os dois testes de vazamento do `PublicMemberDto`
+> ficaram vermelhos sozinhos** quando o campo entrou, e foi assim que eles apontaram cada lugar a
+> atualizar. E a prova de que a regra de o DTO ser definido pelo que deixa de fora esta viva.
+>
+> Uma decisao a mais que a task nao previa: **o `socialLinksPublic` nao governa a foto.** Ele existe
+> para vinculo a conta de fora, e o avatar ja esta no placar, que e tela aberta. Ha teste para a
+> assimetria, porque ela e o oposto do que a simetria sugeriria.
 
 ---
 
-# Fase 05: e2e, documentação e fechamento []
+# Fase 05: e2e, documentação e fechamento [x]
 
-- [] Task 01: `test/me.e2e-spec.ts` — `POST /me/avatar` com um PNG mínimo de verdade (buffer com a
+- [x] Task 01: `test/me.e2e-spec.ts` — `POST /me/avatar` com um PNG mínimo de verdade (buffer com a
   assinatura correta) devolvendo a URL e aparecendo no `GET /me`; um buffer de texto recusado com `400`;
   `DELETE /me/avatar` zerando o campo.
   **O emulador de Storage não entra nesta spec**, então o `StorageService` é substituído por um duplo no
   módulo de teste — é o contrato da nossa rota que está sendo travado aqui, não o upload do Google.
-- [] Task 02: `test/training.e2e-spec.ts` — conclusão com `mainCode` pagando XP normalmente; Dev Tier
+- [x] Task 02: `test/training.e2e-spec.ts` — conclusão com `mainCode` pagando XP normalmente; Dev Tier
   mandando `resultImageUrl` recebendo `403`; Great Dev com URL nossa gravando os dois campos; URL de
   outro host recebendo `400`.
-- [] Task 03: `test/ranking.e2e-spec.ts` e `test/members.e2e-spec.ts` — a foto do membro aparecendo no
+- [x] Task 03: `test/ranking.e2e-spec.ts` e `test/members.e2e-spec.ts` — a foto do membro aparecendo no
   placar e no card público; membro sem gamertag continuando fora do placar depois de trocar a foto.
-- [] Task 04: `README.md` — seção "Spec 027 — Adoção de Storage": as quatro rotas novas, os caminhos do
+- [x] Task 04: `README.md` — seção "Spec 027 — Adoção de Storage": as quatro rotas novas, os caminhos do
   bucket, os limites e a lista de tipos, a variável `FIREBASE_STORAGE_BUCKET` na tabela do `.env`, o
   `firebase deploy --only storage --project <id>` com a advertência dos dois projetos, e `avatarUrl` nas
   estruturas de `profiles`, `ranking` e das conclusões.
   **Nenhum índice composto novo**: `avatarUrl`, `mainCode` e `resultImageUrl` não entram em query, e a
   tabela de índices não ganha linha. Dizer isso explicitamente, porque a ausência é informação.
-- [] Task 05: `npm run lint`, `npm test` e `npm run build` limpos antes do merge.
+- [x] Task 05: `npm run lint`, `npm test` e `npm run build` limpos antes do merge.
   Sobre o `npm run test:e2e`: a suíte inteira falha por um defeito **pré-existente** de ambiente, já
   registrado na Fase 04 da spec 025 — `FirebaseService.identityToolkit` não honra
   `FIREBASE_AUTH_EMULATOR_HOST`, então todo `createSession` leva `401`. **Não investigar de novo**, e não
   tentar consertar aqui. O que vale no lugar: percorrer a spec contra o `dev-liga-dev` com a API local,
   junto da Fase 05 do front.
-- [] Task 06: Marcar as emendas nas specs afetadas, conferindo que cada uma bate com o que foi
+- [x] Task 06: Marcar as emendas nas specs afetadas, conferindo que cada uma bate com o que foi
   implementado: a **005** e a **013** com `Deprecated` na recusa do avatar, e a **019**, **022**, **023**
   e **025** com o bloco de emendas no topo do `context.md`. A seção "Specs Afetadas" desta spec já lista
   as seis.
+
+---
+
+## A execução contra o `dev-liga-dev`
+
+Feita com o backend local apontado para o projeto de preview e o front em
+`localhost:4200`, com dois membros criados para isso (um Dev Tier, um Great Dev) e
+apagados no fim — conta, perfil, linha do placar, conclusões e os arquivos do bucket.
+
+**O Storage está habilitado no `dev-liga-dev`**, que era a dúvida que nenhum teste
+resolvia: o `makePublic()` funciona e a URL responde `200` com `image/png`.
+
+### Três defeitos que só a execução pegou
+
+Os três têm a mesma forma, e vale dizer qual: **cada lado tinha teste, e a ponte
+entre eles não tinha nenhum.**
+
+1. **A foto não ia junto ao entrar no placar pela gamertag.** O `upsert` preservava
+   "o `avatarUrl` da linha atual", e quem põe a foto antes de escolher a gamertag não
+   tem linha — o nulo ganhava. O comentário que eu tinha escrito no `updateAvatar`
+   afirmava o contrário, que o `upsert` lia a foto do perfil. Ele não lia.
+2. **O `avatarUrl` não saía no DTO do ranking.** Estava gravado no Firestore, o
+   converter lia, o repository tinha teste, o `app-avatar` sabia desenhar — e o DTO no
+   meio não levava o campo. A foto simplesmente não chegava na tela.
+3. **O desafio concluído dizia "sem anexar uma resposta" para quem tinha anexado.**
+   A listagem não traz a `submission` de propósito, e a página abria o modal com o
+   objeto da listagem. Faltava alguém ir buscar o detalhe.
+
+Os três viraram correção com teste-trava, e os testes novos afirmam **a travessia**,
+não cada lado: o do ranking afirma o valor saindo do `page()` do service, e não do
+repository, porque era o `toDto` que faltava.
+
+### O que a execução confirmou funcionando
+
+- O boot exige a `FIREBASE_STORAGE_BUCKET` e sobe com o valor real.
+- Upload → `profiles` + `ranking` + URL pública com `?v=`, em 2,5s.
+- O recorte da biblioteca sai em **200x200 exatos**, WebP, e a foto nova aparece na
+  tela **sem recarregar a página** — o `?v=` derruba o cache.
+- Arquivo de texto com nome e `Content-Type` de PNG: `400` com mensagem que diz o
+  formato aceito.
+- Membro **sem gamertag não ganha linha no placar** ao pôr foto.
+- `DELETE /me/avatar` idempotente (`204` duas vezes), objeto fora do bucket, e os dois
+  documentos zerados.
+- Dev Tier: `403` na rota de upload **e** no `complete`, com a frase que oferece a
+  saída; na tela, o campo de código presente e o aviso no lugar do botão de foto.
+- As três recusas de URL no `complete`: de outro membro, de host de fora, e do desafio
+  errado do mesmo membro.
+- A segunda conclusão paga `0`, o XP não se move, e **a submissão gravada segue sendo
+  a da primeira**.
+- O modal de foto abre com o foco em "Escolher imagem", e a moldura do recorte mostra
+  a dica do caminho por teclado.
+
+### O que continua sem conferir
+
+**A Task 03 (Mobile First em 360px).** O `resize_window` da extensão do Chrome
+reporta sucesso e o `innerWidth` não muda — a janela fica em 1536. O CSS foi escrito
+com a razão ao lado (`min-width: 0` na coluna do gamertag, `flex-direction` trocando
+em 22rem e 24rem) e os testes cobrem a estrutura, mas **estrutura não é a mesma coisa
+que nada estourando**. Fica para uma conferência no DevTools à mão, ou num navegador
+que aceite o redimensionamento.
+
+### O check de tela estreita
+
+Feito em **430px de viewport**, com a emulação de dispositivo do DevTools ligada e os
+dois servidores no ar contra o `dev-liga-dev`. Medido por script, e não a olho: para
+cada tela, a lista de todo elemento cuja borda direita passa da janela, mais o
+`scrollWidth` do documento.
+
+**Nenhuma das telas desta spec produziu um único elemento estourando, e nenhuma
+ganhou rolagem horizontal.** O único elemento fora da janela em qualquer medição é o
+`aside` do painel, inteiramente à esquerda com `right <= 0` — é o drawer fechado do
+celular, e o auditor o ignora de propósito.
+
+Os três casos que valia a pena forçar, porque são os que a spec introduziu:
+
+- **A tabela do Ranking com gamertag longa.** Semeadas linhas com nicks no teto de 20
+  caracteres. `JoaoPedroDaSilva_99` com avatar **quebrou em duas linhas** dentro de
+  uma célula de 175px, e as colunas de XP e INSÍGNIAS continuaram visíveis. É o
+  `min-width: 0` do `.table__nickname` fazendo o que existe para fazer: sem ele o
+  item de flex não encolhe abaixo do próprio conteúdo e empurra as colunas para fora.
+- **O bloco de código em leitura**, que é o caso mais arriscado porque o `<pre>` não
+  quebra linha por decisão. Conteúdo de **1177px dentro de um bloco de 352px**,
+  rolando **só ele**, com a página intacta. O `textarea` de digitação se comporta
+  igual.
+- **O modal da foto com o cropper.** Cabe com 19px de margem de cada lado (392 de 430),
+  a máscara redonda monta sobre uma foto em retrato de 900x1200, e os três botões
+  (Remover, Cancelar, Salvar) ficam na mesma linha sem rolagem vertical no modal.
+
+Também conferidos em 430px: a seção da foto em Meu Perfil, o modal do desafio inteiro
+com a área de resposta, e o aviso de tier do Dev Tier no lugar do botão de anexar.
+
+**O que não foi conferido:** larguras **abaixo de 430px**. O `resize_window` da
+extensão do Chrome reporta sucesso sem mudar o `innerWidth`, e `window.open` com
+dimensões é bloqueado — a largura veio da emulação de dispositivo que o usuário ligou
+à mão. As duas media queries que esta spec escreveu (`min-width: 22rem` no cartão de
+membro e `min-width: 24rem` na seção da foto) estão **ativas** em 430px, então o ramo
+em coluna delas, que é o de telas mais estreitas, continua sem passar por um olho.

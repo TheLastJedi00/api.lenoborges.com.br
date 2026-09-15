@@ -6,6 +6,7 @@ import { AdminTrainingController } from './admin-training.controller';
 import { GeminiService } from './gemini.service';
 import { ProfileModule } from '../profile/profile.module';
 import { GamesDataModule } from '../games/games-data.module';
+import { StorageModule } from '../storage/storage.module';
 
 /**
  * A Arena de Treinamento (spec 023).
@@ -21,6 +22,10 @@ import { GamesDataModule } from '../games/games-data.module';
  * `FirebaseService`, que é global, então pode entrar aqui sem reabrir volta
  * nenhuma.
  *
+ * O `StorageModule` (spec 027) entra para a foto de resultado. Ele não importa
+ * nada e o `FirebaseService` é global, então não reabre volta nenhuma -- mesma
+ * forma do `GamesDataModule` logo acima.
+ *
  * O `GeminiService` (spec 025) é provido aqui e **injetado só no
  * `AdminTrainingController`**: nenhuma rota pública o alcança, e é isso que
  * mantém a chamada paga atrás do `AdminGuard`. Ele só depende do
@@ -28,7 +33,7 @@ import { GamesDataModule } from '../games/games-data.module';
  * fazer.
  */
 @Module({
-  imports: [TrainingDataModule, GamesDataModule, ProfileModule],
+  imports: [TrainingDataModule, GamesDataModule, ProfileModule, StorageModule],
   controllers: [TrainingController, AdminTrainingController],
   providers: [TrainingService, GeminiService],
   exports: [TrainingService, TrainingDataModule],

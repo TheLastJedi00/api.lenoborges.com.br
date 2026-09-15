@@ -58,6 +58,32 @@ describe('profileConverter.fromFirestore', () => {
     expect(profile.completedAt).toBeNull();
   });
 
+  it('teste-trava: documento sem avatarUrl e lido como null', () => {
+    // Spec 027, e sao todos os documentos no dia em que ela sobe. `undefined` num
+    // `<img src>` nao deixa a tag vazia: o navegador resolve a string vazia como
+    // a URL da propria pagina e pede o HTML como imagem, entao a tela mostra um
+    // quebrado em vez de cair nas iniciais.
+    const profile = profileConverter.fromFirestore(snapshot(antigo));
+
+    expect(profile.avatarUrl).toBeNull();
+  });
+
+  it('a foto gravada volta com o ?v= intacto', () => {
+    // O parametro faz parte da URL guardada, e nao e remontado na leitura: e ele
+    // que diz ao navegador que esta e a troca de agora, e nao a foto de antes.
+    const comFoto = profileConverter.fromFirestore(
+      snapshot({
+        ...antigo,
+        avatarUrl:
+          'https://storage.googleapis.com/b/avatars/uid-1?v=1757000000000',
+      }),
+    );
+
+    expect(comFoto.avatarUrl).toBe(
+      'https://storage.googleapis.com/b/avatars/uid-1?v=1757000000000',
+    );
+  });
+
   /**
    * O fallback mais caro de perder da spec 018. Documento antigo nao tem
    * `legalAcceptances` -- e sao todos, no dia em que ela sobe. Sem o `?? {}` o

@@ -7,6 +7,7 @@ const certMock = jest.fn((credential: unknown) => ({ credential }));
 const getAuthMock = jest.fn(() => ({ name: 'auth' }));
 const initializeFirestoreMock = jest.fn(() => ({ name: 'firestore' }));
 const getFirestoreMock = jest.fn(() => ({ name: 'firestore' }));
+const getStorageMock = jest.fn(() => ({ name: 'storage' }));
 
 jest.mock('firebase-admin/app', () => ({
   initializeApp: (...args: unknown[]) => initializeAppMock(...(args as [])),
@@ -25,6 +26,10 @@ jest.mock('firebase-admin/firestore', () => ({
   getFirestore: (...args: unknown[]) => getFirestoreMock(...(args as [])),
 }));
 
+jest.mock('firebase-admin/storage', () => ({
+  getStorage: (...args: unknown[]) => getStorageMock(...(args as [])),
+}));
+
 import { FirebaseService } from './firebase.service';
 
 const PEM = '-----BEGIN PRIVATE KEY-----\nMIIEv\n-----END PRIVATE KEY-----\n';
@@ -37,6 +42,8 @@ function configWith(serviceAccountJson: string): ConfigService {
           return serviceAccountJson;
         case 'FIREBASE_WEB_API_KEY':
           return 'web-api-key';
+        case 'FIREBASE_STORAGE_BUCKET':
+          return 'eduleno-test.firebasestorage.app';
         default:
           throw new Error(`Unexpected key: ${key}`);
       }
@@ -105,10 +112,27 @@ describe('FirebaseService', () => {
     expect(service.webApiKey).toBe('web-api-key');
   });
 
-  it('expoe auth e firestore', () => {
+  it('expoe auth, firestore e storage', () => {
     const service = new FirebaseService(configWith(VALID_JSON));
 
     expect(service.auth).toBeDefined();
     expect(service.firestore).toBeDefined();
+    expect(service.storage).toBeDefined();
+  });
+
+  // **O bucket tem que chegar ao initializeApp, e e isso que este teste trava**
+  // (spec 027). Sem o storageBucket na inicializacao, o getStorage devolve um
+  // servico que funciona e o `bucket()` sem argumento estoura so na primeira
+  // escrita, com "Bucket name not specified" -- longe daqui, dentro da rota de
+  // upload, num erro que nao fala de configuracao.
+  it('passa o bucket do Storage para o initializeApp', () => {
+    const service = new FirebaseService(configWith(VALID_JSON));
+
+    expect(service.storageBucket).toBe('eduleno-test.firebasestorage.app');
+    expect(initializeAppMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        storageBucket: 'eduleno-test.firebasestorage.app',
+      }),
+    );
   });
 });
