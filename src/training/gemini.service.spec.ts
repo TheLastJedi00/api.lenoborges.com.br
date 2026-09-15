@@ -25,14 +25,31 @@ function respostaGemini(texto: string) {
 // `null` e não `undefined` para "sem chave": passar `undefined` explicitamente
 // aciona o valor padrão do parâmetro, e o teste da chave ausente passaria a
 // testar a chave presente -- em silêncio, e verde.
-function makeService(apiKey: string | null = 'AIza_x'): {
+function makeService(
+  apiKey: string | null = 'AIza_x',
+  // `null` para "sem GEMINI_MODEL no ambiente", que é o caso comum: a variável
+  // é opcional e o padrão mora no serviço (spec 026).
+  model: string | null = null,
+): {
   service: GeminiService;
   fetchMock: jest.Mock;
 } {
+  // Este dublê **ignora o segundo argumento de `get`**, e é por isso que o
+  // serviço usa `?? DEFAULT_GEMINI_MODEL` e nunca `get(chave, padrão)`: com a
+  // forma de dois parâmetros o modelo chegaria `undefined` aqui, a URL viraria
+  // `models/undefined:generateContent`, e a suíte passaria verde.
   const config = {
-    get: jest.fn((key: string) =>
-      key === 'GEMINI_API_KEY' ? (apiKey ?? undefined) : undefined,
-    ),
+    get: jest.fn((key: string) => {
+      if (key === 'GEMINI_API_KEY') {
+        return apiKey ?? undefined;
+      }
+
+      if (key === 'GEMINI_MODEL') {
+        return model ?? undefined;
+      }
+
+      return undefined;
+    }),
   } as unknown as ConfigService;
 
   const fetchMock = jest.fn();
@@ -284,6 +301,46 @@ describe('GeminiService (treinamentos)', () => {
       await expect(service.generate(PEDIDO)).rejects.toThrow(
         ServiceUnavailableException,
       );
+    });
+  });
+
+  describe('o modelo, vindo do ambiente (spec 026)', () => {
+    it('sem GEMINI_MODEL, chama o padrão do código', async () => {
+      const { service, fetchMock } = makeService();
+      fetchMock.mockReturnValue(okWith([treinamentoGerado()]));
+
+      await service.generate(PEDIDO);
+
+      const [url] = fetchMock.mock.calls[0] as [string];
+
+      expect(url).toContain('models/gemini-2.0-flash:generateContent');
+    });
+
+    it('com GEMINI_MODEL, chama o modelo configurado', async () => {
+      const { service, fetchMock } = makeService('AIza_x', 'gemini-2.5-pro');
+      fetchMock.mockReturnValue(okWith([treinamentoGerado()]));
+
+      await service.generate(PEDIDO);
+
+      const [url] = fetchMock.mock.calls[0] as [string];
+
+      expect(url).toContain('models/gemini-2.5-pro:generateContent');
+    });
+
+    it('teste-trava: a URL nunca carrega undefined', async () => {
+      // Repetido de propósito no outro `gemini.service.spec.ts`, e não extraído
+      // para um helper: são dois serviços de módulos diferentes, e um helper
+      // compartilhado de teste acoplaria as duas suítes pela parte que menos
+      // muda. O sintoma que ele evita é mudo -- 404 da Gemini virando 503 na
+      // cara do admin, com a suíte verde.
+      const { service, fetchMock } = makeService();
+      fetchMock.mockReturnValue(okWith([treinamentoGerado()]));
+
+      await service.generate(PEDIDO);
+
+      const [url] = fetchMock.mock.calls[0] as [string];
+
+      expect(url).not.toContain('undefined');
     });
   });
 });
