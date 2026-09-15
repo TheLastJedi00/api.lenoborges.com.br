@@ -27,25 +27,25 @@ ainda.
 
 ---
 
-# Fase 02: Os dois serviços do Gemini [ ]
+# Fase 02: Os dois serviços do Gemini [x]
 
 Ao fim desta fase o modelo sai da constante e vem da configuração, nos dois serviços, sem que
 nenhuma rota mude de contrato.
 
-- [ ] Task 01: `src/games/gemini.service.spec.ts` — **teste antes**. O dublê do `ConfigService` passa a
+- [x] Task 01: `src/games/gemini.service.spec.ts` — **teste antes**. O dublê do `ConfigService` passa a
   responder também `GEMINI_MODEL`. Três casos: sem a variável a URL do `fetch` contém
   `models/gemini-2.0-flash:generateContent`; com a variável, contém o modelo configurado; e em
   nenhum dos dois a URL contém `undefined`. **O terceiro é o teste-trava desta spec**: o dublê ignora
   o segundo argumento de `config.get`, então a forma `get(chave, padrão)` produziria
   `models/undefined:generateContent` com a suíte verde, porque nada hoje afirma o modelo na URL.
-- [ ] Task 02: `src/games/gemini.service.ts` — a constante de módulo `GEMINI_ENDPOINT` dá lugar a
+- [x] Task 02: `src/games/gemini.service.ts` — a constante de módulo `GEMINI_ENDPOINT` dá lugar a
   `DEFAULT_GEMINI_MODEL` mais `endpointFor(model)`. O `generate` lê
   `this.config.get<string>('GEMINI_MODEL') ?? DEFAULT_GEMINI_MODEL` junto da chave e **passa o modelo
   ao `ask`**, como já faz com a chave — uma leitura só por chamada.
-- [ ] Task 03: `src/training/gemini.service.spec.ts` — os mesmos três casos. **O teste é repetido e não
+- [x] Task 03: `src/training/gemini.service.spec.ts` — os mesmos três casos. **O teste é repetido e não
   extraído**: são dois serviços de módulos diferentes, e um helper compartilhado de teste acoplaria
   as duas suítes pela parte que menos muda.
-- [ ] Task 04: `src/training/gemini.service.ts` — a mesma troca da task 02. As três linhas são
+- [x] Task 04: `src/training/gemini.service.ts` — a mesma troca da task 02. As três linhas são
   **duplicadas de propósito** nos dois serviços, como o `DIFFICULTY_LABEL` e o `MAX_HINTS` já são.
 
 ---
