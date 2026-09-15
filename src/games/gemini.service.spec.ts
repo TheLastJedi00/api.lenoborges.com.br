@@ -28,14 +28,31 @@ function respostaGemini(payload: unknown) {
 // `null` e nao `undefined` para "sem chave": passar `undefined` explicitamente
 // aciona o valor padrao do parametro, e o teste da chave ausente passaria a
 // testar a chave presente -- em silencio, e verde.
-function makeService(apiKey: string | null = 'AIza_x'): {
+function makeService(
+  apiKey: string | null = 'AIza_x',
+  // `null` para "sem GEMINI_MODEL no ambiente", que e o caso comum: a variavel
+  // e opcional e o padrao mora no servico (spec 026).
+  model: string | null = null,
+): {
   service: GeminiService;
   fetchMock: jest.Mock;
 } {
+  // Este duble **ignora o segundo argumento de `get`**, e e por isso que o
+  // servico usa `?? DEFAULT_GEMINI_MODEL` e nunca `get(chave, padrao)`: com a
+  // forma de dois parametros o modelo chegaria `undefined` aqui, a URL viraria
+  // `models/undefined:generateContent`, e a suite passaria verde.
   const config = {
-    get: jest.fn((key: string) =>
-      key === 'GEMINI_API_KEY' ? (apiKey ?? undefined) : undefined,
-    ),
+    get: jest.fn((key: string) => {
+      if (key === 'GEMINI_API_KEY') {
+        return apiKey ?? undefined;
+      }
+
+      if (key === 'GEMINI_MODEL') {
+        return model ?? undefined;
+      }
+
+      return undefined;
+    }),
   } as unknown as ConfigService;
 
   const fetchMock = jest.fn();
@@ -364,6 +381,52 @@ describe('GeminiService', () => {
       expect((init.headers as Record<string, string>)['x-goog-api-key']).toBe(
         'AIza_x',
       );
+    });
+  });
+
+  describe('o modelo, vindo do ambiente (spec 026)', () => {
+    const pedido = {
+      badgeTitle: 'Insígnia da Lógica',
+      prompt: 'laços',
+      difficulty: 'easy',
+      count: 1,
+    } as const;
+
+    it('sem GEMINI_MODEL, chama o padrao do codigo', async () => {
+      const { service, fetchMock } = makeService();
+      fetchMock.mockReturnValue(okWith([questaoGerada()]));
+
+      await service.generate(pedido);
+
+      const [url] = fetchMock.mock.calls[0] as [string];
+
+      expect(url).toContain('models/gemini-2.0-flash:generateContent');
+    });
+
+    it('com GEMINI_MODEL, chama o modelo configurado', async () => {
+      const { service, fetchMock } = makeService('AIza_x', 'gemini-2.5-pro');
+      fetchMock.mockReturnValue(okWith([questaoGerada()]));
+
+      await service.generate(pedido);
+
+      const [url] = fetchMock.mock.calls[0] as [string];
+
+      expect(url).toContain('models/gemini-2.5-pro:generateContent');
+    });
+
+    it('teste-trava: a URL nunca carrega undefined', async () => {
+      // O sintoma que este teste evita e mudo: `config.get(chave, padrao)` com
+      // um duble que ignora o segundo argumento monta
+      // `models/undefined:generateContent`, a Gemini responde 404, a rota vira
+      // 503 -- e nenhum teste reclama, porque nada mais afirma o modelo na URL.
+      const { service, fetchMock } = makeService();
+      fetchMock.mockReturnValue(okWith([questaoGerada()]));
+
+      await service.generate(pedido);
+
+      const [url] = fetchMock.mock.calls[0] as [string];
+
+      expect(url).not.toContain('undefined');
     });
   });
 });
