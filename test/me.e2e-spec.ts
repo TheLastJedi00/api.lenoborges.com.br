@@ -6,6 +6,7 @@ import { acceptCurrentLegalDocuments } from './accept-legal.helper';
 import { App } from 'supertest/types';
 import { Firestore } from 'firebase-admin/firestore';
 import { AppModule } from '../src/app.module';
+import { StorageService } from '../src/storage/storage.service';
 import { FirebaseService } from '../src/auth/firebase.service';
 import { PROFILE_COLLECTION } from '../src/profile/profile.repository';
 import { WAITLIST_COLLECTION } from '../src/waitlist/waitlist.repository';
@@ -87,7 +88,24 @@ describe('Meu Perfil (e2e)', () => {
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
-    }).compile();
+    })
+      // **O emulador de Storage nao entra nesta spec, e o duble e deliberado.**
+      // O que estes testes travam e o contrato da NOSSA rota -- valida o tipo pelos
+      // bytes, grava nos dois lugares, devolve a URL --, e nao o upload do Google.
+      // Quem cobre o `StorageService` de verdade e o `storage.service.spec.ts`,
+      // com o duble de bucket dele.
+      .overrideProvider(StorageService)
+      .useValue({
+        upload: (path: string) =>
+          Promise.resolve(
+            `https://storage.googleapis.com/bucket-de-teste/${path}?v=1757000000000`,
+          ),
+        remove: () => Promise.resolve(),
+        isOwnUrl: (url: string, path: string) =>
+          url ===
+          `https://storage.googleapis.com/bucket-de-teste/${path}?v=1757000000000`,
+      })
+      .compile();
 
     app = moduleFixture.createNestApplication();
     app.use(cookieParser());
@@ -416,6 +434,93 @@ describe('Meu Perfil (e2e)', () => {
 
       // 5. E o usuário do Auth, que morre por último.
       await expect(firebase.auth.getUser(alvo.uid)).rejects.toThrow();
+    });
+  });
+
+  describe('POST e DELETE /me/avatar (spec 027)', () => {
+    /** Um PNG minimo de verdade: a assinatura inteira, oito bytes mais o IHDR. */
+    const PNG = Buffer.from([
+      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d,
+    ]);
+
+    it('sobe a foto, devolve a URL e o GET /me passa a mostra-la', async () => {
+      const { token } = await createSession();
+
+      const enviado = await request(app.getHttpServer())
+        .post('/me/avatar')
+        .set('Authorization', `Bearer ${token}`)
+        .attach('file', PNG, { filename: 'eu.png', contentType: 'image/png' })
+        .expect(201);
+
+      const url = (enviado.body as { avatarUrl: string }).avatarUrl;
+      expect(url).toContain('/avatars/');
+
+      // **A rota persiste, e e isso que este segundo pedido prova.** Uma rota que
+      // so subisse o arquivo exigiria um PATCH depois, e a foto ficaria no bucket
+      // sem dono quando o segundo pedido falhasse.
+      const perfil = await request(app.getHttpServer())
+        .get('/me')
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+
+      expect((perfil.body as ProfileDto).avatarUrl).toBe(url);
+    });
+
+    it('teste-trava: recusa o que nao e imagem, mesmo com nome e tipo de PNG', async () => {
+      // O `filename` e o `contentType` sao os dois campos que quem envia escreve.
+      // Aceitar o que o arquivo diz de si mesmo e o erro que o detectImageType
+      // existe para nao cometer.
+      const { token } = await createSession();
+
+      await request(app.getHttpServer())
+        .post('/me/avatar')
+        .set('Authorization', `Bearer ${token}`)
+        .attach('file', Buffer.from('nao sou imagem nenhuma, nem de longe'), {
+          filename: 'eu.png',
+          contentType: 'image/png',
+        })
+        .expect(400);
+    });
+
+    it('recusa o pedido sem arquivo', async () => {
+      const { token } = await createSession();
+
+      await request(app.getHttpServer())
+        .post('/me/avatar')
+        .set('Authorization', `Bearer ${token}`)
+        .expect(400);
+    });
+
+    it('DELETE zera o campo, e remover de quem nao tem foto tambem responde 204', async () => {
+      const { token } = await createSession();
+
+      await request(app.getHttpServer())
+        .post('/me/avatar')
+        .set('Authorization', `Bearer ${token}`)
+        .attach('file', PNG, { filename: 'eu.png', contentType: 'image/png' })
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .delete('/me/avatar')
+        .set('Authorization', `Bearer ${token}`)
+        .expect(204);
+
+      const perfil = await request(app.getHttpServer())
+        .get('/me')
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+      expect((perfil.body as ProfileDto).avatarUrl).toBeNull();
+
+      // Idempotente: o estado final pedido -- nao ha foto -- ja era verdade.
+      await request(app.getHttpServer())
+        .delete('/me/avatar')
+        .set('Authorization', `Bearer ${token}`)
+        .expect(204);
+    });
+
+    it('exige sessao nas duas rotas', async () => {
+      await request(app.getHttpServer()).post('/me/avatar').expect(401);
+      await request(app.getHttpServer()).delete('/me/avatar').expect(401);
     });
   });
 });

@@ -38,6 +38,11 @@ FIREBASE_SERVICE_ACCOUNT_JSON='{"type":"service_account","project_id":"...", ...
 # NÃO é segredo: vai no bundle de qualquer app Firebase web por desenho.
 FIREBASE_WEB_API_KEY="sua-web-api-key"
 
+# Bucket do Cloud Storage: avatar do perfil e foto de resultado da Arena
+# (spec 027). Console > Storage. Aceita com ou sem o "gs://" na frente.
+# É UMA POR PROJETO, como a action URL e os índices compostos.
+FIREBASE_STORAGE_BUCKET="seu-projeto.firebasestorage.app"
+
 # Cookie do refresh token
 AUTH_COOKIE_SECURE=false          # true em produção (exigido por SameSite=None)
 AUTH_COOKIE_SAMESITE=lax          # none em produção (front e API em domínios distintos)
@@ -1831,3 +1836,212 @@ chegada; se ela importar, o admin reordena depois pela rota de reorder.
 **Nenhum índice composto novo** — `hints` não entra em query, e a tabela de índices não ganha linha.
 Nenhuma coleção nova, nenhum cron, nenhuma isenção de guard, e nenhum campo novo guardando `uid` ao lado
 de dado pessoal.
+
+---
+
+## Spec 027 — Adoção de Storage
+
+O produto passa a guardar arquivo. Duas coisas entram: **avatar de perfil**, para todo mundo, e **foto do
+resultado** na Arena de Treinamento, do Great Dev Tier para cima. Junto delas entra o primeiro bucket, e
+com ele uma pergunta nova — quem pode escrever nele.
+
+### O arquivo sobe por esta API, e o front não fala com o Firebase
+
+**A decisão que organiza a spec inteira.** O caminho óbvio seria o SDK cliente do Firebase Storage no
+navegador, com `storage.rules` decidindo quem grava onde. Não é o que este produto faz, por um motivo
+que já foi pago caro: a spec 005 decidiu que o front nunca fala com o provedor de auth, e a spec 020
+manteve essa decisão **ao preço de três rotas públicas nesta API** para tratar o `oobCode`, quando
+instalar o SDK web teria sido menos código. Uma foto de perfil não é motivo para reabrir a porta que
+aquela spec pagou para fechar.
+
+O front manda `multipart/form-data` para cá, e quem escreve no bucket é o `firebase-admin` que já estava
+aqui, com o mesmo service account de sempre.
+
+**E é isso que torna a trava de tier real.** Se a URL chegasse pronta do cliente, a API estaria validando
+uma string que o próprio cliente escolheu — quem quisesse burlar mandaria qualquer URL. Com o upload
+aqui, o tier é conferido **antes de o byte entrar no bucket**, e é a API que cunha a URL: não há como um
+`avatarUrl` apontar para host de terceiro, que seria um `<img src>` para fora entregando o IP de cada
+membro a quem hospedasse a imagem.
+
+### `storage.rules` nega tudo, como o `firestore.rules`
+
+Consequência da decisão acima, e não esquecimento. Só o Admin SDK toca no bucket, então as regras negam
+leitura e escrita — o mesmo arquivo de uma linha e a mesma razão do Firestore. A superfície que isso
+fecha é o SDK cliente do Storage, que fala com o Google a partir de qualquer navegador que tenha a Web
+API Key, e ela é pública por desenho.
+
+**Negar leitura não quebra as fotos.** Cada objeto é liberado individualmente pelo `makePublic()` do
+`StorageService` e servido pelo `storage.googleapis.com`; as regras valem para o caminho autenticado do
+SDK cliente, que ninguém usa. O que fica legível é o objeto que a API escreveu, e não todo caminho que
+exista ou venha a existir ali.
+
+```bash
+firebase deploy --only storage --project <id>    # npm run storage:deploy
+```
+
+**Com `--project` explícito, e são sempre dois projetos.** Não existe `.firebaserc` e não deve existir:
+`dev-liga-dev` e o projeto de produção têm nomes confundíveis, e um default implícito é a forma mais
+barata de publicar no lugar errado. É a mesma advertência dos índices compostos e da action URL.
+
+### O caminho é fixo, e o `?v=` é o preço disso
+
+```text
+avatars/{uid}                        foto de perfil
+trainings/{uid}/{trainingId}         foto de resultado da Arena
+```
+
+**Sem sufixo aleatório, de propósito**: a foto nova sobrescreve a velha. Um nome por upload deixaria no
+bucket toda foto que a pessoa já trocou — cobrada para sempre, sem nada apontando para ela, e a limpeza
+exigiria varrer o bucket comparando com o Firestore, que é o tipo de tarefa que nunca é escrita.
+
+O preço é o cache: a URL não muda entre trocas, e o navegador serviria a anterior. A pessoa troca a foto,
+recarrega a página, e vê a de antes — sem erro em lugar nenhum. Quem paga esse preço é o
+`?v=<timestamp>` que o `upload` põe na URL: cada troca é uma URL nova para o cache, sem ser um arquivo
+novo para o bucket.
+
+**O `uid` vem antes do `trainingId` na foto de resultado**, e essa ordem é o que torna a conferência do
+`complete` possível: a URL de outro membro não cabe no prefixo deste, e o `isOwnUrl` reprova sem
+consultar nada.
+
+### O tipo sai dos bytes, nunca do que o arquivo diz de si
+
+`detectImageType` lê a assinatura: `FF D8 FF` (jpeg), os oito bytes do png, `RIFF....WEBP`. **Nunca o
+`Content-Type` da parte nem a extensão do nome**, que são dois campos que quem envia escreve — um `.png`
+com bytes de executável passa por qualquer checagem que olhe o que o arquivo afirma. É o mesmo erro que o
+`isUrlOf` de `social-url.ts` documenta do outro lado: confiar na string em vez de conferir a estrutura.
+
+Dois detalhes com um teste cada:
+
+- **`RIFF` sozinho não basta**, porque WAV também é RIFF. São os dois pedaços, `RIFF` e `WEBP`, senão um
+  áudio entra como imagem.
+- **SVG fica fora da lista.** É imagem e também é documento que executa script, e sairia deste bucket por
+  uma URL pública do nosso domínio de storage — XSS hospedado por nós. Nenhuma assinatura binária o
+  cobre, então ele cai como texto e é recusado.
+
+Teto de **5 MB**, conferido duas vezes: o `limits` do `FileInterceptor` corta o upload no meio e protege
+a memória da function antes de o arquivo existir por inteiro, e a checagem do service é a que vale para
+quem chamar o método por outro caminho. O nome original **não entra em caminho nenhum** — o caminho vem
+do `uid`, e nome de arquivo do cliente dentro de caminho é o `../` de sempre.
+
+### Rotas
+
+| Método | Rota | O que faz |
+|---|---|---|
+| `POST` | `/me/avatar` | `multipart` campo `file`. Grava o objeto, persiste em `profiles/{uid}` **e** reflete em `ranking/{uid}`, devolve `{ avatarUrl }` |
+| `DELETE` | `/me/avatar` | Apaga o objeto e grava `null` nos dois. `204` também para quem não tinha foto |
+| `POST` | `/trainings/:trainingId/result-image` | `multipart` campo `file`. **Confere o tier antes de gravar**, devolve `{ resultImageUrl }` |
+| `POST` | `/trainings/:trainingId/complete` | Passa a aceitar `mainCode` e `resultImageUrl`, mantendo `hintsUsed` |
+| `GET` | `/trainings/:trainingId` | Passa a devolver `submission` de quem pediu |
+
+**`PATCH /me/profile` não carrega o `avatarUrl`, e o `UpdateProfileDto` não ganhou campo.** Aquela rota
+exige nome, telefone e bio e estampa o `completedAt`: trocar a foto por ela obrigaria o modal a reenviar
+o cadastro inteiro. É a mesma razão que fez o `PATCH /me/privacy` nascer rota própria na spec 019.
+
+**O `DELETE` existe porque trocar não é o mesmo que tirar.** Sem ele, quem subiu a foto errada só pode
+substituir por outra, e nunca voltar a não ter nenhuma. Ele apaga o objeto **antes** de gravar no
+Firestore, e a ordem é a menos ruim das duas: se o `delete` falhar, o campo aponta para uma foto que ainda
+existe e a pessoa tenta de novo; na ordem inversa, o campo viraria `null` com o arquivo vivo no bucket —
+público, cobrado e sem nada apontando para ele, que é o órfão que ninguém acha depois.
+
+### A escrita no placar vai em `catch` que engole
+
+`profiles/{uid}` e `ranking/{uid}` guardam a foto, e as duas escritas acontecem na mesma chamada —
+deixar a segunda para depois é o defeito de sempre no Firestore: o perfil mostra a foto nova, o placar
+mostra a antiga, e não há erro em lugar nenhum.
+
+Mas a segunda **não derruba a primeira**. Quando ela falha, o erro vira log: a essa altura a foto já está
+no bucket e no perfil, e um `500` diria que a troca falhou quando ela deu certo. Mesmo desenho do
+`upsert` da gamertag e do `catch` da notificação da spec 012 — o placar é eventualmente consistente por
+decisão.
+
+**`updateAvatar` atualiza e nunca cria**, como o `addXpToBatch` e pela mesma razão: a linha do placar
+nasce quando a pessoa escolhe a gamertag (spec 022, decisão 20), e criar aqui daria ao ranking uma linha
+em branco de quem nunca escolheu nome. Membro sem linha não é erro — trocar a foto é ação do perfil, e
+recusá-la porque a pessoa ainda não joga deixaria o menos importante mandar no mais importante.
+
+**E o `upsert` preserva o `avatarUrl` junto do `previousPosition`.** Quem chama o `upsert` é a escolha da
+gamertag e o ganho de XP, e nenhum dos dois sabe da foto: sem a linha de preservação, assistir um vídeo
+apagaria o avatar de quem tinha um. É a armadilha que o comentário daquele método já descrevia para as
+posições, e agora tem teste-trava também.
+
+### A trava de tier é conferida duas vezes, e a segunda não é redundância
+
+A rota de upload barra o Dev Tier antes de o arquivo entrar no bucket. O `complete` barra de novo, porque
+**as duas são chamadas separadas**: sem a segunda, o Dev Tier leva `403` no upload e manda um
+`resultImageUrl` qualquer na conclusão. O `complete` também confere que a URL é uma que esta API cunhou
+**para este membro e este desafio** — `403` para o tier, `400` para a URL estranha.
+
+**A validação mora no service, não num guard.** Um guard no controller barraria também a conclusão e a
+leitura da Arena, e o Dev Tier tem direito às duas: o que ele não tem é a foto. Mesmo desenho da trava de
+comentários da spec 023, e a mensagem carrega a saída pela mesma razão — um `403` sem caminho é a forma
+mais cara de perder um upgrade.
+
+### A submissão gravada é a da primeira conclusão
+
+`mainCode` e `resultImageUrl` entram no documento da conclusão, ao lado do `xpAwarded` e do `hintsUsed`.
+**Eles não participam da trava de repetição** — quem impede o segundo pagamento continua sendo o
+`ALREADY_EXISTS` do caminho `{uid}__{trainingId}` —, e a consequência é que concluir de novo **não
+reescreve a submissão**: a segunda chamada não escreve nada. Não existe "reenviar a resposta", e a tela
+não oferece isso.
+
+`GET /trainings/:trainingId` devolve `submission`, que é o que a tela mostra em leitura quando o desafio
+concluído reabre. **Só ali, nunca na listagem**: aquela leitura já carregava o documento da conclusão e
+descartava tudo menos o `found`, enquanto na lista um `mainCode` de 20000 caracteres por desafio seria o
+corpo de uma tela inteira para desenhar cartões que não mostram código.
+
+O teto de 20000 no `mainCode` não é estético: um documento do Firestore tem limite de 1 MiB, e o campo é
+um `Ctrl+V` de classe inteira. Sem teto, a conclusão falharia no `create` com um erro do Firestore que
+não fala de tamanho, depois de o membro ter clicado em concluir.
+
+### O avatar é público, e o interruptor das redes não o governa
+
+`GET /members/:uid` passa a devolver `avatarUrl`, e o `PublicMemberDto` é o único DTO deste repositório
+onde **campo novo não entra por padrão** — ele é definido pelo que deixa de fora. A decisão aqui é que a
+foto é pública, porque ela **já está no placar**, que é tela aberta a toda a liga: esconder no cartão o
+que o ranking mostra três linhas acima não protegeria nada, só faria a mesma pessoa aparecer com foto
+numa tela e sem foto na outra.
+
+**O `socialLinksPublic` não vale para a foto**, e a assimetria é deliberada: aquele interruptor existe
+para vínculo a uma conta fora daqui, e a foto é a que a pessoa escolheu para este produto. Quem não quer
+a foto vista não a envia, ou a remove em Meu Perfil. Há teste para isso — redes escondidas e foto visível
+na mesma resposta — porque é o oposto do que a simetria sugeriria.
+
+A prova de que a regra do DTO está viva: os **dois testes de vazamento ficaram vermelhos sozinhos** quando
+o campo entrou, e foi assim que apontaram cada lugar a atualizar.
+
+### Estruturas
+
+```text
+profiles/{uid}
+  ... (spec 013)
+  avatarUrl: string | null     ← novo
+
+ranking/{uid} (spec 022)
+  uid, nickname, xp, badgeCount, previousPosition, currentPosition, ...
+  avatarUrl: string | null     ← novo
+
+training_completions/{uid}__{trainingId} (spec 023, hintsUsed na 025)
+  uid, trainingId, xpAwarded, hintsUsed, completedAt
+  mainCode: string | null         ← novo
+  resultImageUrl: string | null   ← novo
+```
+
+Os três nascem com `?? null` no converter, pela razão de sempre: **todo documento é anterior ao campo no
+dia do deploy**. O que esse fallback evita aqui é específico — `undefined` num `<img src>` não deixa a tag
+vazia: o navegador resolve a string vazia como a URL da própria página e pede o HTML como imagem, então a
+tela mostra um quebrado em vez de cair nas iniciais.
+
+### O nada desta spec
+
+**Nenhum índice composto novo** — `avatarUrl`, `mainCode` e `resultImageUrl` não entram em query, e a
+tabela de índices não ganha linha. Nenhuma coleção nova no Firestore, nenhum cron, nenhuma isenção de
+guard (as quatro rotas ficam atrás do `LegalAcceptanceGuard`, como todo o resto de `/me`), e nenhum campo
+novo guardando `uid` ao lado de dado pessoal.
+
+**Não entrou: visão do admin das submissões.** Não existe rota nem método de repository que liste
+conclusões para o admin, e criar essa tela é feature própria — nenhum dos dois `context.md` pede uma. Os
+campos ficam persistidos, que é a parte durável.
+
+**O emulador de Storage não entra no `firebase.json`.** Quem cobre o `StorageService` é o
+`storage.service.spec.ts` com um duble de bucket, no molde do `fake-firestore`; os e2e substituem o
+provider, porque o que eles travam é o contrato das nossas rotas e não o upload do Google.
