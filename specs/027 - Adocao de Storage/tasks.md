@@ -240,31 +240,31 @@ Ao fim desta fase o Great Dev+ sobe a foto do resultado e o Dev Tier manda o có
 
 ---
 
-# Fase 05: e2e, documentação e fechamento []
+# Fase 05: e2e, documentação e fechamento [x]
 
-- [] Task 01: `test/me.e2e-spec.ts` — `POST /me/avatar` com um PNG mínimo de verdade (buffer com a
+- [x] Task 01: `test/me.e2e-spec.ts` — `POST /me/avatar` com um PNG mínimo de verdade (buffer com a
   assinatura correta) devolvendo a URL e aparecendo no `GET /me`; um buffer de texto recusado com `400`;
   `DELETE /me/avatar` zerando o campo.
   **O emulador de Storage não entra nesta spec**, então o `StorageService` é substituído por um duplo no
   módulo de teste — é o contrato da nossa rota que está sendo travado aqui, não o upload do Google.
-- [] Task 02: `test/training.e2e-spec.ts` — conclusão com `mainCode` pagando XP normalmente; Dev Tier
+- [x] Task 02: `test/training.e2e-spec.ts` — conclusão com `mainCode` pagando XP normalmente; Dev Tier
   mandando `resultImageUrl` recebendo `403`; Great Dev com URL nossa gravando os dois campos; URL de
   outro host recebendo `400`.
-- [] Task 03: `test/ranking.e2e-spec.ts` e `test/members.e2e-spec.ts` — a foto do membro aparecendo no
+- [x] Task 03: `test/ranking.e2e-spec.ts` e `test/members.e2e-spec.ts` — a foto do membro aparecendo no
   placar e no card público; membro sem gamertag continuando fora do placar depois de trocar a foto.
-- [] Task 04: `README.md` — seção "Spec 027 — Adoção de Storage": as quatro rotas novas, os caminhos do
+- [x] Task 04: `README.md` — seção "Spec 027 — Adoção de Storage": as quatro rotas novas, os caminhos do
   bucket, os limites e a lista de tipos, a variável `FIREBASE_STORAGE_BUCKET` na tabela do `.env`, o
   `firebase deploy --only storage --project <id>` com a advertência dos dois projetos, e `avatarUrl` nas
   estruturas de `profiles`, `ranking` e das conclusões.
   **Nenhum índice composto novo**: `avatarUrl`, `mainCode` e `resultImageUrl` não entram em query, e a
   tabela de índices não ganha linha. Dizer isso explicitamente, porque a ausência é informação.
-- [] Task 05: `npm run lint`, `npm test` e `npm run build` limpos antes do merge.
+- [x] Task 05: `npm run lint`, `npm test` e `npm run build` limpos antes do merge.
   Sobre o `npm run test:e2e`: a suíte inteira falha por um defeito **pré-existente** de ambiente, já
   registrado na Fase 04 da spec 025 — `FirebaseService.identityToolkit` não honra
   `FIREBASE_AUTH_EMULATOR_HOST`, então todo `createSession` leva `401`. **Não investigar de novo**, e não
   tentar consertar aqui. O que vale no lugar: percorrer a spec contra o `dev-liga-dev` com a API local,
   junto da Fase 05 do front.
-- [] Task 06: Marcar as emendas nas specs afetadas, conferindo que cada uma bate com o que foi
+- [x] Task 06: Marcar as emendas nas specs afetadas, conferindo que cada uma bate com o que foi
   implementado: a **005** e a **013** com `Deprecated` na recusa do avatar, e a **019**, **022**, **023**
   e **025** com o bloco de emendas no topo do `context.md`. A seção "Specs Afetadas" desta spec já lista
   as seis.
