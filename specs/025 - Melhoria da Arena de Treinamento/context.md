@@ -43,7 +43,7 @@ A integração existirá no backend através de uma rota de admin:
 `POST /admin/badges/:badgeId/trainings/generate`
 Payload: `{ prompt: string, difficulty: Difficulty, count: number }`, no molde exato do `GenerateQuestionsDto`: `difficulty` é `@IsIn(DIFFICULTIES)` e **não** string livre, reusando `DIFFICULTIES` de `games.constants`. É um import de constante, e não de módulo -- não abre volta de DI nenhuma.
 
-O prompt do modelo (`src/training/gemini.service.ts`) deve ser instruído a:
+O prompt do modelo (`src/training/gemini.service.ts` - **[DEPRECADO] na spec 026: O modelo não será mais hardcoded no serviço, passando a ser lido pela variável de ambiente GEMINI_MODEL**) deve ser instruído a:
 - Dado um tema, o **título da insígnia** (`BADGE_TITLES[badgeId]`, como o de Jogos faz) e a dificuldade, gerar `count` treinamentos.
 - Retornar um JSON com `title`, `description` (o desafio), `objective` (o resultado esperado), e `hints` (passos lógicos sem dar o código pronto).
 - O backend retornará o rascunho para o admin revisar antes de salvar.

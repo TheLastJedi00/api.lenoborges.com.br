@@ -1447,6 +1447,15 @@ revisa e quem responde num ramo dentro de uma função.
 | Variável | Obrigatória | O que acontece sem ela |
 |---|---|---|
 | `GEMINI_API_KEY` | em produção | A rota de geração responde `503`; o resto da API serve normalmente |
+| `GEMINI_MODEL` | nunca | A geração usa `gemini-2.0-flash`; nada quebra (spec 026) |
+
+`GEMINI_MODEL` vale para as **duas** rotas de geração, a de questões e a de treinamentos da Arena, e
+existe para trocar de modelo sem deploy. Ela não entra na exigência de produção da `GEMINI_API_KEY`
+porque tem padrão embutido, e não tem lista fechada de valores porque o catálogo do Google muda sem
+avisar — um nome errado volta como `404` da Gemini, que os dois serviços já traduzem em `503` com o
+corpo do Google no log. **Configure nos dois ambientes da Vercel ou em nenhum**: só em um faz o
+preview responder com um modelo e a produção com outro, e o teste feito em preview não vale para
+produção.
 
 ### A gamertag: `nicknames/{nickname}`, única e imutável
 
