@@ -7,8 +7,28 @@ import { ConfigService } from '@nestjs/config';
 import type { Difficulty } from '../games/games.constants';
 import { GeneratedTrainingDto } from './dto/generate-training.dto';
 
-const GEMINI_ENDPOINT =
-  'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+/**
+ * O modelo que responde quando `GEMINI_MODEL` não está no ambiente (spec 026).
+ *
+ * **A leitura é `?? DEFAULT_GEMINI_MODEL`, nunca `config.get(chave, padrão)`.**
+ * O dublê de `ConfigService` do `.spec` ignora o segundo argumento, então a
+ * forma de dois parâmetros montaria `models/undefined:generateContent` com a
+ * suíte verde -- e o defeito só apareceria como 404 da Gemini virando 503 na
+ * cara do admin.
+ */
+const DEFAULT_GEMINI_MODEL = 'gemini-2.0-flash';
+
+/**
+ * O endereço da geração, montado com o modelo em mãos.
+ *
+ * Deixou de ser constante de módulo porque o modelo só é conhecido com o
+ * `ConfigService` na mão. As três linhas estão duplicadas no outro
+ * `gemini.service.ts` de propósito, como o `DIFFICULTY_LABEL` e o `MAX_HINTS` já
+ * estão: um módulo compartilhado só para o endereço acoplaria os dois serviços
+ * pela parte que menos muda.
+ */
+const endpointFor = (model: string) =>
+  `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
 /**
  * O teto de dicas do `CreateTrainingDto`, repetido aqui de propósito.
@@ -77,7 +97,14 @@ export class GeminiService {
       );
     }
 
-    const text = await this.ask(apiKey, this.buildPrompt(input));
+    // Lido uma vez por chamada e passado adiante como a chave: ler de novo
+    // dentro do `ask` seria a mesma configuração consultada duas vezes na mesma
+    // requisição, e é assim que as duas metades de um serviço acabam falando
+    // com modelos diferentes no dia em que alguém trocar só uma.
+    const model =
+      this.config.get<string>('GEMINI_MODEL') ?? DEFAULT_GEMINI_MODEL;
+
+    const text = await this.ask(apiKey, model, this.buildPrompt(input));
 
     return this.parse(text, input);
   }
@@ -125,11 +152,15 @@ export class GeminiService {
     ].join('\n');
   }
 
-  private async ask(apiKey: string, prompt: string): Promise<string> {
+  private async ask(
+    apiKey: string,
+    model: string,
+    prompt: string,
+  ): Promise<string> {
     let response: { ok: boolean; status: number; json: () => Promise<unknown> };
 
     try {
-      response = await fetch(GEMINI_ENDPOINT, {
+      response = await fetch(endpointFor(model), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
