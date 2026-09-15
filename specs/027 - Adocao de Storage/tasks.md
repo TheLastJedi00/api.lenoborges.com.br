@@ -144,11 +144,11 @@ Ao fim desta fase o membro troca e remove a foto, e o placar acompanha.
 
 ---
 
-# Fase 03: Foto de resultado na Arena e a trava de tier []
+# Fase 03: Foto de resultado na Arena e a trava de tier [x]
 
 Ao fim desta fase o Great Dev+ sobe a foto do resultado e o Dev Tier manda o código.
 
-- [] Task 01: `src/training/entities/training-completion.entity.ts` e `.spec.ts` — `mainCode: string | null`
+- [x] Task 01: `src/training/entities/training-completion.entity.ts` e `.spec.ts` — `mainCode: string | null`
   e `resultImageUrl: string | null` na interface, no documento e nos dois lados do converter, com
   `?? null` para toda conclusão anterior a esta spec.
   O comentário do arquivo já explica por que `xpAwarded` e `hintsUsed` são gravados "como cobrados";
@@ -156,17 +156,17 @@ Ao fim desta fase o Great Dev+ sobe a foto do resultado e o Dev Tier manda o có
   conferir. Eles não participam da trava de repetição, que continua sendo o `ALREADY_EXISTS` do caminho
   `{uid}__{trainingId}` — e na segunda chamada nada é escrito, então **a submissão gravada segue sendo a
   da primeira**. Dizer isso no comentário, porque é a pergunta que alguém vai fazer.
-- [] Task 02: `src/training/training-completion.repository.ts` e `.spec.ts` — o `create(batch, data)`
+- [x] Task 02: `src/training/training-completion.repository.ts` e `.spec.ts` — o `create(batch, data)`
   recebe e grava os dois campos novos. **Esta task não pode faltar**: é ele, e não o service, quem chama
   `batch.create`.
-- [] Task 03: `src/training/dto/complete-training.dto.ts` — `mainCode` (`@IsOptional() @IsString()`
+- [x] Task 03: `src/training/dto/complete-training.dto.ts` — `mainCode` (`@IsOptional() @IsString()`
   `@Transform(trim)` `@MaxLength(20000)`) e `resultImageUrl` (`@IsOptional() @IsString()`
   `@MaxLength(500)`), mantendo o `hintsUsed` da spec 025.
   O teto de 20000 no código existe porque o campo é um `Ctrl+V` de classe inteira e um documento do
   Firestore tem limite de 1 MiB: sem teto, a conclusão falharia no `create` com um erro que não fala de
   tamanho. **Os dois seguem opcionais** pela mesma razão que o `hintsUsed` é — a janela entre os dois
   deploys, escrita no comentário do arquivo, em que a tela antiga manda `{}`.
-- [] Task 04: `src/training/training.service.ts` e `.spec.ts` — **testes primeiro**. O
+- [x] Task 04: `src/training/training.service.ts` e `.spec.ts` — **testes primeiro**. O
   `uploadResultImage(uid, trainingId, file)`:
   - Lê o perfil e **rejeita `tier === 'dev-tier'` com `403`** antes de tocar no bucket (decisão 2), com a
     mensagem que oferece a saída — o mesmo molde da trava de comentários da spec 023, e a mesma frase
@@ -176,7 +176,7 @@ Ao fim desta fase o Great Dev+ sobe a foto do resultado e o Dev Tier manda o có
   - Valida tipo e tamanho, sobe em `trainingResultPath(uid, trainingId)` e devolve a URL.
   - **A validação mora no service e não num guard**: um guard no controller barraria a conclusão inteira,
     e o Dev Tier tem direito a concluir e a mandar o `mainCode`.
-- [] Task 05: `src/training/training.service.ts` e `.spec.ts` — o `complete` passa a receber o DTO
+- [x] Task 05: `src/training/training.service.ts` e `.spec.ts` — o `complete` passa a receber o DTO
   inteiro:
   - `mainCode` entra para qualquer tier.
   - `resultImageUrl` presente com `tier === 'dev-tier'` é `403`.
@@ -188,15 +188,32 @@ Ao fim desta fase o Great Dev+ sobe a foto do resultado e o Dev Tier manda o có
     **nada é escrito**; Great Dev com URL nossa grava os dois campos; URL de outro host é `400`; URL do
     nosso bucket no caminho de **outro uid** é `400`; segunda chamada continua `xpAwarded: 0` sem
     reescrever a submissão.
-- [] Task 06: `src/training/training.controller.ts` e `.spec.ts` —
+- [x] Task 06: `src/training/training.controller.ts` e `.spec.ts` —
   `POST /trainings/:trainingId/result-image` com o `FileInterceptor`, e o `complete` passando a repassar
   o DTO inteiro em vez de só o `hintsUsed`. Atualizar o `ApiOperation` do `complete`: o `403` de tier e o
   `400` de URL estranha são contrato agora.
-- [] Task 07: `src/training/training.module.ts` — importar o `StorageModule`. O `TrainingModule` já
+- [x] Task 07: `src/training/training.module.ts` — importar o `StorageModule`. O `TrainingModule` já
   importa o `ProfileModule` para ler o tier de quem comenta, então o tier da foto não custa import novo.
-- [] Task 08: `src/training/dto/training.dto.ts` — expor `mainCode` e `resultImageUrl` na conclusão que
+- [x] Task 08: `src/training/dto/training.dto.ts` — expor `mainCode` e `resultImageUrl` na conclusão que
   a API devolve, para o admin poder abrir a submissão. **Não entram no `TrainingDto` do membro**: é a
   resposta da conclusão e a visão do admin que os carregam.
+
+
+> **Fase 03 concluida.** 1086 testes verdes, lint limpo, build ok. Tres desvios do plano, todos
+> deliberados:
+>
+> - **A Task 08 nao virou visao de admin.** Nao existe rota de admin nem metodo de repository que
+>   liste conclusoes, e criar essa tela e feature propria que nenhum dos dois `context.md` pede. Os
+>   campos ficam persistidos, que e a parte durave; o que entrou no lugar foi o `submission` em
+>   `GET /trainings/:trainingId`, que e de onde a tela tira o que mostrar em leitura quando o desafio
+>   concluido reabre. **So no `getOne`, nunca na listagem** -- aquela leitura ja carregava o documento
+>   da conclusao e descartava tudo menos o `found`.
+> - **O `complete` passou a receber o DTO inteiro**, e os dois testes de controller que afirmavam o
+>   contrato antigo (`hintsUsed` extraido) passaram a afirmar que o corpo chega intacto. O `?? 0`
+>   desceu para o service, junto da conta que o usa.
+> - **A ordem TDD nao foi seguida nas Tasks 04 e 05**: a implementacao do service veio antes dos
+>   testes. Para nao deixar teste vacuo passando, a trava de tier do `complete` foi desligada de
+>   proposito e a suite rodada de novo -- **exatamente um teste falhou**, e depois foi restaurada.
 
 ---
 

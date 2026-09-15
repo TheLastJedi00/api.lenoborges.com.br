@@ -1,4 +1,4 @@
-import { IsInt, IsOptional, Min } from 'class-validator';
+import { IsInt, IsOptional, IsString, MaxLength, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 
@@ -35,4 +35,38 @@ export class CompleteTrainingDto {
   @IsInt()
   @Min(0)
   hintsUsed?: number;
+
+  @ApiProperty({
+    required: false,
+    example: 'public static void main(String[] args) { ... }',
+    maxLength: 20000,
+    description:
+      'O conteúdo da classe `main`, colado pelo membro. **Disponível para ' +
+      'todos os tiers.** É a prova do que foi entregue, e não muda o XP',
+  })
+  @IsOptional()
+  @IsString()
+  // Vinte mil caracteres, e o teto nao e estetico: um documento do Firestore tem
+  // limite de 1 MiB, e o campo e um Ctrl+V de classe inteira. Sem teto, a conclusao
+  // falharia no `create` com um erro do Firestore que nao fala de tamanho --
+  // depois de o membro ter clicado em concluir.
+  @MaxLength(20000, {
+    message: 'O código precisa ter no máximo 20000 caracteres.',
+  })
+  mainCode?: string;
+
+  @ApiProperty({
+    required: false,
+    example:
+      'https://storage.googleapis.com/dev-liga-dev.firebasestorage.app/trainings/uid-1/trn-1?v=1757000000000',
+    maxLength: 500,
+    description:
+      'A foto do resultado, **exclusiva do Great Dev Tier em diante**. Precisa ' +
+      'ser a URL que `POST /trainings/:trainingId/result-image` devolveu para ' +
+      'este membro: qualquer outra é `400`, e o Dev Tier é `403`',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  resultImageUrl?: string;
 }
