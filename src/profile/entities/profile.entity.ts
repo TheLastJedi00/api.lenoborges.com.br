@@ -77,6 +77,19 @@ export interface Profile {
   /** Perfil no Instagram, **URL completa** ou nulo. Mesma regra do `linkedin`. */
   instagram: string | null;
   /**
+   * Foto de perfil, URL publica do nosso bucket ou nulo (spec 027).
+   *
+   * **A URL e cunhada por esta API, nunca recebida do cliente**, e o
+   * `StorageService` e quem a monta. Um campo que aceitasse URL de fora seria um
+   * `<img src>` para host de terceiro em toda tela que mostra o membro,
+   * entregando o IP de cada pessoa a quem hospedasse a imagem.
+   *
+   * Ela carrega um `?v=<timestamp>` porque o caminho no bucket e fixo, para a
+   * troca sobrescrever a foto velha: sem o parametro o navegador serviria a
+   * anterior do cache. Ver `avatarPath` em `storage.constants.ts`.
+   */
+  avatarUrl: string | null;
+  /**
    * Se esta pessoa saiu da lista de e-mails (spec 014, decisao 8).
    *
    * **Nao existe "e-mail que ignora o descadastro" neste codigo.** Nem o
@@ -169,6 +182,7 @@ interface ProfileDocument extends DocumentData {
   tier: TierId;
   linkedin: string | null;
   instagram: string | null;
+  avatarUrl: string | null;
   emailOptOut: boolean;
   emailOptOutReason: EmailOptOutReason | null;
   emailOptOutAt: Timestamp | null;
@@ -214,6 +228,7 @@ export const profileConverter: FirestoreDataConverter<Profile> = {
       tier: profile.tier,
       linkedin: profile.linkedin,
       instagram: profile.instagram,
+      avatarUrl: profile.avatarUrl,
       emailOptOut: profile.emailOptOut,
       emailOptOutReason: profile.emailOptOutReason,
       emailOptOutAt: profile.emailOptOutAt
@@ -262,6 +277,11 @@ export const profileConverter: FirestoreDataConverter<Profile> = {
       // comparacao vira falsa em silencio.
       linkedin: data.linkedin ?? null,
       instagram: data.instagram ?? null,
+      // Documento antigo nao tem o campo -- e sao todos, no dia em que a spec 027
+      // sobe. Mesmo cuidado do `tier` e das redes acima: sem o `?? null` o valor
+      // chega `undefined`, e `undefined` num `<img src>` pinta a URL da propria
+      // pagina como se fosse a foto, dando um quebrado em vez das iniciais.
+      avatarUrl: data.avatarUrl ?? null,
       // **O `?? false` aqui e carga util, e o pior dos fallbacks de perder.**
       // Documento antigo nao tem o campo -- e sao todos, no dia em que a spec
       // 014 sobe --, e `undefined` numa comparacao booleana faz a base inteira
