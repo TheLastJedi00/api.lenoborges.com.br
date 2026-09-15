@@ -6,6 +6,7 @@ import { App } from 'supertest/types';
 import { Firestore } from 'firebase-admin/firestore';
 import { acceptCurrentLegalDocuments } from './accept-legal.helper';
 import { AppModule } from '../src/app.module';
+import { StorageService } from '../src/storage/storage.service';
 import { FirebaseService } from '../src/auth/firebase.service';
 import { PROFILE_COLLECTION } from '../src/profile/profile.repository';
 import { SessionResponseDto } from '../src/auth/dto/session.dto';
@@ -69,6 +70,10 @@ describe('Cartao do membro (e2e)', () => {
     return { token, uid: user.uid };
   }
 
+  const PNG_MINIMO = Buffer.from([
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d,
+  ]);
+
   async function abrirCartao(uid: string): Promise<PublicMemberDto> {
     const response = await request(app.getHttpServer())
       .get(`/members/${uid}`)
@@ -81,7 +86,18 @@ describe('Cartao do membro (e2e)', () => {
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
-    }).compile();
+    })
+      // O emulador de Storage nao entra nesta spec; ver a nota em `me.e2e-spec.ts`.
+      .overrideProvider(StorageService)
+      .useValue({
+        upload: (path: string) =>
+          Promise.resolve(
+            `https://storage.googleapis.com/bucket-de-teste/${path}?v=1757000000000`,
+          ),
+        remove: () => Promise.resolve(),
+        isOwnUrl: () => true,
+      })
+      .compile();
 
     app = moduleFixture.createNestApplication();
     app.use(cookieParser());
@@ -218,5 +234,41 @@ describe('Cartao do membro (e2e)', () => {
       .get('/members/uid-que-nunca-existiu')
       .set('Authorization', `Bearer ${brunoToken}`)
       .expect(404);
+  });
+
+  describe('a foto no cartao publico (spec 027)', () => {
+    it('a foto aparece no cartao mesmo com as redes escondidas', async () => {
+      // **A assimetria e deliberada** (spec 027): o `socialLinksPublic` governa
+      // vinculo a conta de fora, e a foto ja esta no placar, que e tela aberta a
+      // toda a liga. Esconder no cartao o que o ranking mostra tres linhas acima
+      // nao protegeria nada.
+      const ana = await createMember('ana-foto');
+
+      const enviado = await request(app.getHttpServer())
+        .post('/me/avatar')
+        .set('Authorization', `Bearer ${ana.token}`)
+        .attach('file', PNG_MINIMO, {
+          filename: 'ana.png',
+          contentType: 'image/png',
+        })
+        .expect(201);
+
+      const cartao = await abrirCartao(ana.uid);
+
+      expect(cartao.avatarUrl).toBe(
+        (enviado.body as { avatarUrl: string }).avatarUrl,
+      );
+      // O interruptor nasce desligado, entao as redes saem nulas na mesma resposta.
+      expect(cartao.linkedin).toBeNull();
+      expect(cartao.instagram).toBeNull();
+    });
+
+    it('quem nao tem foto devolve avatarUrl nulo, e nao o campo ausente', async () => {
+      const semFoto = await createMember('sem-foto');
+
+      const cartao = await abrirCartao(semFoto.uid);
+
+      expect(cartao.avatarUrl).toBeNull();
+    });
   });
 });

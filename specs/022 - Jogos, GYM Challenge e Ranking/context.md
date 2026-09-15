@@ -18,6 +18,15 @@ O par desta spec no front é a **022**, e as duas entram juntas.
 
 ---
 
+## Emendas posteriores
+
+> Registrado aqui pela regra 5 do `clauderc.md` (alteração de escopo vai para o topo do `context.md`).
+
+**A spec 027 adicionou o campo `avatarUrl` ao ranking.**
+Para suportar fotos de perfil, a coleção `ranking/{uid}` passou a armazenar também a URL do avatar (`avatarUrl`), que é atualizada em sincronia com o perfil do usuário.
+
+---
+
 ## Numeração
 Os números são iguais nos dois repositórios, com a exceção conhecida da 008 (Liga Dev, só no front). 021
 é Respostas na Trilha, 022 é esta.

@@ -17,6 +17,7 @@ describe('MembersController', () => {
         xp: 340,
         linkedin: null,
         instagram: null,
+        avatarUrl: null,
       }),
     };
 
@@ -61,6 +62,8 @@ describe('MembersController', () => {
     const cartao = await controller.findMember('uid-2');
 
     expect(Object.keys(cartao).sort()).toEqual([
+      'avatarUrl',
+
       'bio',
       'grade',
       'id',

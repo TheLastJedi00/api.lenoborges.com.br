@@ -6,6 +6,7 @@ import { App } from 'supertest/types';
 import { Firestore } from 'firebase-admin/firestore';
 import { acceptCurrentLegalDocuments } from './accept-legal.helper';
 import { AppModule } from '../src/app.module';
+import { StorageService } from '../src/storage/storage.service';
 import { FirebaseService } from '../src/auth/firebase.service';
 import { PROFILE_COLLECTION } from '../src/profile/profile.repository';
 import { RANKING_COLLECTION } from '../src/games/ranking.repository';
@@ -119,7 +120,18 @@ describe('Ranking (e2e)', () => {
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
-    }).compile();
+    })
+      // O emulador de Storage nao entra nesta spec; ver a nota em `me.e2e-spec.ts`.
+      .overrideProvider(StorageService)
+      .useValue({
+        upload: (path: string) =>
+          Promise.resolve(
+            `https://storage.googleapis.com/bucket-de-teste/${path}?v=1757000000000`,
+          ),
+        remove: () => Promise.resolve(),
+        isOwnUrl: () => true,
+      })
+      .compile();
 
     app = moduleFixture.createNestApplication();
     app.use(cookieParser());
@@ -273,6 +285,80 @@ describe('Ranking (e2e)', () => {
       );
 
       expect(linha!.positionChange).toBe(4);
+    });
+  });
+
+  describe('a foto no placar (spec 027)', () => {
+    const PNG = Buffer.from([
+      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d,
+    ]);
+
+    it('a foto trocada no perfil aparece na linha do placar', async () => {
+      const membro = await createSession();
+      const nickname = `Gamer${Date.now().toString(36)}`;
+      await request(app.getHttpServer())
+        .put('/me/nickname')
+        .set('Authorization', `Bearer ${membro.token}`)
+        .send({ nickname })
+        .expect(204);
+
+      const enviado = await request(app.getHttpServer())
+        .post('/me/avatar')
+        .set('Authorization', `Bearer ${membro.token}`)
+        .attach('file', PNG, { filename: 'eu.png', contentType: 'image/png' })
+        .expect(201);
+
+      const linha = await firestore
+        .collection(RANKING_COLLECTION)
+        .doc(membro.uid)
+        .get();
+      expect(linha.data()?.avatarUrl).toBe(
+        (enviado.body as { avatarUrl: string }).avatarUrl,
+      );
+    });
+
+    it('teste-trava: membro sem gamertag continua fora do placar depois de pôr foto', async () => {
+      // A linha do placar nasce ao escolher a gamertag (spec 022, decisão 20), e
+      // nunca no primeiro XP nem numa troca de foto. Criar aqui daria ao ranking
+      // uma linha em branco de quem nunca escolheu nome.
+      const membro = await createSession();
+
+      await request(app.getHttpServer())
+        .post('/me/avatar')
+        .set('Authorization', `Bearer ${membro.token}`)
+        .attach('file', PNG, { filename: 'eu.png', contentType: 'image/png' })
+        .expect(201);
+
+      const linha = await firestore
+        .collection(RANKING_COLLECTION)
+        .doc(membro.uid)
+        .get();
+      expect(linha.exists).toBe(false);
+    });
+
+    it('remover a foto zera a linha do placar também', async () => {
+      const membro = await createSession();
+      await request(app.getHttpServer())
+        .put('/me/nickname')
+        .set('Authorization', `Bearer ${membro.token}`)
+        .send({ nickname: `Gamer${Date.now().toString(36)}b` })
+        .expect(204);
+
+      await request(app.getHttpServer())
+        .post('/me/avatar')
+        .set('Authorization', `Bearer ${membro.token}`)
+        .attach('file', PNG, { filename: 'eu.png', contentType: 'image/png' })
+        .expect(201);
+      await request(app.getHttpServer())
+        .delete('/me/avatar')
+        .set('Authorization', `Bearer ${membro.token}`)
+        .expect(204);
+
+      const linha = await firestore
+        .collection(RANKING_COLLECTION)
+        .doc(membro.uid)
+        .get();
+      expect(linha.data()?.avatarUrl).toBeNull();
     });
   });
 });

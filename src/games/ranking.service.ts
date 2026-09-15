@@ -98,6 +98,11 @@ export class RankingService {
       position,
       uid: entry.uid,
       nickname: entry.nickname,
+      // **Sem esta linha o campo existe no Firestore e nao chega na tela** (spec
+      // 027), que foi exatamente o defeito: o repository gravava, o converter lia,
+      // o componente sabia desenhar, e o DTO no meio nao levava. Nenhum teste de
+      // um lado so pega isso.
+      avatarUrl: entry.avatarUrl,
       xp: entry.xp,
       badgeCount: entry.badgeCount,
       // **`null` quando nao ha posicao anterior**, e nao zero: zero diz "nao

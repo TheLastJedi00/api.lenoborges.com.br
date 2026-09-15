@@ -7,6 +7,7 @@ import {
   getFirestore,
   Firestore,
 } from 'firebase-admin/firestore';
+import { getStorage, Storage } from 'firebase-admin/storage';
 import { parseServiceAccount } from '../config/service-account';
 
 /** Base da REST do Identity Toolkit: login, envio de e-mail e reset de senha. */
@@ -22,6 +23,20 @@ export class FirebaseService {
   readonly firestore: Firestore;
 
   /**
+   * O Cloud Storage do projeto (spec 027).
+   *
+   * **Quem escreve no bucket e o Admin SDK, daqui, e ninguem mais** -- o front
+   * manda o arquivo para esta API em multipart e nao fala com o Firebase, pela
+   * decisao da spec 005 que a spec 020 ja defendeu a um preco alto. E por isso
+   * que o `storage.rules` nega tudo, do mesmo jeito e pela mesma razao que o
+   * `firestore.rules`: nao existe caminho de escrita que passe por regra.
+   */
+  readonly storage: Storage;
+
+  /** Nome do bucket, pelado -- o `gs://` e aparado na validacao do ambiente. */
+  readonly storageBucket: string;
+
+  /**
    * Chave publica do projeto. NAO e segredo: ela vai no bundle de qualquer app
    * Firebase web por desenho, identifica o projeto e nao autoriza nada sozinha.
    * Esta no ambiente por conveniencia de configuracao, nao por sigilo.
@@ -35,6 +50,9 @@ export class FirebaseService {
     this.webApiKey = this.configService.getOrThrow<string>(
       'FIREBASE_WEB_API_KEY',
     );
+    this.storageBucket = this.configService.getOrThrow<string>(
+      'FIREBASE_STORAGE_BUCKET',
+    );
 
     // A function serverless da Vercel reaproveita o processo entre invocacoes, e
     // uma segunda initializeApp estoura. Reutilizar o app existente e o que faz
@@ -47,6 +65,7 @@ export class FirebaseService {
           privateKey: serviceAccount.privateKey,
         }),
         projectId: serviceAccount.projectId,
+        storageBucket: this.storageBucket,
       });
 
       // O Firestore do Admin SDK fala gRPC por padrao, e gRPC em function
@@ -101,6 +120,11 @@ export class FirebaseService {
     }
 
     this.auth = getAuth(this.app);
+
+    // Fora do if, junto do getAuth e pelo mesmo motivo: no segundo request de
+    // uma mesma instancia o app vem do getApp() e ja carrega o storageBucket que
+    // a primeira invocacao configurou.
+    this.storage = getStorage(this.app);
   }
 
   /**

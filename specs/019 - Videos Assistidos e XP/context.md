@@ -21,6 +21,22 @@ O par desta spec no front é a **019**, e as duas entram juntas.
 
 ---
 
+## Emendas posteriores
+
+> Registrado aqui pela regra 5 do `clauderc.md` (alteração de escopo vai para o topo do `context.md`).
+
+**A spec 027 acrescentou o `avatarUrl` ao `PublicMemberDto`.**
+O cartão do membro passa a trazer a foto de perfil, e ela **não é governada pelo `socialLinksPublic`**
+da decisão 9 desta spec: aquele interruptor existe para vínculo a uma conta fora daqui, e a foto já
+está no placar da spec 022, que é tela aberta a toda a liga. Esconder no cartão o que o ranking mostra
+três linhas acima não protegeria nada.
+
+A regra desta spec de que **campo novo não entra naquele DTO por padrão continua valendo** — e foi ela
+que obrigou a decisão a ser escrita: os dois testes de vazamento ficaram vermelhos sozinhos quando o
+campo entrou.
+
+---
+
 ## Numeração
 Os números são iguais nos dois repositórios: 017 é Respostas em Retrato, 018 é Termos e Privacidade, 019
 é esta. No front não existe 006 nem 007, e aqui não existe 008 — a divergência é antiga e não muda nada.

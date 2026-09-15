@@ -14,6 +14,13 @@ Os números são iguais nos dois repositórios, seguindo a ordem após a 022.
 
 Esta spec depende da **009** (trilha, `badge_videos`), da **019** (XP) e da **021** (Respostas na Trilha). Nenhuma fase depende de spec posterior.
 
+## Emendas posteriores
+
+> Registrado aqui pela regra 5 do `clauderc.md` (alteração de escopo vai para o topo do `context.md`).
+
+**A spec 027 adicionou os campos de resposta (`mainCode` e `resultImageUrl`) à conclusão.**
+O payload de `POST /trainings/:trainingId/complete` e o documento em `training_completions` (ou equivalente) passam a aceitar também o código e a foto do resultado, com restrição de tier no envio da foto.
+
 ---
 
 ## Decisões

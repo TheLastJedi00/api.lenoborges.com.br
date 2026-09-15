@@ -67,6 +67,8 @@ export class TrainingCompletionRepository {
       trainingId: string;
       xpAwarded: number;
       hintsUsed: number;
+      mainCode: string | null;
+      resultImageUrl: string | null;
       now: Date;
     },
   ): void {
@@ -76,6 +78,8 @@ export class TrainingCompletionRepository {
       trainingId: data.trainingId,
       xpAwarded: data.xpAwarded,
       hintsUsed: data.hintsUsed,
+      mainCode: data.mainCode,
+      resultImageUrl: data.resultImageUrl,
       completedAt: data.now,
     });
   }

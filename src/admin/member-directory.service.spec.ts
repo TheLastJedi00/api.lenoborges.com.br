@@ -28,6 +28,7 @@ function profile(id: string, grade = 3): Profile {
     tier: 'dev-tier',
     linkedin: null,
     instagram: null,
+    avatarUrl: null,
     emailOptOut: false,
     emailOptOutReason: null,
     emailOptOutAt: null,

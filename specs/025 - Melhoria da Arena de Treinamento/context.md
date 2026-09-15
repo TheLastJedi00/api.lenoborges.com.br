@@ -9,6 +9,13 @@ O par desta spec no front é a **025**, e as duas entram juntas. *(Nota: O núme
 
 ---
 
+## Emendas posteriores
+
+**A spec 027 adicionou os campos de resposta (`mainCode` e `resultImageUrl`) à conclusão.**
+O payload de `POST /trainings/:trainingId/complete` e a coleção `training_completions` passam a aceitar esses campos. O envio de `resultImageUrl` é restrito para membros do Great Dev Tier em diante, e o `mainCode` é livre para todos.
+
+---
+
 ## Decisões
 
 ### 1. Novo Modelo de Treinamento

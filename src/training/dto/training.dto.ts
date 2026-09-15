@@ -62,6 +62,22 @@ export class TrainingDto {
       'é `false`: não existe "não sei"',
   })
   completed: boolean;
+
+  @ApiProperty({
+    required: false,
+    nullable: true,
+    type: () => TrainingSubmissionDto,
+    description:
+      'O que **este membro** enviou ao concluir, ou nulo (spec 027). Vem só em ' +
+      '`GET /trainings/:trainingId`, e nunca na listagem: o `mainCode` chega ' +
+      'a 20000 caracteres, e mandar isso por desafio numa lista de vinte seria ' +
+      'pagar o corpo de uma tela inteira para mostrar um cartão.' +
+      '\n\n' +
+      'Como a segunda conclusão não escreve nada, **é a submissão da primeira** ' +
+      '— é ela que a tela mostra em leitura quando o desafio reabre, em vez de ' +
+      'um formulário que prometeria uma edição que não existe',
+  })
+  submission?: TrainingSubmissionDto | null;
 }
 
 export class TrainingListDto {
@@ -138,6 +154,31 @@ export class TrainingCommentListDto {
       'cursor deve ser',
   })
   nextCursor: string | null;
+}
+
+/**
+ * O que o membro enviou ao concluir o desafio (spec 027).
+ *
+ * **Sem `xpAwarded` e sem `hintsUsed`.** Os dois vivem no documento da conclusão
+ * pela auditoria, e a tela do membro não tem o que fazer com eles aqui: o XP já
+ * está no perfil, e quantas dicas ele abriu ele acabou de ver. Um DTO que
+ * espelhasse o documento inteiro por conveniência publicaria a auditoria.
+ */
+export class TrainingSubmissionDto {
+  @ApiProperty({
+    nullable: true,
+    example: 'public static void main(String[] args) { ... }',
+    description: 'O código colado na conclusão, ou nulo',
+  })
+  mainCode: string | null;
+
+  @ApiProperty({
+    nullable: true,
+    example:
+      'https://storage.googleapis.com/dev-liga-dev.firebasestorage.app/trainings/uid-1/trn-1?v=1757000000000',
+    description: 'A foto do resultado, ou nulo (Great Dev Tier ou acima)',
+  })
+  resultImageUrl: string | null;
 }
 
 export class TrainingCompletionDto {

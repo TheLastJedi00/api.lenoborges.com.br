@@ -18,6 +18,10 @@ describe('TrainingCompletionRepository', () => {
     trainingId: string,
     xpAwarded = 30,
     hintsUsed = 0,
+    submissao: {
+      mainCode?: string | null;
+      resultImageUrl?: string | null;
+    } = {},
   ) {
     const batch = firestore.batch();
     repository.create(batch as never, {
@@ -25,6 +29,8 @@ describe('TrainingCompletionRepository', () => {
       trainingId,
       xpAwarded,
       hintsUsed,
+      mainCode: submissao.mainCode ?? null,
+      resultImageUrl: submissao.resultImageUrl ?? null,
       now: new Date('2026-09-01T12:00:00.000Z'),
     });
     await batch.commit();

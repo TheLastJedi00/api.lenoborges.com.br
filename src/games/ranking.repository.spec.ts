@@ -159,6 +159,101 @@ describe('RankingRepository', () => {
       expect(entry!.nickname).toBe('LenoDev');
       expect(entry!.badgeCount).toBe(2);
     });
+
+    it('teste-trava: quem ja tem foto entra no placar COM ela', async () => {
+      // **Defeito real, achado ao rodar contra o dev-liga-dev.** Quem poe a foto
+      // antes de escolher a gamertag nao tem linha no placar, entao preservar
+      // "a foto da linha atual" preservava nada: a pessoa entrava no ranking sem
+      // foto e so aparecia na proxima troca. Quem chama ja leu o perfil -- a foto
+      // vem pela mesma carona do xp e do badgeCount.
+      const { repository } = makeRepository();
+
+      await repository.upsert({
+        uid: 'a',
+        nickname: 'A',
+        xp: 40,
+        badgeCount: 1,
+        avatarUrl: 'https://s/b/avatars/a?v=1',
+      });
+
+      const { entry } = await repository.findByUid('a');
+      expect(entry!.avatarUrl).toBe('https://s/b/avatars/a?v=1');
+    });
+
+    it('teste-trava: nao apaga a foto ao somar XP', async () => {
+      // **Mesma armadilha do previousPosition acima, e o mesmo custo** (spec 027).
+      // Quem chama o upsert e a escolha da gamertag e o ganho de XP, e nenhum dos
+      // dois sabe da foto. Sem a linha de preservacao, assistir um video apagaria
+      // o avatar de quem ja tinha um -- sem erro, e sem nada dizendo por que a
+      // foto sumiu.
+      const { repository } = makeRepository();
+      await repository.upsert({
+        uid: 'a',
+        nickname: 'A',
+        xp: 10,
+        badgeCount: 0,
+      });
+      await repository.updateAvatar('a', 'https://s/b/avatars/a?v=1');
+
+      await repository.upsert({
+        uid: 'a',
+        nickname: 'A',
+        xp: 150,
+        badgeCount: 1,
+      });
+
+      const { entry } = await repository.findByUid('a');
+      expect(entry!.xp).toBe(150);
+      expect(entry!.avatarUrl).toBe('https://s/b/avatars/a?v=1');
+    });
+  });
+
+  describe('updateAvatar', () => {
+    it('grava a URL na linha existente', async () => {
+      const { repository } = makeRepository();
+      await repository.upsert({
+        uid: 'a',
+        nickname: 'A',
+        xp: 10,
+        badgeCount: 0,
+      });
+
+      await repository.updateAvatar('a', 'https://s/b/avatars/a?v=1');
+
+      const { entry } = await repository.findByUid('a');
+      expect(entry!.avatarUrl).toBe('https://s/b/avatars/a?v=1');
+    });
+
+    it('aceita null, que e a remocao da foto', async () => {
+      const { repository } = makeRepository();
+      await repository.upsert({
+        uid: 'a',
+        nickname: 'A',
+        xp: 10,
+        badgeCount: 0,
+      });
+      await repository.updateAvatar('a', 'https://s/b/avatars/a?v=1');
+
+      await repository.updateAvatar('a', null);
+
+      const { entry } = await repository.findByUid('a');
+      expect(entry!.avatarUrl).toBeNull();
+    });
+
+    it('teste-trava: membro sem linha no placar nao ganha uma', async () => {
+      // **Nunca set() e nunca criar o documento** (spec 022, decisao 20): a linha
+      // nasce quando a pessoa escolhe a gamertag, e criar aqui daria ao placar uma
+      // linha em branco de quem nunca escolheu nome -- exatamente quem aquela
+      // decisao mantem fora. E a mesma regra do addXpToBatch.
+      const { repository } = makeRepository();
+
+      await expect(
+        repository.updateAvatar('sem-gamertag', 'https://s/b/avatars/x?v=1'),
+      ).resolves.toBeUndefined();
+
+      const { found } = await repository.findByUid('sem-gamertag');
+      expect(found).toBe(false);
+    });
   });
 
   describe('addXpToBatch', () => {

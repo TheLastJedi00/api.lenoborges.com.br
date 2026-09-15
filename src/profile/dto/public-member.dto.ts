@@ -11,6 +11,14 @@ import { ApiProperty } from '@nestjs/swagger';
  * > **Campo novo no perfil nao entra neste DTO por padrao.** Ele entra se
  * > alguem decidir que e publico, e a decisao e escrita aqui.
  *
+ * **Decisao da spec 027: o `avatarUrl` entra, e o `socialLinksPublic` nao o
+ * governa.** A razao e que a foto **ja esta no placar**, que e tela aberta a toda
+ * a liga: esconder no cartao o que o ranking mostra tres linhas acima nao
+ * protegeria nada, so faria a mesma pessoa aparecer com foto numa tela e sem foto
+ * na outra. Quem nao quer a foto vista nao a envia, ou a remove em Meu Perfil --
+ * e diferente das redes sociais, que sao vinculo a uma conta fora daqui e por isso
+ * nasceram atras de um interruptor.
+ *
  * Por isso esta classe **nao estende `ProfileDto`, nao reusa mapeador e nao e
  * montada por espalhamento de objeto** -- os tres atalhos que fazem o campo
  * seguinte vazar sem ninguem ter escolhido. O mapeamento e campo a campo, no
@@ -68,4 +76,15 @@ export class PublicMemberDto {
     description: 'Mesma regra do `linkedin`',
   })
   instagram: string | null;
+
+  @ApiProperty({
+    example:
+      'https://storage.googleapis.com/dev-liga-dev.firebasestorage.app/avatars/uid-2?v=1757000000000',
+    nullable: true,
+    description:
+      'A foto do membro, ou nulo (spec 027). **Entra aqui por decisão escrita**, ' +
+      'não por extensão automática: a regra deste DTO é que campo novo fica de ' +
+      'fora até alguém decidir que é público',
+  })
+  avatarUrl: string | null;
 }
