@@ -9,19 +9,19 @@
 
 ---
 
-# Fase 01: A variável [ ]
+# Fase 01: A variável [x]
 
 Ao fim desta fase a variável existe, é validada no boot e está documentada. Nenhum serviço a lê
 ainda.
 
-- [ ] Task 01: `src/config/env.validation.ts` — `GEMINI_MODEL?: string` com `@IsString()` e
+- [x] Task 01: `src/config/env.validation.ts` — `GEMINI_MODEL?: string` com `@IsString()` e
   `@IsOptional()`, logo abaixo da `GEMINI_API_KEY`, com o comentário dizendo por que ela **não** entra
   na exigência de produção: sem a chave a geração responde `503` e o admin só descobre depois de
   escrever o prompt; sem o modelo há um padrão embutido que funciona, e derrubar o boot por uma
   variável com default cria um problema onde não havia.
-- [ ] Task 02: `.env.example` — a linha comentada `# GEMINI_MODEL="gemini-2.0-flash"` ao lado da
+- [x] Task 02: `.env.example` — a linha comentada `# GEMINI_MODEL="gemini-2.0-flash"` ao lado da
   `GEMINI_API_KEY`, dizendo que ausente significa o padrão do código.
-- [ ] Task 03: `README.md` — nova linha na tabela de variáveis de ambiente: `GEMINI_MODEL`, nunca
+- [x] Task 03: `README.md` — nova linha na tabela de variáveis de ambiente: `GEMINI_MODEL`, nunca
   obrigatória, "sem ela a geração usa `gemini-2.0-flash`; nada quebra". Fica ao lado da linha da
   `GEMINI_API_KEY`, que descreve o `503`.
 
