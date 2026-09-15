@@ -130,6 +130,25 @@ class EnvironmentVariables {
   @IsString()
   @IsOptional()
   GEMINI_API_KEY?: string;
+
+  // Qual modelo da Gemini os dois servicos chamam (spec 026).
+  //
+  // **Opcional aqui e opcional em producao tambem**, e a diferenca para a
+  // GEMINI_API_KEY logo acima e deliberada: sem a chave a geracao responde 503
+  // e o admin so descobre depois de escrever o prompt, por isso o boot falha;
+  // sem o modelo existe um padrao embutido (DEFAULT_GEMINI_MODEL, nos dois
+  // gemini.service.ts) que funciona. Derrubar o boot de toda maquina por uma
+  // variavel que tem default seria trocar um problema que nao existe por um
+  // que existe.
+  //
+  // **Sem lista fechada de valores.** O catalogo do Google muda sem avisar, e
+  // um @IsIn aqui bloquearia exatamente o que esta variavel existe para
+  // permitir: testar o modelo novo sem deploy. Nome errado volta como 404 da
+  // Gemini, que os dois servicos ja traduzem em 503 com o corpo do Google no
+  // log.
+  @IsString()
+  @IsOptional()
+  GEMINI_MODEL?: string;
 }
 
 export function validate(config: Record<string, unknown>) {

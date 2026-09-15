@@ -183,4 +183,48 @@ describe('validate (env)', () => {
       ).toThrow(/GEMINI_API_KEY/);
     });
   });
+
+  describe('o modelo do Gemini (spec 026)', () => {
+    it('sobe sem GEMINI_MODEL, inclusive em producao', () => {
+      // Ela **nao** entra na exigencia de producao da GEMINI_API_KEY, e a
+      // diferenca e o motivo: sem a chave a geracao responde 503 e o admin so
+      // descobre depois de escrever o prompt; sem o modelo existe um padrao
+      // embutido que funciona. Derrubar o boot por uma variavel com default
+      // cria um problema onde nao havia.
+      expect(() =>
+        validate({
+          ...baseEnv,
+          NODE_ENV: 'production',
+          RESEND_API_KEY: 're_x',
+          RESEND_WEBHOOK_SECRET: 'whsec_x',
+          API_PUBLIC_URL: 'https://api.lenoborges.com.br',
+          GEMINI_API_KEY: 'AIza_x',
+        }),
+      ).not.toThrow();
+    });
+
+    it('aceita qualquer nome de modelo, sem lista fechada', () => {
+      // O catalogo do Google muda sem avisar, e uma lista aqui bloquearia
+      // exatamente o que a spec 026 quer permitir: testar o modelo novo sem
+      // deploy. Nome errado aparece como 404 da Gemini, que os dois servicos
+      // ja traduzem em 503 com o corpo do Google no log.
+      const validado = validate({
+        ...baseEnv,
+        GEMINI_MODEL: 'gemini-3-pro-preview-qualquer-coisa',
+      });
+
+      expect(validado.GEMINI_MODEL).toBe('gemini-3-pro-preview-qualquer-coisa');
+    });
+
+    it('nao valida formato: o que chega vira string e passa', () => {
+      // Registrado porque surpreende: o validate() roda com
+      // enableImplicitConversion, entao um numero chega como '42' e o
+      // @IsString() aprova. **Nao e para consertar**: o formato do nome do
+      // modelo nao e assunto desta camada, e quem recusa nome invalido e a
+      // propria Gemini, com 404.
+      const validado = validate({ ...baseEnv, GEMINI_MODEL: 42 });
+
+      expect(validado.GEMINI_MODEL).toBe('42');
+    });
+  });
 });
